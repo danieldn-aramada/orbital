@@ -192,7 +192,8 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 		// ORBITAL_OIDC_* still drives the browser login flow, which is a
 		// different job: there orbital is an OAuth client, here a resource
 		// server.
-		ps, err := auth.NewProviderSet(context.Background(), authProviderSpecs(cfg), logger)
+		ps, err := auth.NewProviderSet(context.Background(), authProviderSpecs(cfg), logger,
+			auth.WithAuditSink(handler.BearerAuthFailureSink(db, logger)))
 		if err != nil {
 			logger.Error("auth provider set init failed — API auth disabled", "err", err)
 		} else if !cfg.APIAuthEnabled {

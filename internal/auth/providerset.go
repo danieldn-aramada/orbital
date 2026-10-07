@@ -38,6 +38,32 @@ type ProviderSet struct {
 	// one accepts" would let a caller aim at whichever is most permissive.
 	byKey  map[string]*provider
 	logger *slog.Logger
+
+	// auditSink records a rejected bearer token. Injected rather than imported:
+	// this package deliberately depends on nothing but echo and go-oidc, and
+	// writing an audit row needs ent. A nil sink is normal — unit tests and the
+	// auth-disabled path have no database.
+	auditSink func(c echo.Context, reason string)
+}
+
+// Option configures a ProviderSet at construction.
+type Option func(*ProviderSet)
+
+// WithAuditSink supplies the function that records rejected bearer tokens.
+// Orbital wires this to the audit writer in internal/handler; see
+// docs/audit-model.md for which failures are recorded and which are not.
+func WithAuditSink(fn func(c echo.Context, reason string)) Option {
+	return func(ps *ProviderSet) { ps.auditSink = fn }
+}
+
+// deny records the refusal, then refuses. reason is a short stable token for
+// the audit row; description is the caller-facing text and deliberately says
+// less — an unauthenticated caller learns nothing about what is configured.
+func (ps *ProviderSet) deny(c echo.Context, code, description, reason string) error {
+	if ps.auditSink != nil {
+		ps.auditSink(c, reason)
+	}
+	return denyBearer(c, code, description)
 }
 
 func providerKey(issuer, clientID string) string { return issuer + "\x00" + clientID }
@@ -85,7 +111,7 @@ type ProviderSpec struct {
 // provider does NOT fail the whole set: orbital must serve what does not need
 // that provider, and an IdP outage should not prevent boot. The failure is
 // logged and that provider's tokens are refused until a restart picks it up.
-func NewProviderSet(ctx context.Context, specs []ProviderSpec, logger *slog.Logger) (*ProviderSet, error) {
+func NewProviderSet(ctx context.Context, specs []ProviderSpec, logger *slog.Logger, opts ...Option) (*ProviderSet, error) {
 	if len(specs) == 0 {
 		return nil, fmt.Errorf("no auth providers configured")
 	}
@@ -122,6 +148,9 @@ func NewProviderSet(ctx context.Context, specs []ProviderSpec, logger *slog.Logg
 		p.audiences = append(p.audiences, s.Audiences...)
 		p.mapper = NewRoleMapper(s.GroupsClaim, s.RoleMapping)
 		ps.byKey[providerKey(s.IssuerURL, s.ClientID)] = p
+	}
+	for _, opt := range opts {
+		opt(ps)
 	}
 	return ps, nil
 }
@@ -180,7 +209,7 @@ func (ps *ProviderSet) verify(c echo.Context, next echo.HandlerFunc, raw string)
 	// rejected by that provider rather than accepted by this lookup.
 	peek, err := parseUnverifiedClaims(raw)
 	if err != nil {
-		return denyBearer(c, oauthErrInvalidToken, "malformed bearer token")
+		return ps.deny(c, oauthErrInvalidToken, "malformed bearer token", "malformed_token")
 	}
 	// Select by (iss, azp), then fall back to the issuer-wide entry. Both are
 	// exact lookups; the specific entry always wins, so a caller cannot steer
@@ -195,24 +224,24 @@ func (ps *ProviderSet) verify(c echo.Context, next echo.HandlerFunc, raw string)
 		// about what is configured. The operator gets it in the log.
 		ps.logger.Warn("bearer token rejected — no configured provider for this issuer and client",
 			"issuer", peek.Iss, "client", azp, "request.id", requestID(c))
-		return denyBearer(c, oauthErrInvalidToken, "token issuer is not trusted by this server")
+		return ps.deny(c, oauthErrInvalidToken, "token issuer is not trusted by this server", "untrusted_issuer")
 	}
 
 	idToken, err := p.verifier.Verify(c.Request().Context(), raw)
 	if err != nil {
 		ps.logger.Warn("bearer token verification failed",
 			"issuer", p.issuer, "err", err, "request.id", requestID(c))
-		return denyBearer(c, oauthErrInvalidToken, "token verification failed")
+		return ps.deny(c, oauthErrInvalidToken, "token verification failed", "verification_failed")
 	}
 
 	var claims map[string]any
 	if err := idToken.Claims(&claims); err != nil {
-		return denyBearer(c, oauthErrInvalidToken, "token claims are unreadable")
+		return ps.deny(c, oauthErrInvalidToken, "token claims are unreadable", "unreadable_claims")
 	}
 	if !audienceMatches(claims["aud"], p.audiences) {
 		ps.logger.Warn("bearer token rejected — audience mismatch",
 			"issuer", p.issuer, "want", p.audiences, "request.id", requestID(c))
-		return denyBearer(c, oauthErrInvalidToken, "token audience is not accepted by this server")
+		return ps.deny(c, oauthErrInvalidToken, "token audience is not accepted by this server", "audience_mismatch")
 	}
 	c.Set("auth_issuer", p.issuer)
 	c.Set("is_authn", true)
@@ -258,7 +287,7 @@ func (ps *ProviderSet) verify(c echo.Context, next echo.HandlerFunc, raw string)
 	if username == "" {
 		ps.logger.Warn("bearer token rejected — username claim is absent",
 			"issuer", p.issuer, "claim", p.usernameClaim, "request.id", requestID(c))
-		return denyBearer(c, oauthErrInvalidToken, "token carries no usable identity")
+		return ps.deny(c, oauthErrInvalidToken, "token carries no usable identity", "no_usable_identity")
 	}
 	c.Set("user_name", claimString(claims["name"]))
 	c.Set("user_email", username)
@@ -294,7 +323,7 @@ func (ps *ProviderSet) verify(c echo.Context, next echo.HandlerFunc, raw string)
 				// role_attribute_strict = true.
 				ps.logger.Warn("bearer token rejected — no group matched this provider's role mapping",
 					"issuer", p.issuer, "groups_claim", p.groupsClaim, "request.id", requestID(c))
-				return denyBearer(c, oauthErrInvalidToken, "no group in this token maps to a role on this server")
+				return ps.deny(c, oauthErrInvalidToken, "no group in this token maps to a role on this server", "no_role_mapping")
 			}
 			// Floor: defaultRole alongside a mapping means "map, else this".
 			// Applied AUTHORITATIVELY, not as a seed — otherwise a user removed

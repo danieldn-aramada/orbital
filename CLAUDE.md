@@ -129,6 +129,7 @@ Read the relevant doc(s) BEFORE writing code in that area — they encode conven
 | **Querying NetBox / building or reconciling a network-topology seed** (endpoints, field shapes, join keys, gotchas) | `docs/reference/NETBOX.md` |
 | UI templates, HTMX, JavaScript, CSS, edit modals, JSON editor pattern | `docs/reference/UI.md` |
 | Audit events, mutation recording, diff rendering, `graphql.go` proxy | `docs/reference/AUDIT.md` |
+| **What orbital's audit trail guarantees, and which AU controls it satisfies** (consumer/auditor-facing; `AUDIT.md` is the internal design) | `docs/audit-model.md` |
 | **Env vars / config / adding a feature toggle** (incl. the ops-vs-maturity rule) | `docs/reference/CONFIG.md` |
 | **REST query params and list conventions** — camelCase, `<field>_gte`/`_lte` time filters, refuse-don't-ignore | `docs/reference/REST-API.md` |
 | Error responses — envelope (`error`/`code`/`httpStatus`/`hint`), `code` registry, HTTP-status mapping | `docs/reference/ERROR-RESPONSES.md` |

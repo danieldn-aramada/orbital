@@ -228,7 +228,7 @@ func TestWritePath_AcceptMakesAnOpenChangeRequestStaleAndVoidsApprovals(t *testi
 	if st.Valid != 0 {
 		t.Errorf("valid approvals = %d, want 0 — the approval predates the Accept", st.Valid)
 	}
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err == nil {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err == nil {
 		t.Error("a stale request merged")
 	}
 }
@@ -267,7 +267,7 @@ func TestWritePath_InternalDispatchWithNoBeforeStillProducesADiff(t *testing.T) 
 	vars := map[string]any{"orbId": crServerA, "set": map[string]any{"hostname": "dispatched-name"}}
 
 	if _, err := f.gql.DispatchMutation(context.Background(), "dispatcher@test.com",
-		callerRole{Role: user.RoleAdmin, Source: "user"}, gateEnforce, query, vars, nil); err != nil {
+		callerRole{Role: user.RoleAdmin, Source: "user"}, gateEnforce, query, vars, nil, auditInternal()); err != nil {
 		t.Fatalf("dispatch: %v", err)
 	}
 
@@ -441,7 +441,7 @@ func TestWritePath_MergeStillAppliesAndBumpsVersionExactlyOnce(t *testing.T) {
 	if _, err := f.crh.Approve(ctx, cr.ID, reviewer, user.RoleDev, "ok"); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err != nil {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 

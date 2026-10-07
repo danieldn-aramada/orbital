@@ -175,7 +175,11 @@ If a future requirement does force failed-call records, **one CloudTrail weaknes
 
 **Do NOT restore a "≥ 12 months" claim here** — it was never ratified, and it asserts a compliance posture on the adopter's behalf.
 
-Two rules for whoever implements pruning:
+⚠️ **The append-only trigger refuses `DELETE` unconditionally, so a pruner cannot simply delete.**
+*(Added 2026-10-07.)* It needs a deliberate path — a privileged role, or a session flag the trigger
+honours — designed as part of the pruner rather than pre-built. See § Append-only above.
+
+Three rules for whoever implements pruning:
 - **Ship the pruner in-process**, not as an optional external job. NetBox's 90-day default sat inert behind a cron many operators never installed; when 4.4 moved housekeeping into a built-in scheduler, the dormant default fired and deleted everything older than 90 days on upgrade.
 - **Surface growth** (row count / oldest-record age) since the default is unbounded.
 
@@ -204,6 +208,7 @@ OWASP alignment: actor, timestamp, event category, action, resource, and reason 
 - `resource_types` (JSON array): all DGraph types touched.
 - `resource_ids` (JSON array): all orbIds touched — extracted from five sources (see below).
 - `details` jsonb: full raw payload `{operationName, query, variables}`, plus `before` when a single-entity mutation resolved one.
+- **`authorization_type` / `authorization_id` — COLUMNS, not a key in `details`.** *(Added 2026-10-07.)* They name the act that authorized the write — `changeRequest`/`colo-58`, or `divergenceResolution`/`<entry uuid>`. Written by `DispatchMutation` from the `auditOrigin` its caller passes, present ONLY when an authority exists, and served as a top-level `authorization` object on the audit-log response (`{type, id}`) — `type` because that is the discriminator orbital already uses elsewhere and CloudTrail's `userIdentity.type`; `authorization` because Kubernetes labels this same concept `authorization.k8s.io/*` on its own audit events. **Columns because this is record metadata, not payload** — the same line the CloudTrail parity table above draws between `eventSource`/`sourceIPAddress` (columns) and `requestParameters` (nested in `details`). It was briefly stored in `details` AND promoted, which returned the same fact twice in one response; nothing else on this record does that. Pinned by `TestAuditLog_AuthorizationIsReturnedTopLevel`, which asserts the absence from `details` as well as the presence top-level. It is the positive counterpart to `bypassedPolicy` below: reviewed / break-glass / ungated. ⚠️ **Merge and divergence-resolve now carry a `request_id` despite `event_source: internal`** — that is NOT a violation of the async-job rule below, because both run inside the HTTP request that triggered them; export, restore and the scheduled backup are the async cases and still pass `auditInternal()`. Do not "fix" it.
 - **`details.privileged` + `details.bypassedPolicy`** (Spike 36) — present ONLY when the write skipped an approval policy because the caller's role was in that policy's `bypass_roles`. Absent (not `false`) otherwise, so a query for `details ? 'privileged'` finds exactly the break-glass writes. The policy LABEL is carried (`<namespace>` or `<namespace>/<type>`) rather than a bare boolean, because the useful question is *which control was skipped*. **The audit row is the durable record, not the log line** — `approval_gate.go` also emits a `WARN`, but that is for an operator watching in real time; "who bypassed review last quarter" is asked from this table, by someone with no prior suspicion. A bypass that produced only a log line would satisfy the letter of "audited break-glass" and none of its purpose.
 - **Events are always recorded** for mutations touching known types regardless of `version` presence — MVCC is opt-in and orthogonal to eventing.
 - **Attribution ("who changed this") is a client-side join on `orbId`, not a new API.** A client pairs a content diff (e.g. the export preview) with `GET /api/v1/audit-log?orbId=<node>` to answer *who/when* per changed entity. Division of labour: **the diff answers *what* changed; the audit log answers *who/when*** — never use the audit log to compute *what* (see `OCI.md` § "Export preview" for why: it's an event stream, records mutation input rather than before→after, and a `dropAll` restore writes zero rows). **Node-level attribution is exact; field-level is best-effort** — the event stores the mutation *input* (`details.variables`), not a per-field owner, so "who set *this field*" is inferred from the most recent event whose variables include it. Do NOT add a field-history table to make it exact; that's the rejected antipattern.
@@ -243,6 +248,21 @@ Three values (stored as string, not enum — adding a value does not require ent
 | `"auth"` | Login/logout events: loginSuccess, loginFailed, logout |
 
 The audit tab query (`GET /api/v1/audit-log?orbId=...`) filters to `event_category IN ('data', 'management')`. Auth events are excluded structurally — they have no resource_ids and appear in every resource tab if included.
+
+## Append-only is enforced by a PostgreSQL TRIGGER, not by grants
+
+- **Do NOT "fix" this by revoking `UPDATE`/`DELETE` instead.** Orbital owns its schema — it runs
+  ent's auto-migration, so it must — and a grant does not bind a table's owner. A trigger fires
+  regardless of privilege, which is why this needs no role split and no deployment change.
+- **All three tables are guarded.** A record's orbIds and resource types live in the children;
+  guarding only the parent would let someone make an event unfindable without touching the event.
+- **Do NOT add a bypass flag or session variable "for the pruner".** An escape hatch nobody uses is
+  attack surface. The retention pruner needs a defined path designed with it, not a pre-built one.
+- Installed and verified on every boot by `db.EnsureAuditGuard`; a missing *or disabled* trigger logs
+  at ERROR and sets `orbital_audit_tables_unprotected`. **A disabled trigger counts as absent** — it
+  reads as present to anything checking only for existence, and fires never.
+- Does **not** stop a superuser (`session_replication_role = replica`) or filesystem access. Pinned by
+  `TestAuditGuard_*`.
 
 ## ent conventions for events
 

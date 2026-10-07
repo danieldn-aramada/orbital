@@ -126,6 +126,34 @@ func (_c *AuditEventCreate) SetNillableRequestID(v *string) *AuditEventCreate {
 	return _c
 }
 
+// SetAuthorizationType sets the "authorization_type" field.
+func (_c *AuditEventCreate) SetAuthorizationType(v string) *AuditEventCreate {
+	_c.mutation.SetAuthorizationType(v)
+	return _c
+}
+
+// SetNillableAuthorizationType sets the "authorization_type" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableAuthorizationType(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetAuthorizationType(*v)
+	}
+	return _c
+}
+
+// SetAuthorizationID sets the "authorization_id" field.
+func (_c *AuditEventCreate) SetAuthorizationID(v string) *AuditEventCreate {
+	_c.mutation.SetAuthorizationID(v)
+	return _c
+}
+
+// SetNillableAuthorizationID sets the "authorization_id" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableAuthorizationID(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetAuthorizationID(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AuditEventCreate) SetID(v uuid.UUID) *AuditEventCreate {
 	_c.mutation.SetID(v)
@@ -300,6 +328,14 @@ func (_c *AuditEventCreate) createSpec() (*AuditEvent, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RequestID(); ok {
 		_spec.SetField(auditevent.FieldRequestID, field.TypeString, value)
 		_node.RequestID = value
+	}
+	if value, ok := _c.mutation.AuthorizationType(); ok {
+		_spec.SetField(auditevent.FieldAuthorizationType, field.TypeString, value)
+		_node.AuthorizationType = value
+	}
+	if value, ok := _c.mutation.AuthorizationID(); ok {
+		_spec.SetField(auditevent.FieldAuthorizationID, field.TypeString, value)
+		_node.AuthorizationID = value
 	}
 	if nodes := _c.mutation.ResourcesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

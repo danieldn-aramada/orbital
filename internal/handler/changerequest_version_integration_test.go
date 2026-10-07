@@ -165,7 +165,7 @@ func TestCRVersion_HonouredOnDelete(t *testing.T) {
 		if _, err := f.crh.Approve(ctx, cr.ID, reviewer, user.RoleDev, "ok"); err != nil {
 			t.Fatalf("approve: %v", err)
 		}
-		if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err != nil {
+		if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err != nil {
 			t.Fatalf("merge: %v", err)
 		}
 		if exists(t, "Server", crServerB) {

@@ -4106,6 +4106,8 @@ type AuditEventMutation struct {
 	acting_client         *string
 	source_ip_address     *string
 	request_id            *string
+	authorization_type    *string
+	authorization_id      *string
 	clearedFields         map[string]struct{}
 	resources             map[int]struct{}
 	removedresources      map[int]struct{}
@@ -4656,6 +4658,104 @@ func (m *AuditEventMutation) ResetRequestID() {
 	delete(m.clearedFields, auditevent.FieldRequestID)
 }
 
+// SetAuthorizationType sets the "authorization_type" field.
+func (m *AuditEventMutation) SetAuthorizationType(s string) {
+	m.authorization_type = &s
+}
+
+// AuthorizationType returns the value of the "authorization_type" field in the mutation.
+func (m *AuditEventMutation) AuthorizationType() (r string, exists bool) {
+	v := m.authorization_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAuthorizationType returns the old "authorization_type" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldAuthorizationType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAuthorizationType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAuthorizationType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAuthorizationType: %w", err)
+	}
+	return oldValue.AuthorizationType, nil
+}
+
+// ClearAuthorizationType clears the value of the "authorization_type" field.
+func (m *AuditEventMutation) ClearAuthorizationType() {
+	m.authorization_type = nil
+	m.clearedFields[auditevent.FieldAuthorizationType] = struct{}{}
+}
+
+// AuthorizationTypeCleared returns if the "authorization_type" field was cleared in this mutation.
+func (m *AuditEventMutation) AuthorizationTypeCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldAuthorizationType]
+	return ok
+}
+
+// ResetAuthorizationType resets all changes to the "authorization_type" field.
+func (m *AuditEventMutation) ResetAuthorizationType() {
+	m.authorization_type = nil
+	delete(m.clearedFields, auditevent.FieldAuthorizationType)
+}
+
+// SetAuthorizationID sets the "authorization_id" field.
+func (m *AuditEventMutation) SetAuthorizationID(s string) {
+	m.authorization_id = &s
+}
+
+// AuthorizationID returns the value of the "authorization_id" field in the mutation.
+func (m *AuditEventMutation) AuthorizationID() (r string, exists bool) {
+	v := m.authorization_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAuthorizationID returns the old "authorization_id" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldAuthorizationID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAuthorizationID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAuthorizationID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAuthorizationID: %w", err)
+	}
+	return oldValue.AuthorizationID, nil
+}
+
+// ClearAuthorizationID clears the value of the "authorization_id" field.
+func (m *AuditEventMutation) ClearAuthorizationID() {
+	m.authorization_id = nil
+	m.clearedFields[auditevent.FieldAuthorizationID] = struct{}{}
+}
+
+// AuthorizationIDCleared returns if the "authorization_id" field was cleared in this mutation.
+func (m *AuditEventMutation) AuthorizationIDCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldAuthorizationID]
+	return ok
+}
+
+// ResetAuthorizationID resets all changes to the "authorization_id" field.
+func (m *AuditEventMutation) ResetAuthorizationID() {
+	m.authorization_id = nil
+	delete(m.clearedFields, auditevent.FieldAuthorizationID)
+}
+
 // AddResourceIDs adds the "resources" edge to the AuditEventResource entity by ids.
 func (m *AuditEventMutation) AddResourceIDs(ids ...int) {
 	if m.resources == nil {
@@ -4798,7 +4898,7 @@ func (m *AuditEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuditEventMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 11)
 	if m.operations != nil {
 		fields = append(fields, auditevent.FieldOperations)
 	}
@@ -4826,6 +4926,12 @@ func (m *AuditEventMutation) Fields() []string {
 	if m.request_id != nil {
 		fields = append(fields, auditevent.FieldRequestID)
 	}
+	if m.authorization_type != nil {
+		fields = append(fields, auditevent.FieldAuthorizationType)
+	}
+	if m.authorization_id != nil {
+		fields = append(fields, auditevent.FieldAuthorizationID)
+	}
 	return fields
 }
 
@@ -4852,6 +4958,10 @@ func (m *AuditEventMutation) Field(name string) (ent.Value, bool) {
 		return m.SourceIPAddress()
 	case auditevent.FieldRequestID:
 		return m.RequestID()
+	case auditevent.FieldAuthorizationType:
+		return m.AuthorizationType()
+	case auditevent.FieldAuthorizationID:
+		return m.AuthorizationID()
 	}
 	return nil, false
 }
@@ -4879,6 +4989,10 @@ func (m *AuditEventMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldSourceIPAddress(ctx)
 	case auditevent.FieldRequestID:
 		return m.OldRequestID(ctx)
+	case auditevent.FieldAuthorizationType:
+		return m.OldAuthorizationType(ctx)
+	case auditevent.FieldAuthorizationID:
+		return m.OldAuthorizationID(ctx)
 	}
 	return nil, fmt.Errorf("unknown AuditEvent field %s", name)
 }
@@ -4951,6 +5065,20 @@ func (m *AuditEventMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetRequestID(v)
 		return nil
+	case auditevent.FieldAuthorizationType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAuthorizationType(v)
+		return nil
+	case auditevent.FieldAuthorizationID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAuthorizationID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent field %s", name)
 }
@@ -4999,6 +5127,12 @@ func (m *AuditEventMutation) ClearedFields() []string {
 	if m.FieldCleared(auditevent.FieldRequestID) {
 		fields = append(fields, auditevent.FieldRequestID)
 	}
+	if m.FieldCleared(auditevent.FieldAuthorizationType) {
+		fields = append(fields, auditevent.FieldAuthorizationType)
+	}
+	if m.FieldCleared(auditevent.FieldAuthorizationID) {
+		fields = append(fields, auditevent.FieldAuthorizationID)
+	}
 	return fields
 }
 
@@ -5030,6 +5164,12 @@ func (m *AuditEventMutation) ClearField(name string) error {
 		return nil
 	case auditevent.FieldRequestID:
 		m.ClearRequestID()
+		return nil
+	case auditevent.FieldAuthorizationType:
+		m.ClearAuthorizationType()
+		return nil
+	case auditevent.FieldAuthorizationID:
+		m.ClearAuthorizationID()
 		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent nullable field %s", name)
@@ -5065,6 +5205,12 @@ func (m *AuditEventMutation) ResetField(name string) error {
 		return nil
 	case auditevent.FieldRequestID:
 		m.ResetRequestID()
+		return nil
+	case auditevent.FieldAuthorizationType:
+		m.ResetAuthorizationType()
+		return nil
+	case auditevent.FieldAuthorizationID:
+		m.ResetAuthorizationID()
 		return nil
 	}
 	return fmt.Errorf("unknown AuditEvent field %s", name)

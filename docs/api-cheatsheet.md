@@ -387,7 +387,61 @@ variables
 
 ## Audit log (REST)
 
-Every intent mutation is recorded as an immutable audit event. Read them at `GET /api/v1/audit-log` (JSON). Events are written by orbital as a side effect of the mutation.
+Every intent mutation is recorded as an audit event. Read them at `GET /api/v1/audit-log` (JSON) — a read-only endpoint; there is no API to create or modify an event. Events are written by orbital as a side effect of the mutation, and the data is **append-only**: nothing in orbital updates or deletes an event. That is a property of the write paths, not a cryptographic guarantee — see [`docs/audit-model.md`](audit-model.md) for what is and isn't protected.
+
+### Was this change reviewed, and under which change request?
+
+An event carries `authorization` when the write passed a control. Two types exist:
+
+| `type` | `id` is | Written when |
+|---|---|---|
+| `changeRequest` | the human identifier, e.g. `colo-36` — resolve at `GET /api/v1/change-requests/colo-36` | a change request is merged |
+| `divergenceResolution` | the divergence entry's uuid | a divergence is accepted |
+ It is **absent on a direct write**, and that absence is the signal: it is how
+you tell a reviewed change from an ungated one on the same resource.
+
+```bash
+# every edit to one server's iDRAC settings, newest first
+curl -s "$ORBITAL_URL/api/v1/audit-log?orbId=colo:CFRHDX3-idrac&limit=50" \
+  -H "Authorization: Bearer $TOKEN" | jq '.events[] | {createdAt, actor, operations, authorization}'
+```
+
+```json
+{
+  "timestamp": "2026-10-07T14:22:08.418293Z",
+  "actor": "daniel.nguyen@armada.ai",
+  "operations": ["updateIdracSettings"],
+  "authorization": { "type": "changeRequest", "id": "colo-58" }
+}
+{
+  "timestamp": "2026-10-06T09:14:51.002771Z",
+  "actor": "asharma@armada.ai",
+  "operations": ["updateIdracSettings"]
+}
+```
+
+The first edit was merged from change request `colo-58`; resolve it with
+`GET /api/v1/change-requests/colo-58` for the author, approvers and comments. The second carries no
+`authorization`, so it was written directly against `/graphql`.
+
+**Just the reviewed ones:**
+```bash
+curl -s "$ORBITAL_URL/api/v1/audit-log?orbId=colo:CFRHDX3-idrac&limit=50" \
+  -H "Authorization: Bearer $TOKEN" | jq '[.events[] | select(.authorization)]'
+```
+There is no server-side filter for this yet — `authorization` is returned for display, and filtering
+is client-side.
+
+Three things to know before you build on it:
+
+- **`actor` is whoever merged, not who approved.** The audit log answers *which* change request; the
+  approval tables answer *who signed off*. That is a deliberate split — `GET /api/v1/change-requests/colo-58`
+  is the second hop.
+- **One event per change item.** A five-item change request produces five events, each carrying the
+  same `colo-58`, each findable by the orbId it touched.
+- ⚠️ **Absent on every event written before 2026-10-07**, regardless of provenance. Audit rows are
+  append-only in the database, so historical events could not be annotated. Do not read an absence
+  on an older event as "not reviewed".
 
 Filter by the resource's `orbId`. For example, to see the trail for the velero backup edits:
 ```bash

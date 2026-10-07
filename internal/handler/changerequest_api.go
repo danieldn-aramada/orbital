@@ -1049,7 +1049,10 @@ func (h *ChangeRequest) MergeChangeRequest(c echo.Context) error {
 		return err
 	}
 	caller := resolveCallerRole(c, h.db)
-	cr, err := h.Merge(c.Request().Context(), id, actorFromContext(c), caller.Role, caller.NoAuthz)
+	// Captured at the HTTP boundary and passed BY VALUE — never by holding the
+	// echo.Context, which Echo pools and reuses (AUDIT.md § CloudTrail parity).
+	cr, err := h.Merge(c.Request().Context(), id, actorFromContext(c), caller.Role, caller.NoAuthz,
+		c.Response().Header().Get(echo.HeaderXRequestID))
 	if err != nil {
 		var pf *preconditionFailed
 		if errors.As(err, &pf) {

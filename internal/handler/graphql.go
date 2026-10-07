@@ -367,7 +367,10 @@ func (h *GraphQL) Handle(c echo.Context) error {
 // caller is the identity the approval gate judges — an `actor` string cannot
 // answer "is this role allowed to bypass". gate says whether the approval check
 // applies; pass gateExempt ONLY with a reason at the call site.
-func (h *GraphQL) DispatchMutation(ctx context.Context, actor string, caller callerRole, gate gateMode, query string, variables map[string]any, before map[string]any) ([]byte, error) {
+// origin names where this write came from and what authorized it. Callers that
+// act on their own behalf (export, restore, scheduled backup) pass
+// auditInternal(); callers acting on a reviewed decision pass auditAuthorized().
+func (h *GraphQL) DispatchMutation(ctx context.Context, actor string, caller callerRole, gate gateMode, query string, variables map[string]any, before map[string]any, origin auditOrigin) ([]byte, error) {
 	body, err := json.Marshal(gqlRequest{Query: query, Variables: variables})
 	if err != nil {
 		return nil, fmt.Errorf("marshal mutation: %w", err)
@@ -389,7 +392,7 @@ func (h *GraphQL) DispatchMutation(ctx context.Context, actor string, caller cal
 		}
 		operations, resourceTypes := extractOperations(h.mutationRe(), query)
 		resourceIDs := extractResourceIDs(query, res.Variables, res.Body)
-		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, query, res.Variables, res.Before, res.Bypassed, auditInternal())
+		go h.auditMutation(opName, operations, resourceTypes, resourceIDs, actor, query, res.Variables, res.Before, res.Bypassed, origin)
 	}
 	return res.Body, nil
 }

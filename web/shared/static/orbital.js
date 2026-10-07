@@ -1224,7 +1224,14 @@ function formatGQL(query) {
   return out.trim()
 }
 
-function renderPayload(details) {
+// authorization is a COLUMN on the event, not part of the payload, so it is
+// passed alongside details rather than read out of it.
+//
+// The type is rendered VERBATIM. Do not add a display-label map: it would be a
+// second place that has to know every authorization type, so a new one added
+// server-side either renders raw anyway or waits for someone to remember the
+// UI — inconsistent presentation instead of consistent presentation.
+function renderPayload(details, authorization) {
   if (!details) return null
   let d
   try { d = typeof details === 'string' ? JSON.parse(details) : details } catch (_) { return null }
@@ -1234,11 +1241,19 @@ function renderPayload(details) {
       Object.entries(d.variables || {}).filter(([k]) => !skipVars.has(k))
     )
     const opName = `<p style="font-size:0.7rem;margin:0 0 0.4rem"><span style="font-weight:600">Operation:</span> ${d.operationName || '—'}</p>`
+    // Which control authorized this write, when one did. Rendered HERE and not
+    // only in the raw-JSON fallback below, because a data event always carries
+    // `query` and so never reaches that branch — the field would have been
+    // stored, returned by the API, and invisible in the one view that shows
+    // every event.
+    const auth = authorization
+      ? `<p style="font-size:0.7rem;margin:0 0 0.4rem"><span style="font-weight:600">Authorization:</span> ${esc(String(authorization.type))} <code>${esc(String(authorization.id))}</code></p>`
+      : ''
     const varsBlock = `<p style="font-size:0.7rem;font-weight:600;margin:0 0 0.25rem">Input</p>
       <pre style="font-size:0.72rem;background:var(--bulma-background);padding:0.75rem;white-space:pre-wrap;margin:0 0 0.75rem">${JSON.stringify(vars, null, 2)}</pre>`
     const queryBlock = `<p style="font-size:0.7rem;font-weight:600;margin:0 0 0.25rem">Query</p>
       <pre style="font-size:0.72rem;background:var(--bulma-background);padding:0.75rem;white-space:pre-wrap;word-break:break-word;margin:0;max-height:400px;overflow-y:auto">${formatGQL(d.query)}</pre>`
-    return `<div style="padding:0.5rem 1rem 0.75rem">${opName}${varsBlock}${queryBlock}</div>`
+    return `<div style="padding:0.5rem 1rem 0.75rem">${opName}${auth}${varsBlock}${queryBlock}</div>`
   }
 
   if (Object.keys(d).length === 0) return null
@@ -1315,7 +1330,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     createdRow: function (row, data) {
       row.dataset.details = typeof data.details === 'string' ? data.details : JSON.stringify(data.details)
-      if (!renderPayload(data.details)) {
+      if (!renderPayload(data.details, data.authorization)) {
         row.querySelector('td.dt-control')?.classList.remove('dt-control')
       }
     },
@@ -1324,7 +1339,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#audit-log-table tbody').on('click', 'td.dt-control', function () {
     const tr = this.closest('tr')
     const row = auditTable.row(tr)
-    const payload = renderPayload(row.data()?.details)
+    const payload = renderPayload(row.data()?.details, row.data()?.authorization)
     if (!payload) return
     if (row.child.isShown()) {
       row.child.hide()

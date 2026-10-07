@@ -33,6 +33,10 @@ const (
 	FieldSourceIPAddress = "source_ip_address"
 	// FieldRequestID holds the string denoting the request_id field in the database.
 	FieldRequestID = "request_id"
+	// FieldAuthorizationType holds the string denoting the authorization_type field in the database.
+	FieldAuthorizationType = "authorization_type"
+	// FieldAuthorizationID holds the string denoting the authorization_id field in the database.
+	FieldAuthorizationID = "authorization_id"
 	// EdgeResources holds the string denoting the resources edge name in mutations.
 	EdgeResources = "resources"
 	// EdgeResourceTypes holds the string denoting the resource_types edge name in mutations.
@@ -67,6 +71,8 @@ var Columns = []string{
 	FieldActingClient,
 	FieldSourceIPAddress,
 	FieldRequestID,
+	FieldAuthorizationType,
+	FieldAuthorizationID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -129,6 +135,16 @@ func BySourceIPAddress(opts ...sql.OrderTermOption) OrderOption {
 // ByRequestID orders the results by the request_id field.
 func ByRequestID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRequestID, opts...).ToFunc()
+}
+
+// ByAuthorizationType orders the results by the authorization_type field.
+func ByAuthorizationType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAuthorizationType, opts...).ToFunc()
+}
+
+// ByAuthorizationID orders the results by the authorization_id field.
+func ByAuthorizationID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAuthorizationID, opts...).ToFunc()
 }
 
 // ByResourcesCount orders the results by resources count.

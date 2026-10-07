@@ -103,7 +103,7 @@ func TestRebase_ChildEditIsSubtreeChangedNotStale(t *testing.T) {
 	if !st.SubtreeChanged {
 		t.Fatal("a child edit did not set subtreeChanged — the reviewer's guarantee is gone")
 	}
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); !errors.Is(err, errCRStale) {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); !errors.Is(err, errCRStale) {
 		t.Errorf("merge err = %v, want blocked by subtreeChanged", err)
 	}
 	// The reviewer clears it.
@@ -138,7 +138,7 @@ func TestRebase_ApprovedAndStaleCoexistAndApprovingCannotClearIt(t *testing.T) {
 		t.Fatal("approving cleared item staleness — a reviewer waved through a moved value")
 	}
 	// 10: merge refuses, naming the entity and pointing at the author.
-	_, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false)
+	_, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, "")
 	var sw *staleWithEntities
 	if !errors.As(err, &sw) {
 		t.Fatalf("merge err = %v, want a named stale refusal", err)
@@ -288,7 +288,7 @@ func TestRebase_CleanRequestStillMergesFirstTime(t *testing.T) {
 	if _, err := f.crh.Approve(ctx, cr.ID, reviewer, user.RoleDev, "ok"); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err != nil {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err != nil {
 		t.Fatalf("a clean request did not merge: %v", err)
 	}
 	if got := readHostname(t, crServerA); got != "clean" {
@@ -361,7 +361,7 @@ func TestRebase_TerminalRequestReportsNeitherStaleSignal(t *testing.T) {
 	if _, err := f.crh.Approve(ctx, cr.ID, reviewer, user.RoleDev, "ok"); err != nil {
 		t.Fatalf("re-approve: %v", err)
 	}
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err != nil {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 

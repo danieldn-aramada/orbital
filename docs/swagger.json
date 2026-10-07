@@ -195,7 +195,7 @@
         },
         "/api/v1/audit-log": {
             "get": {
-                "description": "Read-only, immutable audit trail of intent mutations, newest first.\n\n**Scope a query** by combining filters: `orbId` (repeatable, **max 128** — over that the request is refused with `400 BAD_USER_INPUT`, never silently truncated) for a specific resource; `namespace` for a whole data center; `type`/`operation` to narrow; `createdAt_gte`/`createdAt_lte` (RFC3339; `_gt`/`_lt` for exclusive bounds) for a time window. To see everything under a server/cluster, fetch its subgraph orbIds from the GraphQL Topology API and pass them as repeatable `orbId` params (there is no single \"cluster\" scope — a child mutation records the child's orbId, not the parent's).\n\n**Render a diff:** when an event is a clean single-entity update it carries a `changes` array (`[{field, before, after}]`) with metadata and DGraph UIDs already excluded — render it directly. When `changes` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing `operations` + `resourceIds`. The raw `details` (with `before`/`variables`) is always included for callers that want it.\n\nReturns JSON by default; returns an HTML table fragment when the `HX-Request` header is present (used by orbital's own UI). See docs/api-cheatsheet.md § \"Audit log\".",
+                "description": "Audit trail of intent mutations, newest first. The **data** is append-only — orbital adds events and never updates or deletes them. This **endpoint** is read-only: there is no API to create or modify an event. Append-only is a property of orbital's write paths, not a tamper-evidence mechanism; see docs/audit-model.md § Integrity for what is and is not protected.\n\n**Scope a query** by combining filters: `orbId` (repeatable, **max 128** — over that the request is refused with `400 BAD_USER_INPUT`, never silently truncated) for a specific resource; `namespace` for a whole data center; `type`/`operation` to narrow; `createdAt_gte`/`createdAt_lte` (RFC3339; `_gt`/`_lt` for exclusive bounds) for a time window. To see everything under a server/cluster, fetch its subgraph orbIds from the GraphQL Topology API and pass them as repeatable `orbId` params (there is no single \"cluster\" scope — a child mutation records the child's orbId, not the parent's).\n\n**Render a diff:** when an event is a clean single-entity update it carries a `changes` array (`[{field, before, after}]`) with metadata and DGraph UIDs already excluded — render it directly. When `changes` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing `operations` + `resourceIds`. The raw `details` (with `before`/`variables`) is always included for callers that want it.\n\nReturns JSON by default; returns an HTML table fragment when the `HX-Request` header is present (used by orbital's own UI). See docs/api-cheatsheet.md § \"Audit log\".",
                 "produces": [
                     "application/json"
                 ],
@@ -2452,6 +2452,25 @@
                 }
             }
         },
+        "handler.authorization": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "The act's identifier, resolvable through its own API — a change request\nvia GET /api/v1/change-requests/{id}, a divergence via its entry id.",
+                    "type": "string",
+                    "example": "colo-58"
+                },
+                "type": {
+                    "description": "Which kind of act authorized the write.",
+                    "type": "string",
+                    "enum": [
+                        "changeRequest",
+                        "divergenceResolution"
+                    ],
+                    "example": "changeRequest"
+                }
+            }
+        },
         "handler.backupRequest": {
             "type": "object",
             "properties": {
@@ -2986,9 +3005,22 @@
         "handler.eventItem": {
             "type": "object",
             "properties": {
+                "actingClient": {
+                    "description": "service acting for the human in `actor`; absent when they are the same",
+                    "type": "string",
+                    "example": "aep-fleet-commander"
+                },
                 "actor": {
                     "type": "string",
                     "example": "asharma@armada.ai"
+                },
+                "authorization": {
+                    "description": "what authorized this write; absent on a direct write",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/handler.authorization"
+                        }
+                    ]
                 },
                 "changes": {
                     "description": "Changes is the pre-computed field-level diff. **Present ONLY for a clean\nsingle-entity update** (omitted otherwise via omitempty) — so its presence\nis the client's signal that a field diff is available; no need to inspect\noperations/before. Server-managed metadata (version/updatedAt/updatedBy/…)\nand DGraph UIDs are already excluded. Same data the UI's colored diff renders.",
@@ -2999,7 +3031,7 @@
                 },
                 "createdAt": {
                     "type": "string",
-                    "example": "2026-07-29T17:26:55Z"
+                    "example": "2026-07-29T17:26:55.418293Z"
                 },
                 "details": {
                     "description": "raw {operationName, query, variables, before}",
@@ -3011,7 +3043,7 @@
                     "example": "data"
                 },
                 "eventSource": {
-                    "description": "CloudTrail parity. All three are omitempty: absent means \"no HTTP request\nbehind this event\" (a background writer), which is different from empty.",
+                    "description": "CloudTrail parity. All four are omitempty: absent means \"no HTTP request\nbehind this event\" (a background writer), which is different from empty.",
                     "type": "string",
                     "example": "graphql"
                 },
@@ -3053,7 +3085,7 @@
                 "timestamp": {
                     "description": "Deprecated: same value as createdAt.",
                     "type": "string",
-                    "example": "2026-07-29T17:26:55Z"
+                    "example": "2026-07-29T17:26:55.418293Z"
                 }
             }
         },

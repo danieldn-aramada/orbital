@@ -345,6 +345,23 @@ Asked 2026-09-02 — *"is there a name for this convention?"* Recorded because t
 | the `changes[]` envelope | **id-in-body batch patch** — `[{id, …fields}, …]`. **NetBox's bulk `PATCH` is exactly this**, and NetBox is the domain peer, so it outranks the Kubernetes comparison |
 | `version` | **`If-Match` (RFC 9110)** / Kubernetes `metadata.resourceVersion` in a patch body — object-grain OCC, and the same token orbital's own `/graphql` already accepts |
 
+**The git/GitHub analogy — holds for one tier of three, and the other two mislead.** *(Added
+2026-10-06.)* People reach for *"a change item is a commit, a change request is a PR, an export is a
+release."* The middle one is fair: a request holds N items, gets reviewed, approved and merged, and
+`<namespace>-<number>` is deliberately the Jira/GitHub identifier pattern. The other two are not, and
+each breaks in a way that changes what you would build:
+
+| Tier | Why it breaks |
+|---|---|
+| item ≠ **commit** | A commit is **immutable, content-addressed and merged atomically**. An item is mutable until merge, addressed only by `(request, orbId)`, and applied **one at a time with partial merge a first-class outcome** — see § Merge applies items ONE AT A TIME. Squash-merge destroying commit granularity is git's version of the same lesson: the per-unit record you think you have may not survive the merge. *(One point where the analogy is better than people expect: git stores **snapshots**, not deltas — diffs are computed on demand — and the changeset is likewise target end-state, not a replay.)* |
+| export ≠ **release built from PRs** | An export is a **snapshot of current graph state**, not a composition of change requests. It carries ungated direct mutations, divergence Accepts and restores alike. A git release has the identical property — it is a tag on one commit, and "which PRs are in it" is reconstructed afterwards and is lossy. In both systems the provenance answer is the **audit log**, never the artifact |
+
+**The closest real analogue is a saved Terraform plan plus Gerrit's staleness model**, not GitHub:
+`base_effect` is a delta computed at a moment that goes stale when the world moves, and the base is a
+**version vector across the changeset's scope**, not a parent commit. There is no branch, no
+merge-base, no three-way merge and no conflict resolution — a third-party write simply makes
+approvals stale and forces re-review.
+
 **A worked example** — bumping a server's iDRAC firmware. `type` is absent because `orbId` is `@id` and orbital resolves `IdracSettings` from it; supply `type` only when creating an entity that does not exist yet. `version` is optional, and it is the difference between a refusal that names this entity and one that only says something in scope moved:
 
 ```json

@@ -156,6 +156,8 @@ var (
 		{Name: "acting_client", Type: field.TypeString, Nullable: true},
 		{Name: "source_ip_address", Type: field.TypeString, Nullable: true},
 		{Name: "request_id", Type: field.TypeString, Nullable: true},
+		{Name: "authorization_type", Type: field.TypeString, Nullable: true},
+		{Name: "authorization_id", Type: field.TypeString, Nullable: true},
 	}
 	// AuditEventsTable holds the schema information for the "audit_events" table.
 	AuditEventsTable = &schema.Table{

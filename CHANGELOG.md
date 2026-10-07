@@ -23,6 +23,63 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 ## [Unreleased]
 
 ### Added
+- **An audit event says which change request authorized it.** A merge's writes
+  went through `DispatchMutation`, which hardcoded an origin carrying nothing —
+  so two writes by the same person, one reviewed through `colo-58` and one made
+  directly, were indistinguishable. Events now carry `authorization: {type, id}`,
+  promoted to a top-level field on `GET /api/v1/audit-log` rather than left in
+  `details`, whose shape varies by event type. Absent on a direct write, which is
+  the distinction it exists to make — the positive counterpart to the existing
+  `bypassedPolicy` marker. Divergence-resolve populates it too, so the field is
+  not a change-request special case. Merge and resolve also now record a
+  `request_id`, which groups every write one merge produced; both run inside the
+  HTTP request, so this does not reverse the rule that async jobs record none.
+  ⚠️ Absent on every event written before this release regardless of provenance —
+  audit rows are append-only in the database and could not be annotated.
+- **Audit tables are append-only, enforced by PostgreSQL.** A `BEFORE UPDATE OR
+  DELETE` trigger on `audit_events` and both child tables refuses the statement
+  outright, installed at startup and idempotent. The claim that the trail is
+  append-only was published to API consumers and rested entirely on "no code path
+  calls Update or Delete" — true, unenforced, and with the generated ent mutators
+  sitting there working. A trigger rather than revoked grants because orbital owns
+  its schema and a grant does not bind the owner; a trigger fires regardless of
+  privilege and needs no second credential.
+- **Orbital verifies that guard at startup and alerts if it is gone.**
+  `DROP TRIGGER` is one statement, leaves the data identical, and makes every
+  later edit succeed in silence — so orbital asks the database what is installed
+  rather than trusting that it installed it. A *disabled* trigger counts as
+  absent: it reads as present to anything checking only for existence, and fires
+  never. Unprotected tables are logged at `ERROR` and counted in
+  `orbital_audit_tables_unprotected` (gauge; alert on `> 0`). Not fatal —
+  availability versus audit integrity is the adopter's call, not a default to
+  impose — but loud.
+- **Every way orbital refuses a caller now leaves a record.** `RequireRole` has
+  five refusal branches and exactly one of them wrote an audit event, so "who was
+  refused" depended on *which way* they were refused — a caller rejected for being
+  unauthenticated, for being an app principal, or for carrying a delegated role
+  below the bar left nothing behind. All five now write `authorizationDenied`
+  carrying a `reason`, which is what makes them distinguishable in one table.
+- **A rejected bearer token is recorded.** Seven denial paths in the provider set
+  (untrusted issuer, verification failure, audience mismatch, unreadable claims,
+  no usable identity, no role mapping, malformed token) write a `bearerAuthFailed`
+  auth event. `internal/auth` imports neither ent nor the handler package on
+  purpose, so the writer is injected via `auth.WithAuditSink` rather than imported.
+  A request presenting **no** credential is deliberately not recorded: that is an
+  unauthenticated request, not an authentication failure, and auditing it would
+  bury the real refusals under every anonymous probe.
+- **`actingClient` is returned by `GET /api/v1/audit-log`.** The column has been
+  written since 2026-09 and never delivered, so "a service did this on a human's
+  behalf" — the question it exists to answer, and FedRAMP AU-3(1)'s "individual
+  identities of group account users" — was unanswerable by any consumer.
+- **`docs/audit-model.md` — what the audit trail guarantees, for the person
+  answering an auditor.** States orbital's event-selection rationale, maps the
+  record to the AU-3 content requirements, and carries a control-coverage table
+  where every row is marked shipped, partial, planned, or not addressed. Nine
+  known gaps are named rather than omitted — audit-write failures are silent,
+  re-deciding a change request erases the earlier decision, and the API serializes timestamps
+  at whole-second granularity though they are stored at microsecond. Written
+  because the gaps are the half an auditor asks about, and because a compliance
+  document that overstates is worse than none.
 - **Time-window filters on every REST list endpoint**, named after the response
   field: `createdAt_gte` / `createdAt_lte` (`_gt` / `_lt` for exclusive), RFC3339.
   A malformed time or an unknown field is a 400, never an unfiltered list.
@@ -58,6 +115,15 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   because an API client sending an explicit `remove` is doing it deliberately.
 
 ### Changed
+- **Audit timestamps are served at sub-second precision.** They were stored at
+  PostgreSQL's microsecond precision and serialized with whole seconds, so two
+  events in the same second came back indistinguishable and their order was
+  unrecoverable from API output. Still RFC 3339, so parsers are unaffected.
+- **"Immutable audit trail" is now "append-only", in the API docs and the
+  cheatsheet.** The trail *is* append-only — no code path updates or deletes an
+  event — but nothing enforced or detected it, so the stronger word was a claim
+  published to API consumers with no mechanism behind it. Tamper-evidence is
+  designed and not built; the wording goes back when it is.
 - **REST query params are camelCase, one name per concept.** Audit log:
   `type`, `operation`, `category`, and a `createdAt` field on each event.
   Change requests: `awaitingReview`. Divergences and OCI artifacts:

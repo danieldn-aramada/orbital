@@ -19,6 +19,7 @@ import (
 	"github.com/armada/orbital/ent/auditeventresource"
 	"github.com/armada/orbital/ent/auditeventresourcetype"
 	"github.com/armada/orbital/ent/predicate"
+	"github.com/armada/orbital/internal/metrics"
 	"github.com/armada/orbital/web"
 	"github.com/labstack/echo/v4"
 )
@@ -56,15 +57,17 @@ type eventItem struct {
 	ResourceTypes []string        `json:"resourceTypes"` // ConfigItem types touched, e.g. ["VeleroBackup"]
 	ResourceIDs   []string        `json:"resourceIds"`   // orbIds touched
 	Actor         string          `json:"actor"         example:"asharma@armada.ai"`
-	CreatedAt     string          `json:"createdAt"     example:"2026-07-29T17:26:55Z"`
-	Timestamp     string          `json:"timestamp"     example:"2026-07-29T17:26:55Z"` // Deprecated: same value as createdAt.
-	Details       json.RawMessage `json:"details,omitempty" swaggertype:"object"`       // raw {operationName, query, variables, before}
-	EventCategory string          `json:"eventCategory" example:"data"`                 // data | management | auth
-	// CloudTrail parity. All three are omitempty: absent means "no HTTP request
+	CreatedAt     string          `json:"createdAt"     example:"2026-07-29T17:26:55.418293Z"`
+	Timestamp     string          `json:"timestamp"     example:"2026-07-29T17:26:55.418293Z"` // Deprecated: same value as createdAt.
+	Details       json.RawMessage `json:"details,omitempty" swaggertype:"object"`              // raw {operationName, query, variables, before}
+	EventCategory string          `json:"eventCategory" example:"data"`                        // data | management | auth
+	// CloudTrail parity. All four are omitempty: absent means "no HTTP request
 	// behind this event" (a background writer), which is different from empty.
-	EventSource     string `json:"eventSource,omitempty"     example:"graphql"`  // graphql | rest | internal
-	SourceIPAddress string `json:"sourceIpAddress,omitempty" example:"10.1.2.3"` // caller address
-	RequestID       string `json:"requestId,omitempty"       example:"a1b2c3d4"` // correlates events from one request
+	EventSource     string         `json:"eventSource,omitempty"     example:"graphql"`          // graphql | rest | internal
+	SourceIPAddress string         `json:"sourceIpAddress,omitempty" example:"10.1.2.3"`         // caller address
+	RequestID       string         `json:"requestId,omitempty"       example:"a1b2c3d4"`         // correlates events from one request
+	ActingClient    string         `json:"actingClient,omitempty" example:"aep-fleet-commander"` // service acting for the human in `actor`; absent when they are the same
+	Authorization   *authorization `json:"authorization,omitempty"`                              // what authorized this write; absent on a direct write
 	// Changes is the pre-computed field-level diff. **Present ONLY for a clean
 	// single-entity update** (omitted otherwise via omitempty) — so its presence
 	// is the client's signal that a field diff is available; no need to inspect
@@ -73,6 +76,30 @@ type eventItem struct {
 	Changes    []fieldChange `json:"changes,omitempty"`
 	VarSummary template.HTML `json:"-"`
 	DiffHTML   template.HTML `json:"-"`
+}
+
+// authorization names the act that authorized a write — the change request that
+// was merged, or the divergence entry that was resolved. Present only when the
+// write passed a control; absent on a direct write.
+// (Naming rationale — `type` over `kind`, `authorization` over `authorizedBy` —
+// is in docs/reference/AUDIT.md, deliberately NOT here: a doc comment on an
+// exported API type becomes the published swagger description, and an
+// integrator does not need our reasoning.)
+type authorization struct {
+	// Which kind of act authorized the write.
+	Type string `json:"type" example:"changeRequest" enums:"changeRequest,divergenceResolution"`
+	// The act's identifier, resolvable through its own API — a change request
+	// via GET /api/v1/change-requests/{id}, a divergence via its entry id.
+	ID string `json:"id" example:"colo-58"`
+}
+
+// authorizationOf builds the response field from the row's columns. Returns nil
+// when no authority was recorded, so the key is omitted rather than present-and-empty.
+func authorizationOf(e *ent.AuditEvent) *authorization {
+	if e.AuthorizationType == "" {
+		return nil
+	}
+	return &authorization{Type: e.AuthorizationType, ID: e.AuthorizationID}
 }
 
 // fieldChange is one changed field in an event's diff: the field name plus its
@@ -124,7 +151,7 @@ var skipVarsSet = map[string]bool{
 // List returns a paginated list of audit events ordered by timestamp desc.
 //
 // @Summary     List audit events
-// @Description Read-only, immutable audit trail of intent mutations, newest first.
+// @Description Audit trail of intent mutations, newest first. The **data** is append-only — orbital adds events and never updates or deletes them. This **endpoint** is read-only: there is no API to create or modify an event. Append-only is a property of orbital's write paths, not a tamper-evidence mechanism; see docs/audit-model.md § Integrity for what is and is not protected.
 // @Description
 // @Description **Scope a query** by combining filters: `orbId` (repeatable, **max 128** — over that the request is refused with `400 BAD_USER_INPUT`, never silently truncated) for a specific resource; `namespace` for a whole data center; `type`/`operation` to narrow; `createdAt_gte`/`createdAt_lte` (RFC3339; `_gt`/`_lt` for exclusive bounds) for a time window. To see everything under a server/cluster, fetch its subgraph orbIds from the GraphQL Topology API and pass them as repeatable `orbId` params (there is no single "cluster" scope — a child mutation records the child's orbId, not the parent's).
 // @Description
@@ -285,14 +312,19 @@ func (h *AuditHandler) List(c echo.Context) error {
 			ResourceTypes: resTypes,
 			ResourceIDs:   orbIDs(e.Edges.Resources),
 			Actor:         e.Actor,
-			CreatedAt:     e.Timestamp.UTC().Format(time.RFC3339),
-			Timestamp:     e.Timestamp.UTC().Format(time.RFC3339),
+			// Both sub-second, and both from the same value: createdAt
+			// supersedes timestamp, and a deprecated field that disagreed with
+			// its replacement would be worse than not having deprecated it.
+			CreatedAt:     e.Timestamp.UTC().Format(time.RFC3339Nano),
+			Timestamp:     e.Timestamp.UTC().Format(time.RFC3339Nano),
 			Details:       e.Details,
 			EventCategory: e.EventCategory,
 
 			EventSource:     e.EventSource,
 			SourceIPAddress: e.SourceIPAddress,
 			RequestID:       e.RequestID,
+			ActingClient:    e.ActingClient,
+			Authorization:   authorizationOf(e),
 		}
 		var d eventDetails
 		if len(e.Details) > 0 {
@@ -570,6 +602,33 @@ type auditOrigin struct {
 	// behalf. Empty when the caller IS the subject, so the field means something
 	// when present rather than being noise on every row.
 	ActingClient string
+	// AuthorizationType / AuthorizationID name the ACT that authorized this write
+	// — a merged change request, an accepted divergence. Set only when one
+	// exists, so presence means "this write passed a control" and absence means
+	// it did not, rather than the field being noise on every row.
+	//
+	// This completes a trichotomy with details.bypassedPolicy, which records a
+	// control that was SKIPPED. Reviewed, break-glass, ungated.
+	AuthorizationType string
+	AuthorizationID   string
+}
+
+// auditAuthorized is the origin for a write an internal dispatcher makes on
+// behalf of a reviewed act.
+//
+// Source stays "internal" — the write did not come through the GraphQL proxy,
+// and that distinction is what the field is for. But requestID IS carried, which
+// looks like it contradicts "an async job records no request id" in AUDIT.md and
+// does not: merge and divergence-resolve run INSIDE the HTTP request that
+// triggered them, so a live request id exists. Export, restore and the scheduled
+// backup are the async cases, and they still pass auditInternal().
+func auditAuthorized(typ, id, requestID string) auditOrigin {
+	return auditOrigin{
+		Source:            "internal",
+		RequestID:         requestID,
+		AuthorizationType: typ,
+		AuthorizationID:   id,
+	}
 }
 
 // auditInternal is the origin for writes with no HTTP request behind them.
@@ -604,7 +663,8 @@ func writeAuditEvent(db *ent.Client, logger *slog.Logger, eventCategory, actor, 
 
 	tx, err := db.Tx(ctx)
 	if err != nil {
-		logger.Warn("failed to begin audit transaction", "op", opName, "err", err)
+		metrics.RecordAuditWriteFailure("begin_tx")
+		logger.Error("audit event LOST: could not begin transaction", "op", opName, "err", err)
 		return
 	}
 
@@ -630,11 +690,17 @@ func writeAuditEvent(db *ent.Client, logger *slog.Logger, eventCategory, actor, 
 	if origin.ActingClient != "" {
 		ec = ec.SetActingClient(origin.ActingClient)
 	}
+	// Columns, matching every other record-metadata fact on this table. Set only
+	// when an authority exists — absence is what distinguishes a direct write.
+	if origin.AuthorizationType != "" {
+		ec = ec.SetAuthorizationType(origin.AuthorizationType).SetAuthorizationID(origin.AuthorizationID)
+	}
 
 	ev, err := ec.Save(ctx)
 	if err != nil {
 		tx.Rollback() //nolint:errcheck
-		logger.Warn("failed to write audit event", "op", opName, "err", err)
+		metrics.RecordAuditWriteFailure("event")
+		logger.Error("audit event LOST: could not write event row", "op", opName, "err", err)
 		return
 	}
 
@@ -647,7 +713,8 @@ func writeAuditEvent(db *ent.Client, logger *slog.Logger, eventCategory, actor, 
 		}
 		if err := tx.AuditEventResource.CreateBulk(builders...).Exec(ctx); err != nil {
 			tx.Rollback() //nolint:errcheck
-			logger.Warn("failed to write audit event resources", "op", opName, "err", err)
+			metrics.RecordAuditWriteFailure("resources")
+			logger.Error("audit event LOST: could not write event resources", "op", opName, "err", err)
 			return
 		}
 	}
@@ -661,13 +728,15 @@ func writeAuditEvent(db *ent.Client, logger *slog.Logger, eventCategory, actor, 
 		}
 		if err := tx.AuditEventResourceType.CreateBulk(builders...).Exec(ctx); err != nil {
 			tx.Rollback() //nolint:errcheck
-			logger.Warn("failed to write audit event resource types", "op", opName, "err", err)
+			metrics.RecordAuditWriteFailure("resource_types")
+			logger.Error("audit event LOST: could not write event resource types", "op", opName, "err", err)
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		logger.Warn("failed to commit audit event", "op", opName, "err", err)
+		metrics.RecordAuditWriteFailure("commit")
+		logger.Error("audit event LOST: could not commit", "op", opName, "err", err)
 	}
 }
 

@@ -138,7 +138,7 @@ func TestListFilter_EveryStatusReturnsOnlyItsOwn(t *testing.T) {
 	if _, err := f.crh.Approve(ctx, merged.ID, reviewer, user.RoleDev, ""); err != nil {
 		t.Fatalf("approve merged: %v", err)
 	}
-	if _, err := f.crh.Merge(ctx, merged.ID, author, user.RoleDev, false); err != nil {
+	if _, err := f.crh.Merge(ctx, merged.ID, author, user.RoleDev, false, ""); err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 

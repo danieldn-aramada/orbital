@@ -58,7 +58,7 @@ func TestNoBefore_ThirdPartyChildEditStillStalesTheParent(t *testing.T) {
 	if st.Valid != 0 {
 		t.Errorf("valid approvals = %d, want 0", st.Valid)
 	}
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); !errors.Is(err, errCRStale) {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); !errors.Is(err, errCRStale) {
 		t.Errorf("merge err = %v, want stale", err)
 	}
 }
@@ -97,7 +97,7 @@ func TestNoBefore_SatisfiedAndThreeWayMergeStillWork(t *testing.T) {
 	}
 
 	versionBefore := readVersion(t, crServerA)
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err != nil {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err != nil {
 		t.Fatalf("merging an already-satisfied request failed: %v", err)
 	}
 	if got := readVersion(t, crServerA); got != versionBefore {
@@ -119,7 +119,7 @@ func TestNoBefore_SatisfiedAndThreeWayMergeStillWork(t *testing.T) {
 	crGQL(t, `mutation($orbId: String!, $set: ServerPatch!) { updateServer(input: {filter: {orbId: {eq: $orbId}}, set: $set}) { numUids } }`,
 		map[string]any{"orbId": crServerB, "set": map[string]any{"hostname": "theirs"}})
 
-	_, err := f.crh.Merge(ctx, cr2.ID, author, user.RoleDev, false)
+	_, err := f.crh.Merge(ctx, cr2.ID, author, user.RoleDev, false, "")
 	var pf *preconditionFailed
 	if !errors.As(err, &pf) {
 		t.Fatalf("err = %v, want a field-level conflict from base_values", err)
