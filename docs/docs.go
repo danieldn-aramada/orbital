@@ -203,7 +203,7 @@ const docTemplate = `{
         },
         "/api/v1/audit-log": {
             "get": {
-                "description": "Read-only, immutable audit trail of intent mutations, newest first.\n\n**Scope a query** by combining filters: ` + "`" + `orbId` + "`" + ` (repeatable, **max 128** — over that the request is refused with ` + "`" + `400 BAD_USER_INPUT` + "`" + `, never silently truncated) for a specific resource; ` + "`" + `namespace` + "`" + ` for a whole data center; ` + "`" + `resource_type` + "`" + `/` + "`" + `operation_name` + "`" + ` to narrow. To see everything under a server/cluster, fetch its subgraph orbIds from the GraphQL Topology API and pass them as repeatable ` + "`" + `orbId` + "`" + ` params (there is no single \"cluster\" scope — a child mutation records the child's orbId, not the parent's).\n\n**Render a diff:** when an event is a clean single-entity update it carries a ` + "`" + `changes` + "`" + ` array (` + "`" + `[{field, before, after}]` + "`" + `) with metadata and DGraph UIDs already excluded — render it directly. When ` + "`" + `changes` + "`" + ` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing ` + "`" + `operations` + "`" + ` + ` + "`" + `resourceIds` + "`" + `. The raw ` + "`" + `details` + "`" + ` (with ` + "`" + `before` + "`" + `/` + "`" + `variables` + "`" + `) is always included for callers that want it.\n\nReturns JSON by default; returns an HTML table fragment when the ` + "`" + `HX-Request` + "`" + ` header is present (used by orbital's own UI). See docs/api-cheatsheet.md § \"Audit log\".",
+                "description": "Read-only, immutable audit trail of intent mutations, newest first.\n\n**Scope a query** by combining filters: ` + "`" + `orbId` + "`" + ` (repeatable, **max 128** — over that the request is refused with ` + "`" + `400 BAD_USER_INPUT` + "`" + `, never silently truncated) for a specific resource; ` + "`" + `namespace` + "`" + ` for a whole data center; ` + "`" + `type` + "`" + `/` + "`" + `operation` + "`" + ` to narrow; ` + "`" + `createdAt_gte` + "`" + `/` + "`" + `createdAt_lte` + "`" + ` (RFC3339; ` + "`" + `_gt` + "`" + `/` + "`" + `_lt` + "`" + ` for exclusive bounds) for a time window. To see everything under a server/cluster, fetch its subgraph orbIds from the GraphQL Topology API and pass them as repeatable ` + "`" + `orbId` + "`" + ` params (there is no single \"cluster\" scope — a child mutation records the child's orbId, not the parent's).\n\n**Render a diff:** when an event is a clean single-entity update it carries a ` + "`" + `changes` + "`" + ` array (` + "`" + `[{field, before, after}]` + "`" + `) with metadata and DGraph UIDs already excluded — render it directly. When ` + "`" + `changes` + "`" + ` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing ` + "`" + `operations` + "`" + ` + ` + "`" + `resourceIds` + "`" + `. The raw ` + "`" + `details` + "`" + ` (with ` + "`" + `before` + "`" + `/` + "`" + `variables` + "`" + `) is always included for callers that want it.\n\nReturns JSON by default; returns an HTML table fragment when the ` + "`" + `HX-Request` + "`" + ` header is present (used by orbital's own UI). See docs/api-cheatsheet.md § \"Audit log\".",
                 "produces": [
                     "application/json"
                 ],
@@ -242,31 +242,65 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "RFC3339 lower bound (exclusive) on event timestamp",
-                        "name": "since",
+                        "description": "Events at or after this time (RFC3339)",
+                        "name": "createdAt_gte",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "RFC3339 upper bound (inclusive) on event timestamp",
-                        "name": "until",
+                        "description": "Events at or before this time (RFC3339)",
+                        "name": "createdAt_lte",
                         "in": "query"
                     },
                     {
-                        "type": "string",
-                        "description": "Filter by resource ID",
-                        "name": "resource_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by resource type (e.g. Server, DataCenter)",
-                        "name": "resource_type",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Filter by resource type (e.g. Server, DataCenter). Repeatable, OR-ed.",
+                        "name": "type",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "Filter to events containing this operation (exact, case-sensitive; stored form is verb-lowercased, e.g. updateVeleroBackup)",
+                        "name": "operation",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by event category: data, management or auth",
+                        "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deprecated: use createdAt_gt.",
+                        "name": "since",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deprecated: use createdAt_lte.",
+                        "name": "until",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deprecated: use orbId.",
+                        "name": "resource_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deprecated: use type.",
+                        "name": "resource_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deprecated: use operation.",
                         "name": "operation_name",
                         "in": "query"
                     }
@@ -336,6 +370,32 @@ const docTemplate = `{
                     "backup"
                 ],
                 "summary": "List backups",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Initiated at or after (RFC3339; _gt for exclusive)",
+                        "name": "initiatedAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Initiated at or before (RFC3339; _lt for exclusive)",
+                        "name": "initiatedAt_lte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Completed at or after (RFC3339; _gt for exclusive)",
+                        "name": "completedAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Completed at or before (RFC3339; _lt for exclusive)",
+                        "name": "completedAt_lte",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -344,6 +404,12 @@ const docTemplate = `{
                             "items": {
                                 "$ref": "#/definitions/handler.backupResponse"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
                         }
                     }
                 }
@@ -481,7 +547,7 @@ const docTemplate = `{
         },
         "/api/v1/change-requests": {
             "get": {
-                "description": "Filters AND across params; ` + "`" + `status` + "`" + `, ` + "`" + `namespace` + "`" + ` and ` + "`" + `orbId` + "`" + ` are each repeatable and OR-ed within. Use ` + "`" + `status=active` + "`" + ` (open+approved) for \"in flight\" — ` + "`" + `open` + "`" + ` alone excludes approved.",
+                "description": "Filters AND across params; ` + "`" + `status` + "`" + `, ` + "`" + `namespace` + "`" + `, ` + "`" + `type` + "`" + ` and ` + "`" + `orbId` + "`" + ` are each repeatable and OR-ed within. Use ` + "`" + `status=active` + "`" + ` (open+approved) for \"in flight\" — ` + "`" + `open` + "`" + ` alone excludes approved.\n\n**Time filters:** ` + "`" + `\u003cfield\u003e_gte` + "`" + ` / ` + "`" + `\u003cfield\u003e_lte` + "`" + ` on ` + "`" + `createdAt` + "`" + `, ` + "`" + `updatedAt` + "`" + ` and ` + "`" + `executedAt` + "`" + `, RFC3339. ` + "`" + `_gt` + "`" + ` / ` + "`" + `_lt` + "`" + ` are also accepted for exclusive bounds. A malformed time, or an operator on a field this list does not filter, is a 400.",
                 "produces": [
                     "application/json"
                 ],
@@ -511,6 +577,16 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "ConfigItem type any item of the changeset targets (e.g. Server). An interface name matches its implementing types. Repeatable, OR-ed.",
+                        "name": "type",
+                        "in": "query"
+                    },
+                    {
                         "type": "string",
                         "description": "Author email",
                         "name": "author",
@@ -525,6 +601,12 @@ const docTemplate = `{
                     {
                         "type": "boolean",
                         "description": "Only requests this caller can still review",
+                        "name": "awaitingReview",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Deprecated: use awaitingReview.",
                         "name": "awaiting_review",
                         "in": "query"
                     },
@@ -536,6 +618,54 @@ const docTemplate = `{
                         "collectionFormat": "multi",
                         "description": "orbId(s) the changeset touches. Repeatable, OR-ed, max 128.",
                         "name": "orbId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Created at or after (RFC3339)",
+                        "name": "createdAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Created at or before (RFC3339)",
+                        "name": "createdAt_lte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Updated at or after (RFC3339)",
+                        "name": "updatedAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Updated at or before (RFC3339)",
+                        "name": "updatedAt_lte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Merged at or after (RFC3339)",
+                        "name": "executedAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Merged at or before (RFC3339)",
+                        "name": "executedAt_lte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max results after filtering (default: all)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset into the filtered results",
+                        "name": "offset",
                         "in": "query"
                     }
                 ],
@@ -936,8 +1066,38 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Filter by dc_orb_id",
+                        "description": "Filter by data center orbId (e.g. colo:colo-galleon)",
+                        "name": "dataCenter",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deprecated: use dataCenter.",
                         "name": "dc",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "First seen at or after (RFC3339; _gt for exclusive)",
+                        "name": "firstSeenAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "First seen at or before (RFC3339; _lt for exclusive)",
+                        "name": "firstSeenAt_lte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Last seen at or after (RFC3339; _gt for exclusive)",
+                        "name": "lastSeenAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Last seen at or before (RFC3339; _lt for exclusive)",
+                        "name": "lastSeenAt_lte",
                         "in": "query"
                     }
                 ],
@@ -949,6 +1109,12 @@ const docTemplate = `{
                             "items": {
                                 "$ref": "#/definitions/handler.entryItem"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
                         }
                     }
                 }
@@ -962,9 +1128,15 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Data center orbId (e.g. colo:colo-galleon)",
-                        "name": "dcOrbId",
+                        "name": "dataCenter",
                         "in": "query",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deprecated: use dataCenter.",
+                        "name": "dcOrbId",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1256,6 +1428,32 @@ const docTemplate = `{
                     "export"
                 ],
                 "summary": "List export jobs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Created at or after (RFC3339; _gt for exclusive)",
+                        "name": "createdAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Created at or before (RFC3339; _lt for exclusive)",
+                        "name": "createdAt_lte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Completed at or after (RFC3339; _gt for exclusive)",
+                        "name": "completedAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Completed at or before (RFC3339; _lt for exclusive)",
+                        "name": "completedAt_lte",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1264,6 +1462,12 @@ const docTemplate = `{
                             "items": {
                                 "$ref": "#/definitions/handler.statusResponse"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
                         }
                     }
                 }
@@ -1401,7 +1605,7 @@ const docTemplate = `{
         },
         "/api/v1/oci/artifacts": {
             "get": {
-                "description": "Returns published OCI artifacts, most recent first. Combine ` + "`" + `dc` + "`" + ` + ` + "`" + `status=completed` + "`" + ` + ` + "`" + `limit=1` + "`" + ` to read the latest published version for a data center — the response carries ` + "`" + `tag` + "`" + `, ` + "`" + `digest` + "`" + ` and ` + "`" + `completedAt` + "`" + `. **Compare on ` + "`" + `digest` + "`" + `, not ` + "`" + `tag` + "`" + `:** the tag sequence is per OCI repository and the repository name derives from the data center's editable name, so renaming a data center restarts the sequence at v1 for the same orbId.",
+                "description": "Returns published OCI artifacts, most recent first. Combine ` + "`" + `dataCenter` + "`" + ` + ` + "`" + `status=completed` + "`" + ` + ` + "`" + `limit=1` + "`" + ` to read the latest published version for a data center — the response carries ` + "`" + `tag` + "`" + `, ` + "`" + `digest` + "`" + ` and ` + "`" + `completedAt` + "`" + `. **Compare on ` + "`" + `digest` + "`" + `, not ` + "`" + `tag` + "`" + `:** the tag sequence is per OCI repository and the repository name derives from the data center's editable name, so renaming a data center restarts the sequence at v1 for the same orbId.",
                 "produces": [
                     "application/json"
                 ],
@@ -1412,8 +1616,38 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Filter by data center orbId (e.g. colo:colo-galleon). Matches RegistryArtifact.datacenter_id, which stores the orbId.",
+                        "description": "Filter by data center orbId (e.g. colo:colo-galleon)",
+                        "name": "dataCenter",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deprecated: use dataCenter.",
                         "name": "dc",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Initiated at or after (RFC3339; _gt for exclusive)",
+                        "name": "initiatedAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Initiated at or before (RFC3339; _lt for exclusive)",
+                        "name": "initiatedAt_lte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Completed at or after (RFC3339; _gt for exclusive)",
+                        "name": "completedAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Completed at or before (RFC3339; _lt for exclusive)",
+                        "name": "completedAt_lte",
                         "in": "query"
                     },
                     {
@@ -1437,6 +1671,12 @@ const docTemplate = `{
                             "items": {
                                 "$ref": "#/definitions/handler.artifactResponse"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
                         }
                     }
                 }
@@ -1657,6 +1897,44 @@ const docTemplate = `{
                     "backup"
                 ],
                 "summary": "List restore jobs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Created at or after (RFC3339; _gt for exclusive)",
+                        "name": "createdAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Created at or before (RFC3339; _lt for exclusive)",
+                        "name": "createdAt_lte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Started at or after (RFC3339; _gt for exclusive)",
+                        "name": "startedAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Started at or before (RFC3339; _lt for exclusive)",
+                        "name": "startedAt_lte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Completed at or after (RFC3339; _gt for exclusive)",
+                        "name": "completedAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Completed at or before (RFC3339; _lt for exclusive)",
+                        "name": "completedAt_lte",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1665,6 +1943,12 @@ const docTemplate = `{
                             "items": {
                                 "$ref": "#/definitions/handler.restoreJobResponse"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
                         }
                     }
                 }
@@ -1715,12 +1999,32 @@ const docTemplate = `{
                     "users"
                 ],
                 "summary": "List users",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Created at or after (RFC3339; _gt for exclusive)",
+                        "name": "createdAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Created at or before (RFC3339; _lt for exclusive)",
+                        "name": "createdAt_lte",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.errorResponse"
                         }
                     },
                     "403": {
@@ -2500,7 +2804,7 @@ const docTemplate = `{
                     "example": "open"
                 },
                 "subtreeChanged": {
-                    "description": "SubtreeChanged means the reviewed scope moved without any change object\ngoing out of date — an edit to an owned child. Cleared by approving again;\nblocks merge on its own. Distinct from Stale, which only the author can\nclear by rebasing.",
+                    "description": "SubtreeChanged means the reviewed scope moved without any change object\ngoing out of date — an edit to a subgraph member. Cleared by approving again;\nblocks merge on its own. Distinct from Stale, which only the author can\nclear by rebasing.",
                     "type": "boolean",
                     "example": false
                 },
@@ -2701,6 +3005,10 @@ const docTemplate = `{
                         "$ref": "#/definitions/handler.fieldChange"
                     }
                 },
+                "createdAt": {
+                    "type": "string",
+                    "example": "2026-07-29T17:26:55Z"
+                },
                 "details": {
                     "description": "raw {operationName, query, variables, before}",
                     "type": "object"
@@ -2751,6 +3059,7 @@ const docTemplate = `{
                     "example": "10.1.2.3"
                 },
                 "timestamp": {
+                    "description": "Deprecated: same value as createdAt.",
                     "type": "string",
                     "example": "2026-07-29T17:26:55Z"
                 }

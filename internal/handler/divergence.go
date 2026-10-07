@@ -13,6 +13,7 @@ import (
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/divergenceentry"
 	"github.com/armada/orbital/ent/divergenceresolution"
+	"github.com/armada/orbital/ent/predicate"
 	"github.com/armada/orbital/internal/approval"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -116,7 +117,7 @@ type resolutionOutcome struct {
 // Filterable by query params:
 //
 //	?action=accept&action=reject   resolution action — repeatable for OR. Entries without a resolution are excluded when this filter is set.
-//	?dc=colo:colo-galleon          dc_orb_id exact match.
+//	?dataCenter=colo:colo-galleon  dc_orb_id exact match.
 //
 // Two canonical query shapes for the deployment layer:
 //   - "force takeover":  ?action=accept&action=reject  → spec.takeover[]
@@ -129,16 +130,29 @@ type resolutionOutcome struct {
 // @Tags     divergence
 // @Produce  json
 // @Param    action      query []string false "Filter by resolution action; repeatable for OR" Enums(accept,reject,ignore)
-// @Param    dc          query string   false "Filter by dc_orb_id"
+// @Param    dataCenter  query string   false "Filter by data center orbId (e.g. colo:colo-galleon)"
+// @Param    dc          query string   false "Deprecated: use dataCenter."
+// @Param    firstSeenAt_gte query string false "First seen at or after (RFC3339; _gt for exclusive)"
+// @Param    firstSeenAt_lte query string false "First seen at or before (RFC3339; _lt for exclusive)"
+// @Param    lastSeenAt_gte  query string false "Last seen at or after (RFC3339; _gt for exclusive)"
+// @Param    lastSeenAt_lte  query string false "Last seen at or before (RFC3339; _lt for exclusive)"
 // @Success  200 {array} entryItem
+// @Failure  400 {object} errorResponse
 // @Router   /api/v1/divergences [get]
 func (h *DivergenceHandler) List(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	actions := c.QueryParams()["action"]
-	dcFilter := c.QueryParam("dc")
+	dcFilter := queryParam(c, "dataCenter", "dc")
+	timePreds, err := TimeFilters[predicate.DivergenceEntry](c.QueryParams(), TimeFields{
+		"firstSeenAt": divergenceentry.FieldFirstSeenAt,
+		"lastSeenAt":  divergenceentry.FieldLastSeenAt,
+	})
+	if err != nil {
+		return WriteQueryError(c, err)
+	}
 
-	entryQuery := h.db.DivergenceEntry.Query().Order(ent.Desc(divergenceentry.FieldLastSeenAt))
+	entryQuery := h.db.DivergenceEntry.Query().Where(timePreds...).Order(ent.Desc(divergenceentry.FieldLastSeenAt))
 	if dcFilter != "" {
 		entryQuery = entryQuery.Where(divergenceentry.DcOrbID(dcFilter))
 	}
@@ -670,7 +684,7 @@ func (h *DivergenceHandler) DeleteResolution(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-// ClearByDC handles DELETE /api/v1/divergences?dcOrbId=<dc>.
+// ClearByDC handles DELETE /api/v1/divergences?dataCenter=<dc>.
 //
 // Break-glass for operators: drops ALL DivergenceEntry and DivergenceResolution
 // rows for a DC in one transaction, then resets the ingester's idempotency
@@ -681,15 +695,17 @@ func (h *DivergenceHandler) DeleteResolution(c echo.Context) error {
 //
 // @Summary  Clear all divergence state for a data center
 // @Tags     divergence
-// @Param    dcOrbId query string true "Data center orbId (e.g. colo:colo-galleon)"
+// @Param    dataCenter query string true "Data center orbId (e.g. colo:colo-galleon)"
+// @Param    dcOrbId    query string false "Deprecated: use dataCenter."
 // @Success  200 {object} map[string]any
 // @Failure  400 {object} errorResponse
 // @Failure  401 {object} errorResponse
 // @Router   /api/v1/divergences [delete]
 func (h *DivergenceHandler) ClearByDC(c echo.Context) error {
-	dc := c.QueryParam("dcOrbId")
+	dc := queryParam(c, "dataCenter", "dcOrbId")
 	if dc == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "dcOrbId query param required")
+		return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+			"dataCenter query param required", "Pass the data center's orbId, e.g. ?dataCenter=colo:colo-galleon.")
 	}
 	actor := actorFromContext(c)
 	if actor == "" {

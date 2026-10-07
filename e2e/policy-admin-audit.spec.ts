@@ -71,7 +71,7 @@ test('the delete event records what the policy was', async ({ page }) => {
   expect(created.ok()).toBeTruthy()
   await api(page, 'DELETE', `/api/v1/approval-policies/${(await created.json()).id}`)
 
-  const res = await api(page, 'GET', '/api/v1/audit-log?operation_name=deleteApprovalPolicy')
+  const res = await api(page, 'GET', '/api/v1/audit-log?operation=deleteApprovalPolicy')
   expect(res.ok()).toBeTruthy()
   const events = (await res.json()).events || []
   const ours = events.find((e: any) => e.details?.namespace === NS)

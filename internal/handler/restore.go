@@ -22,6 +22,7 @@ import (
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/exportjob"
+	"github.com/armada/orbital/ent/predicate"
 	"github.com/armada/orbital/ent/restorejob"
 	"github.com/armada/orbital/internal/blobstore"
 	"github.com/armada/orbital/web"
@@ -307,10 +308,25 @@ func (h *RestoreHandler) Trigger(c echo.Context) error {
 // @Description Returns up to 50 restore jobs ordered by most recent first.
 // @Tags        backup
 // @Produce     json
+// @Param       createdAt_gte query string false "Created at or after (RFC3339; _gt for exclusive)"
+// @Param       createdAt_lte query string false "Created at or before (RFC3339; _lt for exclusive)"
+// @Param       startedAt_gte query string false "Started at or after (RFC3339; _gt for exclusive)"
+// @Param       startedAt_lte query string false "Started at or before (RFC3339; _lt for exclusive)"
+// @Param       completedAt_gte query string false "Completed at or after (RFC3339; _gt for exclusive)"
+// @Param       completedAt_lte query string false "Completed at or before (RFC3339; _lt for exclusive)"
 // @Success     200 {array} restoreJobResponse
+// @Failure     400 {object} errorResponse
 // @Router      /api/v1/restore/jobs [get]
 func (h *RestoreHandler) List(c echo.Context) error {
-	jobs, err := h.db.RestoreJob.Query().
+	timePreds, err := TimeFilters[predicate.RestoreJob](c.QueryParams(), TimeFields{
+		"createdAt":   restorejob.FieldCreatedAt,
+		"startedAt":   restorejob.FieldStartedAt,
+		"completedAt": restorejob.FieldCompletedAt,
+	})
+	if err != nil {
+		return WriteQueryError(c, err)
+	}
+	jobs, err := h.db.RestoreJob.Query().Where(timePreds...).
 		Order(restorejob.ByCreatedAt(entsql.OrderDesc())).
 		Limit(50).
 		All(c.Request().Context())

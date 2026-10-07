@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -572,13 +573,104 @@ func TestEventList_FilterByTimestampWindow(t *testing.T) {
 
 func TestEventList_FilterByTimestamp_MalformedReturns400(t *testing.T) {
 	h := newEventHandler(t)
-	c, _ := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"since": "not-a-timestamp"})
-	err := h.List(c)
-	if err == nil {
-		t.Fatal("expected 400 for malformed since; got nil")
+	c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", map[string]string{"since": "not-a-timestamp"})
+	if err := h.List(c); err != nil {
+		t.Fatalf("List: %v", err)
 	}
-	if he, ok := err.(*echo.HTTPError); !ok || he.Code != http.StatusBadRequest {
-		t.Errorf("expected *echo.HTTPError 400, got %T %v", err, err)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"code":"BAD_USER_INPUT"`) {
+		t.Errorf("expected a 400 BAD_USER_INPUT envelope, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// AC 6 + 7 — createdAt_* filters on the event time, both bounds inclusive as
+// named; the deprecated since/until still answer the same window; every event
+// carries createdAt equal to the deprecated timestamp.
+func TestEventList_CreatedAtWindowAndDeprecatedSinceUntilAgree(t *testing.T) {
+	ctx := context.Background()
+	clearEvents(ctx)
+	t.Cleanup(func() { clearEvents(ctx) })
+
+	base := time.Now().UTC().Truncate(time.Second)
+	for i, off := range []time.Duration{-3 * time.Minute, -2 * time.Minute, -1 * time.Minute, 0} {
+		ev := testDB.AuditEvent.Create().SetActor("ts-test").SetOperations([]string{"op"}).
+			SetTimestamp(base.Add(off)).SaveX(ctx)
+		testDB.AuditEventResource.Create().SetOrbID("ns:ts-" + strconv.Itoa(i)).SetAuditEventID(ev.ID).ExecX(ctx)
+	}
+	lo := base.Add(-2 * time.Minute).Format(time.RFC3339)
+	hi := base.Add(-1 * time.Minute).Format(time.RFC3339)
+
+	h := newEventHandler(t)
+	ids := func(query map[string]string) []string {
+		t.Helper()
+		c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log", query)
+		if err := h.List(c); err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		var body struct {
+			Events []struct {
+				ResourceIDs []string `json:"resourceIds"`
+				CreatedAt   string   `json:"createdAt"`
+				Timestamp   string   `json:"timestamp"`
+			} `json:"events"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode %d %s: %v", rec.Code, rec.Body.String(), err)
+		}
+		var out []string
+		for _, e := range body.Events {
+			if e.CreatedAt == "" || e.CreatedAt != e.Timestamp {
+				t.Errorf("createdAt %q must equal timestamp %q", e.CreatedAt, e.Timestamp)
+			}
+			out = append(out, e.ResourceIDs...)
+		}
+		sort.Strings(out)
+		return out
+	}
+
+	if got := strings.Join(ids(map[string]string{"createdAt_gte": lo, "createdAt_lte": hi}), ","); got != "ns:ts-1,ns:ts-2" {
+		t.Errorf("createdAt_gte/_lte returned %s, want both bounds included", got)
+	}
+	newer := strings.Join(ids(map[string]string{"createdAt_gt": lo, "createdAt_lte": hi}), ",")
+	deprecated := strings.Join(ids(map[string]string{"since": lo, "until": hi}), ",")
+	if newer != "ns:ts-2" || deprecated != newer {
+		t.Errorf("createdAt_gt/_lte returned %s and since/until %s, want ns:ts-2 from both", newer, deprecated)
+	}
+}
+
+// The renamed params and their deprecated spellings select the same events;
+// `type` is repeatable and OR-ed.
+func TestEventList_RenamedParamsAndDeprecatedAliasesAgree(t *testing.T) {
+	ctx := context.Background()
+	clearEvents(ctx)
+	t.Cleanup(func() { clearEvents(ctx) })
+	createEvent(t, "a", []string{"updateServer"}, []string{"Server"}, []string{"ns:s"}, "data")
+	createEvent(t, "a", []string{"updateRack"}, []string{"Rack"}, []string{"ns:r"}, "data")
+	createEvent(t, "a", []string{"exportSubgraph"}, []string{"DataCenter"}, []string{"ns:dc"}, "management")
+
+	h := newEventHandler(t)
+	total := func(raw string) int {
+		t.Helper()
+		c, rec := eventCtx(http.MethodGet, "/api/v1/audit-log?"+raw, nil)
+		if err := h.List(c); err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		var body struct {
+			Total int `json:"total"`
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		return body.Total
+	}
+	for raw, want := range map[string]int{
+		"type=Server&type=Rack":     2,
+		"resource_type=Server":      1,
+		"operation=updateRack":      1,
+		"operation_name=updateRack": 1,
+		"category=management":       1,
+		"event_category=management": 1,
+	} {
+		if got := total(raw); got != want {
+			t.Errorf("%s: total %d, want %d", raw, got, want)
+		}
 	}
 }
 

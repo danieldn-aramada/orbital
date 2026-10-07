@@ -611,7 +611,7 @@ definitions:
       subtreeChanged:
         description: |-
           SubtreeChanged means the reviewed scope moved without any change object
-          going out of date — an edit to an owned child. Cleared by approving again;
+          going out of date — an edit to a subgraph member. Cleared by approving again;
           blocks merge on its own. Distinct from Stale, which only the author can
           clear by rebasing.
         example: false
@@ -765,6 +765,9 @@ definitions:
         items:
           $ref: '#/definitions/handler.fieldChange'
         type: array
+      createdAt:
+        example: "2026-07-29T17:26:55Z"
+        type: string
       details:
         description: raw {operationName, query, variables, before}
         type: object
@@ -805,6 +808,7 @@ definitions:
         example: 10.1.2.3
         type: string
       timestamp:
+        description: 'Deprecated: same value as createdAt.'
         example: "2026-07-29T17:26:55Z"
         type: string
     type: object
@@ -1362,7 +1366,7 @@ paths:
       description: |-
         Read-only, immutable audit trail of intent mutations, newest first.
 
-        **Scope a query** by combining filters: `orbId` (repeatable, **max 128** — over that the request is refused with `400 BAD_USER_INPUT`, never silently truncated) for a specific resource; `namespace` for a whole data center; `resource_type`/`operation_name` to narrow. To see everything under a server/cluster, fetch its subgraph orbIds from the GraphQL Topology API and pass them as repeatable `orbId` params (there is no single "cluster" scope — a child mutation records the child's orbId, not the parent's).
+        **Scope a query** by combining filters: `orbId` (repeatable, **max 128** — over that the request is refused with `400 BAD_USER_INPUT`, never silently truncated) for a specific resource; `namespace` for a whole data center; `type`/`operation` to narrow; `createdAt_gte`/`createdAt_lte` (RFC3339; `_gt`/`_lt` for exclusive bounds) for a time window. To see everything under a server/cluster, fetch its subgraph orbIds from the GraphQL Topology API and pass them as repeatable `orbId` params (there is no single "cluster" scope — a child mutation records the child's orbId, not the parent's).
 
         **Render a diff:** when an event is a clean single-entity update it carries a `changes` array (`[{field, before, after}]`) with metadata and DGraph UIDs already excluded — render it directly. When `changes` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing `operations` + `resourceIds`. The raw `details` (with `before`/`variables`) is always included for callers that want it.
 
@@ -1389,24 +1393,48 @@ paths:
         in: query
         name: namespace
         type: string
-      - description: RFC3339 lower bound (exclusive) on event timestamp
+      - description: Events at or after this time (RFC3339)
+        in: query
+        name: createdAt_gte
+        type: string
+      - description: Events at or before this time (RFC3339)
+        in: query
+        name: createdAt_lte
+        type: string
+      - collectionFormat: multi
+        description: Filter by resource type (e.g. Server, DataCenter). Repeatable,
+          OR-ed.
+        in: query
+        items:
+          type: string
+        name: type
+        type: array
+      - description: Filter to events containing this operation (exact, case-sensitive;
+          stored form is verb-lowercased, e.g. updateVeleroBackup)
+        in: query
+        name: operation
+        type: string
+      - description: 'Filter by event category: data, management or auth'
+        in: query
+        name: category
+        type: string
+      - description: 'Deprecated: use createdAt_gt.'
         in: query
         name: since
         type: string
-      - description: RFC3339 upper bound (inclusive) on event timestamp
+      - description: 'Deprecated: use createdAt_lte.'
         in: query
         name: until
         type: string
-      - description: Filter by resource ID
+      - description: 'Deprecated: use orbId.'
         in: query
         name: resource_id
         type: string
-      - description: Filter by resource type (e.g. Server, DataCenter)
+      - description: 'Deprecated: use type.'
         in: query
         name: resource_type
         type: string
-      - description: Filter to events containing this operation (exact, case-sensitive;
-          stored form is verb-lowercased, e.g. updateVeleroBackup)
+      - description: 'Deprecated: use operation.'
         in: query
         name: operation_name
         type: string
@@ -1454,6 +1482,23 @@ paths:
   /api/v1/backup/jobs:
     get:
       description: Returns up to 50 backup records ordered by most recent first.
+      parameters:
+      - description: Initiated at or after (RFC3339; _gt for exclusive)
+        in: query
+        name: initiatedAt_gte
+        type: string
+      - description: Initiated at or before (RFC3339; _lt for exclusive)
+        in: query
+        name: initiatedAt_lte
+        type: string
+      - description: Completed at or after (RFC3339; _gt for exclusive)
+        in: query
+        name: completedAt_gte
+        type: string
+      - description: Completed at or before (RFC3339; _lt for exclusive)
+        in: query
+        name: completedAt_lte
+        type: string
       produces:
       - application/json
       responses:
@@ -1463,6 +1508,10 @@ paths:
             items:
               $ref: '#/definitions/handler.backupResponse'
             type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
       summary: List backups
       tags:
       - backup
@@ -1558,9 +1607,10 @@ paths:
       - backup
   /api/v1/change-requests:
     get:
-      description: Filters AND across params; `status`, `namespace` and `orbId` are
-        each repeatable and OR-ed within. Use `status=active` (open+approved) for
-        "in flight" — `open` alone excludes approved.
+      description: |-
+        Filters AND across params; `status`, `namespace`, `type` and `orbId` are each repeatable and OR-ed within. Use `status=active` (open+approved) for "in flight" — `open` alone excludes approved.
+
+        **Time filters:** `<field>_gte` / `<field>_lte` on `createdAt`, `updatedAt` and `executedAt`, RFC3339. `_gt` / `_lt` are also accepted for exclusive bounds. A malformed time, or an operator on a field this list does not filter, is a 400.
       parameters:
       - collectionFormat: multi
         description: 'Lifecycle: open, approved, active (open+approved), rejected,
@@ -1577,6 +1627,14 @@ paths:
           type: string
         name: namespace
         type: array
+      - collectionFormat: multi
+        description: ConfigItem type any item of the changeset targets (e.g. Server).
+          An interface name matches its implementing types. Repeatable, OR-ed.
+        in: query
+        items:
+          type: string
+        name: type
+        type: array
       - description: Author email
         in: query
         name: author
@@ -1587,6 +1645,10 @@ paths:
         type: boolean
       - description: Only requests this caller can still review
         in: query
+        name: awaitingReview
+        type: boolean
+      - description: 'Deprecated: use awaitingReview.'
+        in: query
         name: awaiting_review
         type: boolean
       - collectionFormat: multi
@@ -1596,6 +1658,38 @@ paths:
           type: string
         name: orbId
         type: array
+      - description: Created at or after (RFC3339)
+        in: query
+        name: createdAt_gte
+        type: string
+      - description: Created at or before (RFC3339)
+        in: query
+        name: createdAt_lte
+        type: string
+      - description: Updated at or after (RFC3339)
+        in: query
+        name: updatedAt_gte
+        type: string
+      - description: Updated at or before (RFC3339)
+        in: query
+        name: updatedAt_lte
+        type: string
+      - description: Merged at or after (RFC3339)
+        in: query
+        name: executedAt_gte
+        type: string
+      - description: Merged at or before (RFC3339)
+        in: query
+        name: executedAt_lte
+        type: string
+      - description: 'Max results after filtering (default: all)'
+        in: query
+        name: limit
+        type: integer
+      - description: Offset into the filtered results
+        in: query
+        name: offset
+        type: integer
       produces:
       - application/json
       responses:
@@ -1855,8 +1949,12 @@ paths:
       parameters:
       - description: Data center orbId (e.g. colo:colo-galleon)
         in: query
-        name: dcOrbId
+        name: dataCenter
         required: true
+        type: string
+      - description: 'Deprecated: use dataCenter.'
+        in: query
+        name: dcOrbId
         type: string
       responses:
         "200":
@@ -1888,9 +1986,29 @@ paths:
           type: string
         name: action
         type: array
-      - description: Filter by dc_orb_id
+      - description: Filter by data center orbId (e.g. colo:colo-galleon)
+        in: query
+        name: dataCenter
+        type: string
+      - description: 'Deprecated: use dataCenter.'
         in: query
         name: dc
+        type: string
+      - description: First seen at or after (RFC3339; _gt for exclusive)
+        in: query
+        name: firstSeenAt_gte
+        type: string
+      - description: First seen at or before (RFC3339; _lt for exclusive)
+        in: query
+        name: firstSeenAt_lte
+        type: string
+      - description: Last seen at or after (RFC3339; _gt for exclusive)
+        in: query
+        name: lastSeenAt_gte
+        type: string
+      - description: Last seen at or before (RFC3339; _lt for exclusive)
+        in: query
+        name: lastSeenAt_lte
         type: string
       produces:
       - application/json
@@ -1901,6 +2019,10 @@ paths:
             items:
               $ref: '#/definitions/handler.entryItem'
             type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
       summary: List divergences with their resolution
       tags:
       - divergence
@@ -2086,6 +2208,23 @@ paths:
   /api/v1/export/jobs:
     get:
       description: Returns the 50 most recent export jobs ordered by creation time.
+      parameters:
+      - description: Created at or after (RFC3339; _gt for exclusive)
+        in: query
+        name: createdAt_gte
+        type: string
+      - description: Created at or before (RFC3339; _lt for exclusive)
+        in: query
+        name: createdAt_lte
+        type: string
+      - description: Completed at or after (RFC3339; _gt for exclusive)
+        in: query
+        name: completedAt_gte
+        type: string
+      - description: Completed at or before (RFC3339; _lt for exclusive)
+        in: query
+        name: completedAt_lte
+        type: string
       produces:
       - application/json
       responses:
@@ -2095,6 +2234,10 @@ paths:
             items:
               $ref: '#/definitions/handler.statusResponse'
             type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
       summary: List export jobs
       tags:
       - export
@@ -2190,17 +2333,36 @@ paths:
       - export
   /api/v1/oci/artifacts:
     get:
-      description: Returns published OCI artifacts, most recent first. Combine `dc`
+      description: Returns published OCI artifacts, most recent first. Combine `dataCenter`
         + `status=completed` + `limit=1` to read the latest published version for
         a data center — the response carries `tag`, `digest` and `completedAt`. **Compare
         on `digest`, not `tag`:** the tag sequence is per OCI repository and the repository
         name derives from the data center's editable name, so renaming a data center
         restarts the sequence at v1 for the same orbId.
       parameters:
-      - description: Filter by data center orbId (e.g. colo:colo-galleon). Matches
-          RegistryArtifact.datacenter_id, which stores the orbId.
+      - description: Filter by data center orbId (e.g. colo:colo-galleon)
+        in: query
+        name: dataCenter
+        type: string
+      - description: 'Deprecated: use dataCenter.'
         in: query
         name: dc
+        type: string
+      - description: Initiated at or after (RFC3339; _gt for exclusive)
+        in: query
+        name: initiatedAt_gte
+        type: string
+      - description: Initiated at or before (RFC3339; _lt for exclusive)
+        in: query
+        name: initiatedAt_lte
+        type: string
+      - description: Completed at or after (RFC3339; _gt for exclusive)
+        in: query
+        name: completedAt_gte
+        type: string
+      - description: Completed at or before (RFC3339; _lt for exclusive)
+        in: query
+        name: completedAt_lte
         type: string
       - description: Filter by publish status (e.g. completed). Only completed artifacts
           have a retrievable digest.
@@ -2220,6 +2382,10 @@ paths:
             items:
               $ref: '#/definitions/handler.artifactResponse'
             type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
       summary: List OCI artifacts
       tags:
       - oci
@@ -2390,6 +2556,31 @@ paths:
   /api/v1/restore/jobs:
     get:
       description: Returns up to 50 restore jobs ordered by most recent first.
+      parameters:
+      - description: Created at or after (RFC3339; _gt for exclusive)
+        in: query
+        name: createdAt_gte
+        type: string
+      - description: Created at or before (RFC3339; _lt for exclusive)
+        in: query
+        name: createdAt_lte
+        type: string
+      - description: Started at or after (RFC3339; _gt for exclusive)
+        in: query
+        name: startedAt_gte
+        type: string
+      - description: Started at or before (RFC3339; _lt for exclusive)
+        in: query
+        name: startedAt_lte
+        type: string
+      - description: Completed at or after (RFC3339; _gt for exclusive)
+        in: query
+        name: completedAt_gte
+        type: string
+      - description: Completed at or before (RFC3339; _lt for exclusive)
+        in: query
+        name: completedAt_lte
+        type: string
       produces:
       - application/json
       responses:
@@ -2399,6 +2590,10 @@ paths:
             items:
               $ref: '#/definitions/handler.restoreJobResponse'
             type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
       summary: List restore jobs
       tags:
       - backup
@@ -2428,6 +2623,15 @@ paths:
   /api/v1/users:
     get:
       description: Returns all users in the orbital user table. Admin only.
+      parameters:
+      - description: Created at or after (RFC3339; _gt for exclusive)
+        in: query
+        name: createdAt_gte
+        type: string
+      - description: Created at or before (RFC3339; _lt for exclusive)
+        in: query
+        name: createdAt_lte
+        type: string
       produces:
       - application/json
       responses:
@@ -2436,6 +2640,10 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
         "403":
           description: Forbidden
           schema:

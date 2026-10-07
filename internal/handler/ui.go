@@ -396,7 +396,7 @@ func (h *UI) buildMenuSections(path, userRole string, pendingDivergences int) []
 				// limit=0: the badge reads only `total`, so there is no reason to
 				// transfer every matching request's changes/record/reviews to
 				// render one number — on every page in the app.
-				BadgeSrc: "/api/v1/change-requests?awaiting_review=true&limit=0",
+				BadgeSrc: "/api/v1/change-requests?awaitingReview=true&limit=0",
 			},
 		}
 		// readonly+, matching the API: apiReadonly serves GET /approval-policies,

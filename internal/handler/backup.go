@@ -20,6 +20,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/backup"
+	"github.com/armada/orbital/ent/predicate"
 	"github.com/armada/orbital/ent/restorejob"
 	"github.com/armada/orbital/internal/blobstore"
 	"github.com/armada/orbital/web"
@@ -394,10 +395,22 @@ func (h *BackupHandler) Trigger(c echo.Context) error {
 // @Description Returns up to 50 backup records ordered by most recent first.
 // @Tags        backup
 // @Produce     json
+// @Param       initiatedAt_gte query string false "Initiated at or after (RFC3339; _gt for exclusive)"
+// @Param       initiatedAt_lte query string false "Initiated at or before (RFC3339; _lt for exclusive)"
+// @Param       completedAt_gte query string false "Completed at or after (RFC3339; _gt for exclusive)"
+// @Param       completedAt_lte query string false "Completed at or before (RFC3339; _lt for exclusive)"
 // @Success     200 {array}  backupResponse
+// @Failure     400 {object} errorResponse
 // @Router      /api/v1/backup/jobs [get]
 func (h *BackupHandler) List(c echo.Context) error {
-	jobs, err := h.db.Backup.Query().
+	timePreds, err := TimeFilters[predicate.Backup](c.QueryParams(), TimeFields{
+		"initiatedAt": backup.FieldCreatedAt,
+		"completedAt": backup.FieldCompletedAt,
+	})
+	if err != nil {
+		return WriteQueryError(c, err)
+	}
+	jobs, err := h.db.Backup.Query().Where(timePreds...).
 		Order(backup.ByCreatedAt(entsql.OrderDesc())).
 		Limit(50).
 		All(c.Request().Context())

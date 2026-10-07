@@ -8,6 +8,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent"
+	"github.com/armada/orbital/ent/predicate"
 	"github.com/armada/orbital/ent/user"
 	"github.com/labstack/echo/v4"
 )
@@ -38,7 +39,10 @@ type userItem struct {
 // @Description Returns all users in the orbital user table. Admin only.
 // @Tags        users
 // @Produce     json
+// @Param       createdAt_gte query string false "Created at or after (RFC3339; _gt for exclusive)"
+// @Param       createdAt_lte query string false "Created at or before (RFC3339; _lt for exclusive)"
 // @Success     200 {object} map[string]any
+// @Failure     400 {object} errorResponse
 // @Failure     403 {object} errorResponse
 // @Router      /api/v1/users [get]
 func (h *UsersHandler) List(c echo.Context) error {
@@ -46,7 +50,11 @@ func (h *UsersHandler) List(c echo.Context) error {
 		return err
 	}
 
-	users, err := h.db.User.Query().Order(user.ByCreatedAt(sql.OrderAsc())).All(c.Request().Context())
+	timePreds, err := TimeFilters[predicate.User](c.QueryParams(), TimeFields{"createdAt": user.FieldCreatedAt})
+	if err != nil {
+		return WriteQueryError(c, err)
+	}
+	users, err := h.db.User.Query().Where(timePreds...).Order(user.ByCreatedAt(sql.OrderAsc())).All(c.Request().Context())
 	if err != nil {
 		return fmt.Errorf("query users: %w", err)
 	}

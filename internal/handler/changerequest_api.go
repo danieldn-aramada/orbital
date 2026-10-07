@@ -15,6 +15,7 @@ import (
 	entapproval "github.com/armada/orbital/ent/approval"
 	"github.com/armada/orbital/ent/approvalpolicy"
 	"github.com/armada/orbital/ent/approvalrequest"
+	"github.com/armada/orbital/ent/predicate"
 	"github.com/armada/orbital/ent/user"
 	"github.com/armada/orbital/internal/approval"
 	"github.com/armada/orbital/internal/graphdiff"
@@ -612,15 +613,27 @@ func (h *ChangeRequest) CreateChangeRequest(c echo.Context) error {
 // ListChangeRequests lists change requests.
 //
 // @Summary     List change requests
-// @Description Filters AND across params; `status`, `namespace` and `orbId` are each repeatable and OR-ed within. Use `status=active` (open+approved) for "in flight" — `open` alone excludes approved.
+// @Description Filters AND across params; `status`, `namespace`, `type` and `orbId` are each repeatable and OR-ed within. Use `status=active` (open+approved) for "in flight" — `open` alone excludes approved.
+// @Description
+// @Description **Time filters:** `<field>_gte` / `<field>_lte` on `createdAt`, `updatedAt` and `executedAt`, RFC3339. `_gt` / `_lt` are also accepted for exclusive bounds. A malformed time, or an operator on a field this list does not filter, is a 400.
 // @Tags        change-requests
 // @Produce     json
 // @Param       status query []string false "Lifecycle: open, approved, active (open+approved), rejected, merged, closed. Repeatable, OR-ed; unknown value is a 400." collectionFormat(multi)
 // @Param       namespace query []string false "Namespace(s). Repeatable, OR-ed." collectionFormat(multi)
+// @Param       type query []string false "ConfigItem type any item of the changeset targets (e.g. Server). An interface name matches its implementing types. Repeatable, OR-ed." collectionFormat(multi)
 // @Param       author query string false "Author email"
 // @Param       mine query boolean false "Only requests this caller authored"
-// @Param       awaiting_review query boolean false "Only requests this caller can still review"
+// @Param       awaitingReview query boolean false "Only requests this caller can still review"
+// @Param       awaiting_review query boolean false "Deprecated: use awaitingReview."
 // @Param       orbId query []string false "orbId(s) the changeset touches. Repeatable, OR-ed, max 128." collectionFormat(multi)
+// @Param       createdAt_gte query string false "Created at or after (RFC3339)"
+// @Param       createdAt_lte query string false "Created at or before (RFC3339)"
+// @Param       updatedAt_gte query string false "Updated at or after (RFC3339)"
+// @Param       updatedAt_lte query string false "Updated at or before (RFC3339)"
+// @Param       executedAt_gte query string false "Merged at or after (RFC3339)"
+// @Param       executedAt_lte query string false "Merged at or before (RFC3339)"
+// @Param       limit query int false "Max results after filtering (default: all)"
+// @Param       offset query int false "Offset into the filtered results"
 // @Success     200 {object} changeRequestListResponse
 // @Failure     400 {object} errorResponse
 // @Router      /api/v1/change-requests [get]
@@ -656,7 +669,7 @@ func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
 			wantNamespaces = append(wantNamespaces, v)
 		}
 	}
-	awaiting := c.QueryParam("awaiting_review") == "true"
+	awaiting := queryParam(c, "awaitingReview", "awaiting_review") == "true"
 
 	// orbId is repeatable — ?orbId=server&orbId=idrac&orbId=maintenance — and
 	// the values are OR-ed, matching /api/v1/audit-log. Reading it with
@@ -681,7 +694,19 @@ func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
 			fmt.Sprintf("Query at most %d orbIds at a time, or drop orbId and filter by namespace instead.", maxOrbIDFilter))
 	}
 
-	q := h.db.ApprovalRequest.Query().WithApprovals().WithMergeAttempts()
+	timePreds, err := TimeFilters[predicate.ApprovalRequest](c.QueryParams(), changeRequestTimeFields)
+	if err != nil {
+		return WriteQueryError(c, err)
+	}
+	wantTypes, err := h.concreteTypes(ctx, queryValues(c, "type"))
+	if err != nil {
+		return err
+	}
+
+	q := h.db.ApprovalRequest.Query().WithApprovals().WithMergeAttempts().Where(timePreds...)
+	if len(wantTypes) > 0 {
+		q = q.Where(payloadTouchesAnyType(wantTypes))
+	}
 	if v := c.QueryParam("author"); v != "" {
 		q = q.Where(approvalrequest.AuthorEQ(v))
 	}
