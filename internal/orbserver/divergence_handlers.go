@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"github.com/armada/orbital/internal/divergence"
+	"github.com/armada/orbital/internal/handler"
+	"github.com/armada/orbital/internal/orb/store/predicate"
+	"github.com/armada/orbital/internal/orb/store/publishedreport"
 	"github.com/armada/orbital/internal/web/data/layout"
 	"github.com/labstack/echo/v4"
 )
@@ -71,7 +74,7 @@ func (s *Server) divergencePage(c echo.Context) error {
 // initial load + HX-Request pagination swaps into #publish-history-content
 // with just the inner fragment.
 func (s *Server) publishHistoryPage(c echo.Context) error {
-	history := s.loadPublishHistoryView(c)
+	history := s.loadPublishHistoryView(c, nil)
 	data := divergencePageData{
 		Base:           s.orbBase(c),
 		PageTitle:      "Publish History",
@@ -86,9 +89,9 @@ func (s *Server) publishHistoryPage(c echo.Context) error {
 // loadPublishHistoryView reads pagination query params (limit, offset) and
 // returns the rendered view model. Errors are logged and treated as an empty
 // history — a broken history query should not blank the whole divergence page.
-func (s *Server) loadPublishHistoryView(c echo.Context) publishHistoryView {
+func (s *Server) loadPublishHistoryView(c echo.Context, where []predicate.PublishedReport) publishHistoryView {
 	limit, offset := parsePublishHistoryParams(c)
-	rows, total, err := s.divStore.LoadPublishHistory("", limit, offset)
+	rows, total, err := s.divStore.LoadPublishHistory("", limit, offset, where...)
 	if err != nil {
 		s.logger.Warn("load publish history failed", "err", err)
 		return publishHistoryView{Limit: limit, Offset: offset}
@@ -286,10 +289,18 @@ func (s *Server) publishDivergence(c echo.Context) error {
 // @Produce     json
 // @Param       limit  query int false "Rows per page (default 25, max 200)"
 // @Param       offset query int false "Row offset (default 0)"
+// @Param       publishedAt_gte query string false "Published at or after (RFC3339; _gt for exclusive)"
+// @Param       publishedAt_lte query string false "Published at or before (RFC3339; _lt for exclusive)"
 // @Success     200 {object} map[string]any
+// @Failure     400 {object} map[string]any
 // @Router      /api/v1/divergence/publish-history [get]
 func (s *Server) publishHistory(c echo.Context) error {
-	view := s.loadPublishHistoryView(c)
+	where, err := handler.TimeFilters[predicate.PublishedReport](c.QueryParams(),
+		handler.TimeFields{"publishedAt": publishedreport.FieldPublishedAt})
+	if err != nil {
+		return handler.WriteQueryError(c, err)
+	}
+	view := s.loadPublishHistoryView(c, where)
 	if c.Request().Header.Get("HX-Request") == "true" {
 		// Fragment path: render the same section rendered inline by the page.
 		return s.renderFragment(c, "publish-history", "publish-history-content", divergencePageData{

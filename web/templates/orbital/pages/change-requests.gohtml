@@ -18,7 +18,7 @@
       {{/* Do NOT add `is-small`: it makes these the only 12px tabs in the app. */}}
       <nav class="tabs is-boxed has-text-weight-medium" style="font-size: 14px;" id="cr-tabs">
         <ul>
-          {{if .CanMutate}}<li class="is-active"><a data-cr-filter="awaiting_review=true">Needs my review</a></li>{{end}}
+          {{if .CanMutate}}<li class="is-active"><a data-cr-filter="awaitingReview=true">Needs my review</a></li>{{end}}
           <li{{if not .CanMutate}} class="is-active"{{end}}><a data-cr-filter="status=active">Open</a></li>
           <li><a data-cr-filter="status=merged&amp;status=rejected&amp;status=closed">Closed</a></li>
         </ul>

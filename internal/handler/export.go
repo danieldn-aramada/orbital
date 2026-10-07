@@ -21,6 +21,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/ent/exportjob"
+	"github.com/armada/orbital/ent/predicate"
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/ent/restorejob"
 	"github.com/armada/orbital/internal/bundler"
@@ -341,10 +342,22 @@ func (h *Export) Trigger(c echo.Context) error {
 // @Description Returns the 50 most recent export jobs ordered by creation time.
 // @Tags        export
 // @Produce     json
+// @Param       createdAt_gte query string false "Created at or after (RFC3339; _gt for exclusive)"
+// @Param       createdAt_lte query string false "Created at or before (RFC3339; _lt for exclusive)"
+// @Param       completedAt_gte query string false "Completed at or after (RFC3339; _gt for exclusive)"
+// @Param       completedAt_lte query string false "Completed at or before (RFC3339; _lt for exclusive)"
 // @Success     200 {array} statusResponse
+// @Failure     400 {object} errorResponse
 // @Router      /api/v1/export/jobs [get]
 func (h *Export) List(c echo.Context) error {
-	jobs, err := h.db.ExportJob.Query().
+	timePreds, err := TimeFilters[predicate.ExportJob](c.QueryParams(), TimeFields{
+		"createdAt":   exportjob.FieldCreatedAt,
+		"completedAt": exportjob.FieldCompletedAt,
+	})
+	if err != nil {
+		return WriteQueryError(c, err)
+	}
+	jobs, err := h.db.ExportJob.Query().Where(timePreds...).
 		Order(exportjob.ByCreatedAt(entsql.OrderDesc())).
 		Limit(50).
 		All(c.Request().Context())

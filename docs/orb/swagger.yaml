@@ -247,11 +247,24 @@ paths:
         in: query
         name: offset
         type: integer
+      - description: Published at or after (RFC3339; _gt for exclusive)
+        in: query
+        name: publishedAt_gte
+        type: string
+      - description: Published at or before (RFC3339; _lt for exclusive)
+        in: query
+        name: publishedAt_lte
+        type: string
       produces:
       - application/json
       responses:
         "200":
           description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
           schema:
             additionalProperties: true
             type: object

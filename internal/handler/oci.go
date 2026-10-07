@@ -14,6 +14,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent"
+	"github.com/armada/orbital/ent/predicate"
 	"github.com/armada/orbital/ent/registryartifact"
 	"github.com/armada/orbital/internal/bundler"
 	"github.com/armada/orbital/internal/oci"
@@ -220,20 +221,26 @@ func (h *OCI) DeleteArtifact(c echo.Context) error {
 // Filters exist because the unfiltered list is capped: without `dc`, a data
 // center that publishes often pushes every other data center off the response
 // entirely. Any client asking "what did orbital last publish for X?" must scope
-// by `dc` rather than fetching the list and grouping client-side.
+// by `dataCenter` rather than fetching the list and grouping client-side.
 //
 // Ordering is by initiated_at descending. That is unambiguous here because
 // exports are globally serialized (Trigger 409s while any export is pending or
 // running), so no two publishes overlap and initiated/completed order alike.
 //
 // @Summary     List OCI artifacts
-// @Description Returns published OCI artifacts, most recent first. Combine `dc` + `status=completed` + `limit=1` to read the latest published version for a data center — the response carries `tag`, `digest` and `completedAt`. **Compare on `digest`, not `tag`:** the tag sequence is per OCI repository and the repository name derives from the data center's editable name, so renaming a data center restarts the sequence at v1 for the same orbId.
+// @Description Returns published OCI artifacts, most recent first. Combine `dataCenter` + `status=completed` + `limit=1` to read the latest published version for a data center — the response carries `tag`, `digest` and `completedAt`. **Compare on `digest`, not `tag`:** the tag sequence is per OCI repository and the repository name derives from the data center's editable name, so renaming a data center restarts the sequence at v1 for the same orbId.
 // @Tags        oci
 // @Produce     json
-// @Param       dc     query string false "Filter by data center orbId (e.g. colo:colo-galleon). Matches RegistryArtifact.datacenter_id, which stores the orbId."
+// @Param       dataCenter query string false "Filter by data center orbId (e.g. colo:colo-galleon)"
+// @Param       dc     query string false "Deprecated: use dataCenter."
+// @Param       initiatedAt_gte query string false "Initiated at or after (RFC3339; _gt for exclusive)"
+// @Param       initiatedAt_lte query string false "Initiated at or before (RFC3339; _lt for exclusive)"
+// @Param       completedAt_gte query string false "Completed at or after (RFC3339; _gt for exclusive)"
+// @Param       completedAt_lte query string false "Completed at or before (RFC3339; _lt for exclusive)"
 // @Param       status query string false "Filter by publish status (e.g. completed). Only completed artifacts have a retrievable digest."
 // @Param       limit  query int    false "Max results (default 100, max 500)"
 // @Success     200 {array} artifactResponse
+// @Failure     400 {object} errorResponse
 // @Router      /api/v1/oci/artifacts [get]
 func (h *OCI) ListArtifacts(c echo.Context) error {
 	limit := 100
@@ -243,11 +250,17 @@ func (h *OCI) ListArtifacts(c echo.Context) error {
 		}
 	}
 
-	q := h.db.RegistryArtifact.Query()
-	// `dc` is the orbId. datacenter_id holds the orbId (set from the export
-	// request's orbId, not a DGraph UID — the "DGraph internal ID" comment on
-	// the ent field is stale). Matching the `?dc=` convention on /divergences.
-	if dc := c.QueryParam("dc"); dc != "" {
+	timePreds, err := TimeFilters[predicate.RegistryArtifact](c.QueryParams(), TimeFields{
+		"initiatedAt": registryartifact.FieldInitiatedAt,
+		"completedAt": registryartifact.FieldCompletedAt,
+	})
+	if err != nil {
+		return WriteQueryError(c, err)
+	}
+	q := h.db.RegistryArtifact.Query().Where(timePreds...)
+	// datacenter_id holds the orbId (set from the export request's orbId, not a
+	// DGraph UID — the "DGraph internal ID" comment on the ent field is stale).
+	if dc := queryParam(c, "dataCenter", "dc"); dc != "" {
 		q = q.Where(registryartifact.DatacenterID(dc))
 	}
 	// Validate rather than letting an unknown value fall through to an empty

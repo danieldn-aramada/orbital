@@ -100,6 +100,17 @@ The full request body on the wire (what the UI editor sends — kept fields go i
 
 Orbital's UI editor does this read-then-remove automatically; API callers do it explicitly.
 
+### Deleting a config item
+
+Delete through `/graphql`. It removes only the node you name: delete its children first, or they are left without a parent.
+
+```bash
+curl -s -X POST $ORBITAL_URL/graphql -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{
+  "query": "mutation DeleteServer($orbId: String!) { deleteServer(filter: { orbId: { eq: $orbId } }) { numUids } }",
+  "variables": { "orbId": "colo:server-CWJHDX3" }
+}'
+```
+
 ---
 
 ## Example schema 
@@ -380,7 +391,7 @@ Every intent mutation is recorded as an immutable audit event. Read them at `GET
 
 Filter by the resource's `orbId`. For example, to see the trail for the velero backup edits:
 ```bash
-curl -s "$ORBITAL_URL/api/v1/audit-log?orbId=colo:dev-main-velero-backup&operation_name=updateVeleroBackup&limit=50" \
+curl -s "$ORBITAL_URL/api/v1/audit-log?orbId=colo:dev-main-velero-backup&operation=updateVeleroBackup&limit=50" \
   -H "Authorization: Bearer $TOKEN" | jq .
 ```
 Example response
@@ -399,7 +410,7 @@ Example response
         "colo:dev-main-velero-backup"
       ],
       "actor": "admin@armada.ai",
-      "timestamp": "2026-07-29T19:40:50Z",
+      "createdAt": "2026-07-29T19:40:50Z",
       ... 
       "changes": [
         {
@@ -415,10 +426,17 @@ Example response
 ```
 
 All filters are **optional** and **combinable** — omit them all for the full log (newest first)
-- `orbId=colo:dev-main-velero-backup` — events touching a resource (repeatable, max 32)
-- `operation_name=updateVeleroBackup` — one operation (must match a value in the event's `operations` array, e.g. `updateVeleroBackup`)
+- `orbId=colo:dev-main-velero-backup` — events touching a resource (repeatable, max 128)
+- `operation=updateVeleroBackup` — one operation (must match a value in the event's `operations` array)
+- `type=Server` — resource type (repeatable)
 - `namespace=colo` — everything under a data center (`colo:*`)
-- `since` / `until` — RFC3339 window; `limit` / `offset` — pagination (`limit` ≤ 500)
+- `createdAt_gte` / `createdAt_lte` — RFC3339 window; `limit` / `offset` — pagination (`limit` ≤ 500)
+
+Every list endpoint takes time filters the same way: `<field>_gte` / `<field>_lte` (`_gt` / `_lt` for exclusive) on a timestamp field in its response. Encode a `+` offset as `%2B`, or use `Z`:
+```bash
+curl -s "$ORBITAL_URL/api/v1/change-requests?createdAt_gte=2026-10-01T00:00:00Z&createdAt_lte=2026-10-07T23:59:59Z&type=Server" \
+  -H "Authorization: Bearer $TOKEN" | jq .total
+```
 
 ### Response shape + rendering a diff
 ```json

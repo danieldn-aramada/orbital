@@ -39,7 +39,7 @@
 {{/* Detail row: hidden until the chevron toggles it (delegated handler in
      orbital.js). Carries the Digest; completed publishes also HTMX-lazily fetch
      audit events since the previous publish
-     (see /api/v1/audit-log ?namespace=&since=&until=). */}}
+     (see /api/v1/audit-log ?namespace=&createdAt_gt=&createdAt_lte=). */}}
 <tr class="js-publish-changes-detail is-hidden">
   <td></td>
   <td colspan="9" style="background: var(--bulma-background);">
@@ -66,7 +66,7 @@
       <span class="has-text-grey is-size-7"> · since
         <span class="is-family-monospace">{{.PreviousExportedAtRFC3339}}</span></span>
     </div>
-    <div hx-get="{{.BasePath}}/api/v1/audit-log?namespace={{.DatacenterNamespace}}&since={{.PreviousExportedAtRFC3339}}&until={{.ExportedAtRFC3339}}&event_category=data&limit=200"
+    <div hx-get="{{.BasePath}}/api/v1/audit-log?namespace={{.DatacenterNamespace}}&createdAt_gt={{.PreviousExportedAtRFC3339}}&createdAt_lte={{.ExportedAtRFC3339}}&category=data&limit=200"
          hx-trigger="revealed once"
          hx-target="this"
          hx-swap="innerHTML"

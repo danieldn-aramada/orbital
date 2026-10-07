@@ -25,11 +25,10 @@ data:
     # pages:                 # a URL + a menu entry + a detail layout
     #   Server:
     #     menuWeight: 20
-    #     summary:
-    #       refs: [dataCenter, oobIP, rack]
-    #     tabs:
+    #     subgraph:            # what the page shows, edits, audits and deletes
     #       - { path: idracSettings, editable: true }
     #       - storageControllers
+    #       - storageControllers.storageDevices
     #
     # types:                 # how a type renders WHEREVER it renders
     #   Server:

@@ -10,6 +10,7 @@ import (
 	"github.com/armada/orbital/internal/blobstore"
 	"github.com/armada/orbital/internal/orb/store"
 	"github.com/armada/orbital/internal/orb/store/pendingoverride"
+	"github.com/armada/orbital/internal/orb/store/predicate"
 	"github.com/armada/orbital/internal/orb/store/publishedreport"
 )
 
@@ -202,9 +203,9 @@ func (s *Store) LoadPublishRecord() (*PublishRecord, error) {
 // filtered by dcOrbID. limit ≤ 0 returns everything; limit > 0 caps the page.
 // Also returns the total row count matching the filter (before pagination) so
 // callers can render "N of M".
-func (s *Store) LoadPublishHistory(dcOrbID string, limit, offset int) ([]PublishHistoryRow, int, error) {
+func (s *Store) LoadPublishHistory(dcOrbID string, limit, offset int, where ...predicate.PublishedReport) ([]PublishHistoryRow, int, error) {
 	ctx := context.Background()
-	q := s.db.PublishedReport.Query()
+	q := s.db.PublishedReport.Query().Where(where...)
 	if dcOrbID != "" {
 		q = q.Where(publishedreport.DcOrbID(dcOrbID))
 	}

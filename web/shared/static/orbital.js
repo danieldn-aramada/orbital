@@ -1929,7 +1929,7 @@ function divergenceDeleteReportForDC(button) {
   button.disabled = true
   button.innerHTML = '<span class="icon"><i class="fa-solid fa-spinner fa-spin"></i></span><span>Deleting…</span>'
 
-  fetch(BASE + '/api/v1/divergences?dcOrbId=' + encodeURIComponent(dcOrbId), {
+  fetch(BASE + '/api/v1/divergences?dataCenter=' + encodeURIComponent(dcOrbId), {
     method: 'DELETE',
   })
     .then(r => r.json().then(body => ({ ok: r.ok, status: r.status, body })))
@@ -2198,7 +2198,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // DataTables' `emptyTable`, which is one static string and cannot say which
   // tab is empty.
   const EMPTY = {
-    'awaiting_review=true': 'Nothing is waiting on your review.',
+    'awaitingReview=true': 'Nothing is waiting on your review.',
     'status=active': 'No change requests are open.',
     'status=merged&status=rejected&status=closed': 'Nothing has finished yet — no request has been merged, rejected or withdrawn.',
     '': 'No change requests yet. One is created when a change needs approval before it applies.',
@@ -3342,13 +3342,13 @@ function initComparePage() {
   const wantFrom = params.get('from')
   const wantTo = params.get('to')
 
-  // Versions are fetched per data center via ?dc=, never by pulling the whole
+  // Versions are fetched per data center via ?dataCenter=, never by pulling the whole
   // artifact list and grouping here. The unfiltered list is capped, so one
   // busy data center would push the others off it entirely — and grouping
   // client-side is the "UI compensating for the API" pattern orbital rejects.
   const loadVersions = (dcOrbId, selectFrom, selectTo) => {
     fromSel.disabled = toSel.disabled = runBtn.disabled = true
-    return fetch(`${BASE}/api/v1/oci/artifacts?dc=${encodeURIComponent(dcOrbId)}&status=completed&limit=500`)
+    return fetch(`${BASE}/api/v1/oci/artifacts?dataCenter=${encodeURIComponent(dcOrbId)}&status=completed&limit=500`)
       .then(r => r.json())
       .then(rows => {
         // Only artifacts with a digest can be pulled by digest.

@@ -141,7 +141,7 @@ Render `changes` — that is the diff. `satisfied` is the part of the proposal t
 curl -s "$ORBITAL_URL/api/v1/change-requests?status=active&orbId=colo:CWJHDX3-idrac" -H "Authorization: Bearer $TOKEN" \
   | jq '{total, items: [.items[] | {id, effect, author, status}]}'
 
-curl -s "$ORBITAL_URL/api/v1/change-requests?awaiting_review=true" -H "Authorization: Bearer $TOKEN" | jq .total
+curl -s "$ORBITAL_URL/api/v1/change-requests?awaitingReview=true" -H "Authorization: Bearer $TOKEN" | jq .total
 ```
 
 | Filter | |
@@ -149,7 +149,10 @@ curl -s "$ORBITAL_URL/api/v1/change-requests?awaiting_review=true" -H "Authoriza
 | `status` | `open` `approved` `active` `rejected` `merged` `closed` — repeatable, OR-ed |
 | `orbId` | repeatable, OR-ed, max 128 |
 | `namespace` | repeatable, OR-ed |
-| `author` · `mine` · `awaiting_review` | |
+| `type` | ConfigItem type any item targets; repeatable; an interface (`KubernetesCluster`) matches its implementations |
+| `createdAt_gte` · `createdAt_lte` | RFC3339 window; also `updatedAt_*`, `executedAt_*` (merge time); `_gt`/`_lt` for exclusive |
+| `author` · `mine` · `awaitingReview` | |
+| `limit` · `offset` | paging after filtering; `total` counts every match |
 
 Use `status=active`, not `open` — `approved` is derived, so `open` alone misses approved-but-unmerged. An edit to an owned child files under the *child's* orbId.
 

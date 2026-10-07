@@ -18,9 +18,13 @@ import (
 	"github.com/armada/orbital/ent/auditevent"
 	"github.com/armada/orbital/ent/auditeventresource"
 	"github.com/armada/orbital/ent/auditeventresourcetype"
+	"github.com/armada/orbital/ent/predicate"
 	"github.com/armada/orbital/web"
 	"github.com/labstack/echo/v4"
 )
+
+// auditTimeFields: the event's createdAt is stored in the `timestamp` column.
+var auditTimeFields = TimeFields{"createdAt": auditevent.FieldTimestamp}
 
 type AuditHandler struct {
 	db       *ent.Client
@@ -52,9 +56,10 @@ type eventItem struct {
 	ResourceTypes []string        `json:"resourceTypes"` // ConfigItem types touched, e.g. ["VeleroBackup"]
 	ResourceIDs   []string        `json:"resourceIds"`   // orbIds touched
 	Actor         string          `json:"actor"         example:"asharma@armada.ai"`
-	Timestamp     string          `json:"timestamp"     example:"2026-07-29T17:26:55Z"`
-	Details       json.RawMessage `json:"details,omitempty" swaggertype:"object"` // raw {operationName, query, variables, before}
-	EventCategory string          `json:"eventCategory" example:"data"`           // data | management | auth
+	CreatedAt     string          `json:"createdAt"     example:"2026-07-29T17:26:55Z"`
+	Timestamp     string          `json:"timestamp"     example:"2026-07-29T17:26:55Z"` // Deprecated: same value as createdAt.
+	Details       json.RawMessage `json:"details,omitempty" swaggertype:"object"`       // raw {operationName, query, variables, before}
+	EventCategory string          `json:"eventCategory" example:"data"`                 // data | management | auth
 	// CloudTrail parity. All three are omitempty: absent means "no HTTP request
 	// behind this event" (a background writer), which is different from empty.
 	EventSource     string `json:"eventSource,omitempty"     example:"graphql"`  // graphql | rest | internal
@@ -121,7 +126,7 @@ var skipVarsSet = map[string]bool{
 // @Summary     List audit events
 // @Description Read-only, immutable audit trail of intent mutations, newest first.
 // @Description
-// @Description **Scope a query** by combining filters: `orbId` (repeatable, **max 128** — over that the request is refused with `400 BAD_USER_INPUT`, never silently truncated) for a specific resource; `namespace` for a whole data center; `resource_type`/`operation_name` to narrow. To see everything under a server/cluster, fetch its subgraph orbIds from the GraphQL Topology API and pass them as repeatable `orbId` params (there is no single "cluster" scope — a child mutation records the child's orbId, not the parent's).
+// @Description **Scope a query** by combining filters: `orbId` (repeatable, **max 128** — over that the request is refused with `400 BAD_USER_INPUT`, never silently truncated) for a specific resource; `namespace` for a whole data center; `type`/`operation` to narrow; `createdAt_gte`/`createdAt_lte` (RFC3339; `_gt`/`_lt` for exclusive bounds) for a time window. To see everything under a server/cluster, fetch its subgraph orbIds from the GraphQL Topology API and pass them as repeatable `orbId` params (there is no single "cluster" scope — a child mutation records the child's orbId, not the parent's).
 // @Description
 // @Description **Render a diff:** when an event is a clean single-entity update it carries a `changes` array (`[{field, before, after}]`) with metadata and DGraph UIDs already excluded — render it directly. When `changes` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing `operations` + `resourceIds`. The raw `details` (with `before`/`variables`) is always included for callers that want it.
 // @Description
@@ -132,11 +137,16 @@ var skipVarsSet = map[string]bool{
 // @Param       offset         query int    false "Pagination offset"
 // @Param       orbId          query []string false "Filter by resource orbId (e.g. alaska-dot:GRTLY24). Repeatable, max 128 — matches events touching ANY of them. Over 128 the request is refused (400), not truncated."
 // @Param       namespace      query string false "Filter by namespace prefix (e.g. \"colo\" matches every orbId starting with \"colo:\"). Cheap DC-scope filter that avoids enumerating child orbIds."
-// @Param       since          query string false "RFC3339 lower bound (exclusive) on event timestamp"
-// @Param       until          query string false "RFC3339 upper bound (inclusive) on event timestamp"
-// @Param       resource_id    query string false "Filter by resource ID"
-// @Param       resource_type  query string false "Filter by resource type (e.g. Server, DataCenter)"
-// @Param       operation_name query string false "Filter to events containing this operation (exact, case-sensitive; stored form is verb-lowercased, e.g. updateVeleroBackup)"
+// @Param       createdAt_gte  query string false "Events at or after this time (RFC3339)"
+// @Param       createdAt_lte  query string false "Events at or before this time (RFC3339)"
+// @Param       type           query []string false "Filter by resource type (e.g. Server, DataCenter). Repeatable, OR-ed." collectionFormat(multi)
+// @Param       operation      query string false "Filter to events containing this operation (exact, case-sensitive; stored form is verb-lowercased, e.g. updateVeleroBackup)"
+// @Param       category       query string false "Filter by event category: data, management or auth"
+// @Param       since          query string false "Deprecated: use createdAt_gt."
+// @Param       until          query string false "Deprecated: use createdAt_lte."
+// @Param       resource_id    query string false "Deprecated: use orbId."
+// @Param       resource_type  query string false "Deprecated: use type."
+// @Param       operation_name query string false "Deprecated: use operation."
 // @Success     200 {object} auditLogResponse
 // @Failure     400 {object} errorResponse
 // @Router      /api/v1/audit-log [get]
@@ -152,6 +162,11 @@ func (h *AuditHandler) List(c echo.Context) error {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			offset = n
 		}
+	}
+
+	timePreds, err := TimeFilters[predicate.AuditEvent](c.QueryParams(), auditTimeFields)
+	if err != nil {
+		return WriteQueryError(c, err)
 	}
 
 	q := h.db.AuditEvent.Query()
@@ -195,16 +210,16 @@ func (h *AuditHandler) List(c echo.Context) error {
 	if rid := c.QueryParam("resource_id"); rid != "" {
 		q = q.Where(auditevent.HasResourcesWith(auditeventresource.OrbIDEQ(rid)))
 	}
-	if rt := c.QueryParam("resource_type"); rt != "" {
-		q = q.Where(auditevent.HasResourceTypesWith(auditeventresourcetype.ResourceTypeEQ(rt)))
+	if types := queryValues(c, "type", "resource_type"); len(types) > 0 {
+		q = q.Where(auditevent.HasResourceTypesWith(auditeventresourcetype.ResourceTypeIn(types...)))
 	}
-	if cat := c.QueryParam("event_category"); cat != "" {
+	if cat := queryParam(c, "category", "event_category"); cat != "" {
 		// event_category=data restricts to intent mutations (used by the
 		// publish-changes panel to exclude the surrounding system events
 		// like `export` from the diff itself).
 		q = q.Where(auditevent.EventCategoryEQ(cat))
 	}
-	if op := strings.TrimSpace(c.QueryParam("operation_name")); op != "" {
+	if op := queryParam(c, "operation", "operation_name"); op != "" {
 		// `operations` is a JSON array column; match events whose array contains
 		// op. Postgres: operations::jsonb @> '"<op>"'. Exact and case-sensitive —
 		// callers pass the stored form (verb lowercased + Type, e.g.
@@ -226,19 +241,21 @@ func (h *AuditHandler) List(c echo.Context) error {
 		)
 	}
 
-	// Timestamp window. `since` is exclusive, `until` is inclusive — pick
-	// consecutive windows and no event is counted twice on the boundary.
+	q = q.Where(timePreds...)
+	// Deprecated spellings: since = createdAt_gt, until = createdAt_lte.
 	if v := c.QueryParam("since"); v != "" {
 		t, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "since must be RFC3339: "+err.Error())
+			return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+				fmt.Sprintf("since must be an RFC3339 time, got %q", v), "Use createdAt_gt; since is deprecated.")
 		}
 		q = q.Where(auditevent.TimestampGT(t))
 	}
 	if v := c.QueryParam("until"); v != "" {
 		t, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "until must be RFC3339: "+err.Error())
+			return writeError(c, http.StatusBadRequest, CodeBadUserInput,
+				fmt.Sprintf("until must be an RFC3339 time, got %q", v), "Use createdAt_lte; until is deprecated.")
 		}
 		q = q.Where(auditevent.TimestampLTE(t))
 	}
@@ -268,6 +285,7 @@ func (h *AuditHandler) List(c echo.Context) error {
 			ResourceTypes: resTypes,
 			ResourceIDs:   orbIDs(e.Edges.Resources),
 			Actor:         e.Actor,
+			CreatedAt:     e.Timestamp.UTC().Format(time.RFC3339),
 			Timestamp:     e.Timestamp.UTC().Format(time.RFC3339),
 			Details:       e.Details,
 			EventCategory: e.EventCategory,

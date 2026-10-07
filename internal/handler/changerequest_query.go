@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"slices"
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/armada/orbital/ent/approvalrequest"
@@ -148,8 +151,14 @@ func payloadTouchesAnyOrbID(orbIDs []string) predicate.ApprovalRequest {
 // does not substitute `?` inside ExprP, so that form ships the literal question
 // mark to Postgres and 500s.
 func payloadTouchesOrbID(orbID string) predicate.ApprovalRequest {
+	return payloadChangeHas("orbId", orbID)
+}
+
+// payloadChangeHas matches change requests with at least one changeset item
+// whose key equals value. See payloadTouchesOrbID for why containment.
+func payloadChangeHas(key, value string) predicate.ApprovalRequest {
 	operand, err := json.Marshal(map[string]any{
-		"changes": []any{map[string]any{"orbId": orbID}},
+		"changes": []any{map[string]any{key: value}},
 	})
 	if err != nil {
 		// Unreachable for a string map; a false predicate is the safe reading
@@ -193,4 +202,53 @@ func payloadNamespaceEQ(namespace string) predicate.ApprovalRequest {
 			b.Ident(s.C(approvalrequest.FieldPayload)).WriteString(" @> ").Arg(string(operand)).WriteString("::jsonb")
 		}))
 	})
+}
+
+// changeRequestTimeFields are the list's time filters: createdAt_gte and so on.
+var changeRequestTimeFields = TimeFields{
+	"createdAt":  approvalrequest.FieldCreatedAt,
+	"updatedAt":  approvalrequest.FieldUpdatedAt,
+	"executedAt": approvalrequest.FieldExecutedAt,
+}
+
+// payloadTouchesAnyType matches change requests with at least one item of ANY
+// of these concrete types — on any item, not just the first. Validation stamps
+// every item's concrete type before the payload is stored, so containment on
+// `type` is exact.
+func payloadTouchesAnyType(types []string) predicate.ApprovalRequest {
+	ps := make([]predicate.ApprovalRequest, 0, len(types))
+	for _, t := range types {
+		ps = append(ps, payloadChangeHas("type", t))
+	}
+	if len(ps) == 1 {
+		return ps[0]
+	}
+	return approvalrequest.Or(ps...)
+}
+
+// concreteTypes expands interface names to the concrete types that implement
+// them. Stored item types are always concrete, so `type=KubernetesCluster`
+// taken literally would match nothing, and an empty list reads as "no
+// requests touch clusters".
+func (h *ChangeRequest) concreteTypes(ctx context.Context, names []string) ([]string, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+	views, err := h.views(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolve type filter: %w", err)
+	}
+	var out []string
+	for _, n := range names {
+		add := []string{n}
+		if v := views.Of(n); v.IsInterface {
+			add = append(add, v.Implementations...)
+		}
+		for _, t := range add {
+			if !slices.Contains(out, t) {
+				out = append(out, t)
+			}
+		}
+	}
+	return out, nil
 }

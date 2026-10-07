@@ -92,7 +92,7 @@ func TestUINav_ChangeRequestsBadgeMatchesAwaitingReviewTotal(t *testing.T) {
 	// number. `limit=0` returns `total` with no items — the badge reads only
 	// `total` (see layout.MenuItem.BadgeSrc), so anything else is transfer this
 	// menu pays for on EVERY page in the app.
-	if !strings.HasPrefix(src, "/api/v1/change-requests?") || !strings.Contains(src, "awaiting_review=true") {
+	if !strings.HasPrefix(src, "/api/v1/change-requests?") || !strings.Contains(src, "awaitingReview=true") {
 		t.Fatalf("BadgeSrc = %q, want the awaiting-review query", src)
 	}
 	if !strings.Contains(src, "limit=0") {
@@ -166,7 +166,7 @@ func TestApprovalPoliciesPage_EveryoneReadsAdminWrites(t *testing.T) {
 func awaitingTotal(t *testing.T, f *crFixture, actor string) int {
 	t.Helper()
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/change-requests?awaiting_review=true", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/change-requests?awaitingReview=true", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.Set("user_email", actor)

@@ -23,6 +23,11 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 ## [Unreleased]
 
 ### Added
+- **Time-window filters on every REST list endpoint**, named after the response
+  field: `createdAt_gte` / `createdAt_lte` (`_gt` / `_lt` for exclusive), RFC3339.
+  A malformed time or an unknown field is a 400, never an unfiltered list.
+  Change requests also filter by `type` (repeatable; an interface name matches
+  its implementations). Conventions: `docs/reference/REST-API.md`.
 - **A page declares its subgraph** (`subgraph:` in `config/views.yaml`): one list
   drives what the page shows, edits, audits and deletes. Replaces ownership
   derived from non-null edges. `tabs:`, `summary.refs:` and `ownerReferences:` are
@@ -53,6 +58,12 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   because an API client sending an explicit `remove` is doing it deliberately.
 
 ### Changed
+- **REST query params are camelCase, one name per concept.** Audit log:
+  `type`, `operation`, `category`, and a `createdAt` field on each event.
+  Change requests: `awaitingReview`. Divergences and OCI artifacts:
+  `dataCenter`. The old names (`since`, `until`, `resource_type`,
+  `operation_name`, `event_category`, `resource_id`, `awaiting_review`, `dc`,
+  `dcOrbId`) and the event's `timestamp` still work and are deprecated.
 - **Bearer provider selection reads RFC 9068's `client_id`, not only `azp`.**
   `client_id` is REQUIRED on a JWT access token by RFC 9068 §2.2; `azp` is OIDC
   Core §2 and is specified for *ID tokens*, which Keycloak and Entra v2 emit on

@@ -130,6 +130,7 @@ Read the relevant doc(s) BEFORE writing code in that area — they encode conven
 | UI templates, HTMX, JavaScript, CSS, edit modals, JSON editor pattern | `docs/reference/UI.md` |
 | Audit events, mutation recording, diff rendering, `graphql.go` proxy | `docs/reference/AUDIT.md` |
 | **Env vars / config / adding a feature toggle** (incl. the ops-vs-maturity rule) | `docs/reference/CONFIG.md` |
+| **REST query params and list conventions** — camelCase, `<field>_gte`/`_lte` time filters, refuse-don't-ignore | `docs/reference/REST-API.md` |
 | Error responses — envelope (`error`/`code`/`httpStatus`/`hint`), `code` registry, HTTP-status mapping | `docs/reference/ERROR-RESPONSES.md` |
 | Auth, sessions, OIDC, bearer tokens, role enforcement, orbctl credentials | `docs/reference/AUTH.md` |
 | OCI publish, signing, export jobs, backup, restore, bundler integration | `docs/reference/OCI.md` |
@@ -258,6 +259,7 @@ These are cross-cutting platform decisions. Domain-specific decisions live in th
 - **Orbital is the sole OCI producer** — no downstream system needs registry write credentials. See `docs/reference/OCI.md` for bundler/signing details.
 - **Product naming: "Orbital" (cloud) / "Orb" (edge) — this is the north star.** Do not use "Orbital Edge" or conflate the two. Orb is a purpose-built edge agent, not a deployment variant of Orbital. `AppName: "Orbital"` in orbital handlers; `AppName: "Orb"` in orb handlers.
 - **`actorFromContext(c echo.Context) string` is the canonical identity helper** — in `internal/handler/actor.go`. Prefers email over display name. All handlers recording "created by" or "actor" must call this. Never inline `c.Get("user_name")` / `c.Get("user_email")` in new handlers. `ui.go` is the only legitimate exception.
+- **REST query params are camelCase and time windows are `<field>_gte` / `<field>_lte`** — one vocabulary across every orbital and orb endpoint; rules in `docs/reference/REST-API.md`.
 - **REST API convention: operation-centric triggers, resource-centric jobs** — orbital is GraphQL-first for CRUD; REST endpoints exist only for async operational workflows. Trigger endpoints create a job and return a job ID. Do not create resource-centric paths for operations that have no corresponding GET/PUT/DELETE.
 - **Local dev defaults must point to local services** — `OCIRegistry`, `S3Endpoint`, `S3Bucket`, `S3AccessKey`, `S3SecretKey` all default to local Docker Compose services. Production credentials must never appear as code defaults.
 - **All Docker Compose images must use pinned versions** — no `latest` tags. Look up the actual release tag from the project's GitHub releases.

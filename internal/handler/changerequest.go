@@ -979,7 +979,7 @@ func availableActions(cr *ent.ApprovalRequest, st crState, actor string, role us
 		// path cannot answer. Omitted there rather than guessed: offering merge
 		// on a request that would 409 is worse than not offering it, and the
 		// queue renders no action buttons anyway — availableActions is read on
-		// the list ONLY by the awaiting_review filter, which looks for
+		// the list ONLY by the awaitingReview filter, which looks for
 		// "approve" and is unaffected.
 		blocked := st.Stale || st.SubtreeChanged
 		if st.StalenessKnown && !blocked && (isAuthor || approvedBy(st, actor) || bypass) {

@@ -172,11 +172,30 @@ const docTemplate = `{
                         "description": "Row offset (default 0)",
                         "name": "offset",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Published at or after (RFC3339; _gt for exclusive)",
+                        "name": "publishedAt_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Published at or before (RFC3339; _lt for exclusive)",
+                        "name": "publishedAt_lte",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
