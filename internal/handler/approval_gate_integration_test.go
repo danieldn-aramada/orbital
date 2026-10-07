@@ -216,7 +216,7 @@ func TestGate_MergeOfApprovedRequestStillWorksWhileGated(t *testing.T) {
 	// Merged by a plain dev — NOT in bypass_roles. Without the exemption the
 	// merge is refused for lacking the approval it already has, and the request
 	// becomes permanently unmergeable by anyone outside bypass_roles.
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err != nil {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err != nil {
 		t.Fatalf("an approved change request could not apply itself: %v", err)
 	}
 	if got := readHostname(t, crServerA); got != "via-change-request" {
@@ -599,7 +599,7 @@ func TestGate_RefusalIsLoggedFromTheInternalDispatchPathToo(t *testing.T) {
 	f.requireApproval(t, 1)
 
 	q, v := updateHostname(crServerA, "should-not-land")
-	if _, err := gql.DispatchMutation(context.Background(), "dispatch-actor", devCaller(), gateEnforce, q, v, nil); err == nil {
+	if _, err := gql.DispatchMutation(context.Background(), "dispatch-actor", devCaller(), gateEnforce, q, v, nil, auditInternal()); err == nil {
 		t.Fatal("expected a refusal")
 	}
 

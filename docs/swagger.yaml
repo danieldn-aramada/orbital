@@ -254,6 +254,22 @@ definitions:
         example: 42
         type: integer
     type: object
+  handler.authorization:
+    properties:
+      id:
+        description: |-
+          The act's identifier, resolvable through its own API — a change request
+          via GET /api/v1/change-requests/{id}, a divergence via its entry id.
+        example: colo-58
+        type: string
+      type:
+        description: Which kind of act authorized the write.
+        enum:
+        - changeRequest
+        - divergenceResolution
+        example: changeRequest
+        type: string
+    type: object
   handler.backupRequest:
     properties:
       trigger:
@@ -752,9 +768,18 @@ definitions:
     type: object
   handler.eventItem:
     properties:
+      actingClient:
+        description: service acting for the human in `actor`; absent when they are
+          the same
+        example: aep-fleet-commander
+        type: string
       actor:
         example: asharma@armada.ai
         type: string
+      authorization:
+        allOf:
+        - $ref: '#/definitions/handler.authorization'
+        description: what authorized this write; absent on a direct write
       changes:
         description: |-
           Changes is the pre-computed field-level diff. **Present ONLY for a clean
@@ -766,7 +791,7 @@ definitions:
           $ref: '#/definitions/handler.fieldChange'
         type: array
       createdAt:
-        example: "2026-07-29T17:26:55Z"
+        example: "2026-07-29T17:26:55.418293Z"
         type: string
       details:
         description: raw {operationName, query, variables, before}
@@ -777,7 +802,7 @@ definitions:
         type: string
       eventSource:
         description: |-
-          CloudTrail parity. All three are omitempty: absent means "no HTTP request
+          CloudTrail parity. All four are omitempty: absent means "no HTTP request
           behind this event" (a background writer), which is different from empty.
         example: graphql
         type: string
@@ -809,7 +834,7 @@ definitions:
         type: string
       timestamp:
         description: 'Deprecated: same value as createdAt.'
-        example: "2026-07-29T17:26:55Z"
+        example: "2026-07-29T17:26:55.418293Z"
         type: string
     type: object
   handler.exportRequest:
@@ -1364,7 +1389,7 @@ paths:
   /api/v1/audit-log:
     get:
       description: |-
-        Read-only, immutable audit trail of intent mutations, newest first.
+        Audit trail of intent mutations, newest first. The **data** is append-only — orbital adds events and never updates or deletes them. This **endpoint** is read-only: there is no API to create or modify an event. Append-only is a property of orbital's write paths, not a tamper-evidence mechanism; see docs/audit-model.md § Integrity for what is and is not protected.
 
         **Scope a query** by combining filters: `orbId` (repeatable, **max 128** — over that the request is refused with `400 BAD_USER_INPUT`, never silently truncated) for a specific resource; `namespace` for a whole data center; `type`/`operation` to narrow; `createdAt_gte`/`createdAt_lte` (RFC3339; `_gt`/`_lt` for exclusive bounds) for a time window. To see everything under a server/cluster, fetch its subgraph orbIds from the GraphQL Topology API and pass them as repeatable `orbId` params (there is no single "cluster" scope — a child mutation records the child's orbId, not the parent's).
 

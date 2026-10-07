@@ -190,6 +190,46 @@ func (_u *AuditEventUpdate) ClearRequestID() *AuditEventUpdate {
 	return _u
 }
 
+// SetAuthorizationType sets the "authorization_type" field.
+func (_u *AuditEventUpdate) SetAuthorizationType(v string) *AuditEventUpdate {
+	_u.mutation.SetAuthorizationType(v)
+	return _u
+}
+
+// SetNillableAuthorizationType sets the "authorization_type" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillableAuthorizationType(v *string) *AuditEventUpdate {
+	if v != nil {
+		_u.SetAuthorizationType(*v)
+	}
+	return _u
+}
+
+// ClearAuthorizationType clears the value of the "authorization_type" field.
+func (_u *AuditEventUpdate) ClearAuthorizationType() *AuditEventUpdate {
+	_u.mutation.ClearAuthorizationType()
+	return _u
+}
+
+// SetAuthorizationID sets the "authorization_id" field.
+func (_u *AuditEventUpdate) SetAuthorizationID(v string) *AuditEventUpdate {
+	_u.mutation.SetAuthorizationID(v)
+	return _u
+}
+
+// SetNillableAuthorizationID sets the "authorization_id" field if the given value is not nil.
+func (_u *AuditEventUpdate) SetNillableAuthorizationID(v *string) *AuditEventUpdate {
+	if v != nil {
+		_u.SetAuthorizationID(*v)
+	}
+	return _u
+}
+
+// ClearAuthorizationID clears the value of the "authorization_id" field.
+func (_u *AuditEventUpdate) ClearAuthorizationID() *AuditEventUpdate {
+	_u.mutation.ClearAuthorizationID()
+	return _u
+}
+
 // AddResourceIDs adds the "resources" edge to the AuditEventResource entity by IDs.
 func (_u *AuditEventUpdate) AddResourceIDs(ids ...int) *AuditEventUpdate {
 	_u.mutation.AddResourceIDs(ids...)
@@ -357,6 +397,18 @@ func (_u *AuditEventUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if _u.mutation.RequestIDCleared() {
 		_spec.ClearField(auditevent.FieldRequestID, field.TypeString)
+	}
+	if value, ok := _u.mutation.AuthorizationType(); ok {
+		_spec.SetField(auditevent.FieldAuthorizationType, field.TypeString, value)
+	}
+	if _u.mutation.AuthorizationTypeCleared() {
+		_spec.ClearField(auditevent.FieldAuthorizationType, field.TypeString)
+	}
+	if value, ok := _u.mutation.AuthorizationID(); ok {
+		_spec.SetField(auditevent.FieldAuthorizationID, field.TypeString, value)
+	}
+	if _u.mutation.AuthorizationIDCleared() {
+		_spec.ClearField(auditevent.FieldAuthorizationID, field.TypeString)
 	}
 	if _u.mutation.ResourcesCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -626,6 +678,46 @@ func (_u *AuditEventUpdateOne) ClearRequestID() *AuditEventUpdateOne {
 	return _u
 }
 
+// SetAuthorizationType sets the "authorization_type" field.
+func (_u *AuditEventUpdateOne) SetAuthorizationType(v string) *AuditEventUpdateOne {
+	_u.mutation.SetAuthorizationType(v)
+	return _u
+}
+
+// SetNillableAuthorizationType sets the "authorization_type" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillableAuthorizationType(v *string) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetAuthorizationType(*v)
+	}
+	return _u
+}
+
+// ClearAuthorizationType clears the value of the "authorization_type" field.
+func (_u *AuditEventUpdateOne) ClearAuthorizationType() *AuditEventUpdateOne {
+	_u.mutation.ClearAuthorizationType()
+	return _u
+}
+
+// SetAuthorizationID sets the "authorization_id" field.
+func (_u *AuditEventUpdateOne) SetAuthorizationID(v string) *AuditEventUpdateOne {
+	_u.mutation.SetAuthorizationID(v)
+	return _u
+}
+
+// SetNillableAuthorizationID sets the "authorization_id" field if the given value is not nil.
+func (_u *AuditEventUpdateOne) SetNillableAuthorizationID(v *string) *AuditEventUpdateOne {
+	if v != nil {
+		_u.SetAuthorizationID(*v)
+	}
+	return _u
+}
+
+// ClearAuthorizationID clears the value of the "authorization_id" field.
+func (_u *AuditEventUpdateOne) ClearAuthorizationID() *AuditEventUpdateOne {
+	_u.mutation.ClearAuthorizationID()
+	return _u
+}
+
 // AddResourceIDs adds the "resources" edge to the AuditEventResource entity by IDs.
 func (_u *AuditEventUpdateOne) AddResourceIDs(ids ...int) *AuditEventUpdateOne {
 	_u.mutation.AddResourceIDs(ids...)
@@ -823,6 +915,18 @@ func (_u *AuditEventUpdateOne) sqlSave(ctx context.Context) (_node *AuditEvent, 
 	}
 	if _u.mutation.RequestIDCleared() {
 		_spec.ClearField(auditevent.FieldRequestID, field.TypeString)
+	}
+	if value, ok := _u.mutation.AuthorizationType(); ok {
+		_spec.SetField(auditevent.FieldAuthorizationType, field.TypeString, value)
+	}
+	if _u.mutation.AuthorizationTypeCleared() {
+		_spec.ClearField(auditevent.FieldAuthorizationType, field.TypeString)
+	}
+	if value, ok := _u.mutation.AuthorizationID(); ok {
+		_spec.SetField(auditevent.FieldAuthorizationID, field.TypeString, value)
+	}
+	if _u.mutation.AuthorizationIDCleared() {
+		_spec.ClearField(auditevent.FieldAuthorizationID, field.TypeString)
 	}
 	if _u.mutation.ResourcesCleared() {
 		edge := &sqlgraph.EdgeSpec{

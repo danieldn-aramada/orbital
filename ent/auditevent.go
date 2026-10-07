@@ -37,6 +37,10 @@ type AuditEvent struct {
 	SourceIPAddress string `json:"source_ip_address,omitempty"`
 	// RequestID holds the value of the "request_id" field.
 	RequestID string `json:"request_id,omitempty"`
+	// AuthorizationType holds the value of the "authorization_type" field.
+	AuthorizationType string `json:"authorization_type,omitempty"`
+	// AuthorizationID holds the value of the "authorization_id" field.
+	AuthorizationID string `json:"authorization_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the AuditEventQuery when eager-loading is set.
 	Edges        AuditEventEdges `json:"edges"`
@@ -79,7 +83,7 @@ func (*AuditEvent) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case auditevent.FieldOperations, auditevent.FieldDetails:
 			values[i] = new([]byte)
-		case auditevent.FieldActor, auditevent.FieldEventCategory, auditevent.FieldEventSource, auditevent.FieldActingClient, auditevent.FieldSourceIPAddress, auditevent.FieldRequestID:
+		case auditevent.FieldActor, auditevent.FieldEventCategory, auditevent.FieldEventSource, auditevent.FieldActingClient, auditevent.FieldSourceIPAddress, auditevent.FieldRequestID, auditevent.FieldAuthorizationType, auditevent.FieldAuthorizationID:
 			values[i] = new(sql.NullString)
 		case auditevent.FieldTimestamp:
 			values[i] = new(sql.NullTime)
@@ -164,6 +168,18 @@ func (_m *AuditEvent) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.RequestID = value.String
 			}
+		case auditevent.FieldAuthorizationType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field authorization_type", values[i])
+			} else if value.Valid {
+				_m.AuthorizationType = value.String
+			}
+		case auditevent.FieldAuthorizationID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field authorization_id", values[i])
+			} else if value.Valid {
+				_m.AuthorizationID = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -236,6 +252,12 @@ func (_m *AuditEvent) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("request_id=")
 	builder.WriteString(_m.RequestID)
+	builder.WriteString(", ")
+	builder.WriteString("authorization_type=")
+	builder.WriteString(_m.AuthorizationType)
+	builder.WriteString(", ")
+	builder.WriteString("authorization_id=")
+	builder.WriteString(_m.AuthorizationID)
 	builder.WriteByte(')')
 	return builder.String()
 }

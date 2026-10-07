@@ -49,7 +49,7 @@ func TestCRMerge_EntityMovedIsRefusedByNameAndAppliesNothing(t *testing.T) {
 	// A third party moves ONE of the two entities.
 	setHostname(t, crServerB, "moved-by-someone-else")
 
-	_, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false)
+	_, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, "")
 	if err == nil {
 		t.Fatal("a merge whose target moved after approval was allowed")
 	}
@@ -92,7 +92,7 @@ func TestCRMerge_AllCurrentAppliesAndBumpsEachVersionOnce(t *testing.T) {
 	if _, err := f.crh.Approve(ctx, cr.ID, reviewer, user.RoleDev, "ok"); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err != nil {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 
@@ -127,7 +127,7 @@ func TestCRMerge_EntityMoveAndFieldMoveAreDistinguishable(t *testing.T) {
 	}
 	setHostname(t, crServerA, "third-party")
 
-	_, errA := f.crh.Merge(ctx, crA.ID, author, user.RoleDev, false)
+	_, errA := f.crh.Merge(ctx, crA.ID, author, user.RoleDev, false, "")
 	var sw *staleWithEntities
 	if !errors.As(errA, &sw) || len(sw.Problems) == 0 {
 		t.Fatalf("expected an entity-level refusal, got %v", errA)
@@ -157,7 +157,7 @@ func TestCRMerge_EntityMoveAndFieldMoveAreDistinguishable(t *testing.T) {
 	crGQL(t, `mutation($orbId: String!, $set: ServerPatch!) { updateServer(input: {filter: {orbId: {eq: $orbId}}, set: $set}) { numUids } }`,
 		map[string]any{"orbId": crServerB, "set": map[string]any{"hostname": "someone-elses-value"}})
 
-	_, errB := f.crh.Merge(ctx, crB.ID, author, user.RoleDev, false)
+	_, errB := f.crh.Merge(ctx, crB.ID, author, user.RoleDev, false, "")
 	var pf *preconditionFailed
 	if !errors.As(errB, &pf) || len(pf.Problems) == 0 {
 		t.Fatalf("expected a field-level refusal from base_values, got %v", errB)
@@ -188,7 +188,7 @@ func TestCRMerge_WriteTimeGuardRefusesAVersionThatMovedAfterPlanning(t *testing.
 		Set: map[string]any{"hostname": "written-against-a-stale-plan"}}
 	stale := mergeTarget{Exists: true, Version: readVersion(t, crServerA) - 1, Current: map[string]any{}}
 
-	err := f.crh.applyItem(ctx, author, callerRole{Role: user.RoleAdmin, Source: "user"}, 1, item, stale)
+	err := f.crh.applyItem(ctx, author, callerRole{Role: user.RoleAdmin, Source: "user"}, 1, item, stale, auditInternal())
 	if err == nil {
 		t.Fatal("a write planned against a version that had already moved was applied")
 	}
@@ -199,7 +199,7 @@ func TestCRMerge_WriteTimeGuardRefusesAVersionThatMovedAfterPlanning(t *testing.
 	// The negative: a CURRENT target still applies. A guard that refused
 	// everything would pass the test above and break every merge.
 	current := mergeTarget{Exists: true, Version: readVersion(t, crServerA), Current: map[string]any{}}
-	if err := f.crh.applyItem(ctx, author, callerRole{Role: user.RoleAdmin, Source: "user"}, 1, item, current); err != nil {
+	if err := f.crh.applyItem(ctx, author, callerRole{Role: user.RoleAdmin, Source: "user"}, 1, item, current, auditInternal()); err != nil {
 		t.Fatalf("a write planned against the current version was refused: %v", err)
 	}
 	if got := readHostname(t, crServerA); got != "written-against-a-stale-plan" {
@@ -274,14 +274,14 @@ func TestCRMerge_ReApprovalAfterAThirdPartyWriteStillMerges(t *testing.T) {
 
 	setHostname(t, crServerA, "third-party-edit")
 
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); !errors.Is(err, errCRStale) {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); !errors.Is(err, errCRStale) {
 		t.Fatalf("merge err = %v, want stale", err)
 	}
 	// One click.
 	if _, err := f.crh.Approve(ctx, cr.ID, reviewer, user.RoleDev, "re-reviewed"); err != nil {
 		t.Fatalf("re-approve: %v", err)
 	}
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err != nil {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err != nil {
 		t.Fatalf("merge after re-approval was refused: %v — re-review no longer clears staleness", err)
 	}
 	if got := readHostname(t, crServerA); got != "proposed" {
@@ -361,7 +361,7 @@ func TestCRMerge_UngovernedRequestGetsTheNamedRefusalToo(t *testing.T) {
 
 	setHostname(t, crServerA, "third-party")
 
-	_, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false)
+	_, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, "")
 	if !errors.Is(err, errCRStale) {
 		t.Fatalf("err = %v, want stale", err)
 	}
@@ -454,7 +454,7 @@ func TestCRMerge_StaleEntitiesAreCarriedOnTheGetResponse(t *testing.T) {
 	}
 
 	// And it agrees with what a merge attempt would say.
-	_, mergeErr := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false)
+	_, mergeErr := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, "")
 	var sw *staleWithEntities
 	if !errors.As(mergeErr, &sw) || len(sw.Problems) != 1 || sw.Problems[0].OrbID != e.OrbID {
 		t.Errorf("the banner and the merge refusal name different entities: banner=%v merge=%v", e.OrbID, sw)
@@ -543,7 +543,7 @@ func TestCRFields_ResolvesAppliesSatisfiedAndConflict(t *testing.T) {
 
 	// And the preview agrees with the refusal: merge must refuse, naming the
 	// same field the table marked.
-	_, mergeErr := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false)
+	_, mergeErr := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, "")
 	var pf *preconditionFailed
 	if !errors.As(mergeErr, &pf) {
 		t.Fatalf("merge err = %v, want a field conflict — the table and the merge disagree", mergeErr)

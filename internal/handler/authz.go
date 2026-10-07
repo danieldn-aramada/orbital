@@ -300,6 +300,68 @@ func ResolveUser(db *ent.Client, adminEmails map[string]struct{}) echo.Middlewar
 // HTTP methods (POST, PUT, PATCH, DELETE). GET, HEAD, and OPTIONS pass through.
 // If db is nil (dev mode without DB), all requests pass through.
 // Authorization denials are logged (slog.Warn) and recorded as audit events.
+// BearerAuthFailureSink returns the function orbital hands to the auth provider
+// set so a rejected bearer token leaves a record. It exists because
+// internal/auth deliberately imports neither ent nor this package, so the write
+// has to be injected rather than called.
+//
+// Category "auth", alongside loginSuccess/loginFailed/logout — these are the
+// bearer path's session-boundary events, which is also why user_agent is
+// carried here and nowhere else (see AUDIT.md § CloudTrail field parity).
+//
+// NOT recorded: a request that presents no credential at all. That is an
+// unauthenticated request rather than an authentication failure, it fires for
+// every anonymous probe, and the access log already carries the 401.
+//
+// NOTE: Login.writeAuthAudit and OIDC.writeAuthAudit are byte-identical copies
+// of this shape. A fourth copy would be worse than three; folding all of them
+// into one package-level helper is a cleanup worth doing, deliberately not done
+// here because those two call sites were not part of this change.
+func BearerAuthFailureSink(db *ent.Client, logger *slog.Logger) func(echo.Context, string) {
+	return func(c echo.Context, reason string) {
+		if db == nil {
+			return
+		}
+		writeAuditEvent(db, logger, "auth", actorFromContext(c), "bearerAuthFailed",
+			[]string{"bearerAuthFailed"},
+			[]string{},
+			[]string{},
+			map[string]any{
+				"reason":     reason,
+				"method":     c.Request().Method,
+				"uri":        c.Request().URL.Path,
+				"user_agent": c.Request().UserAgent(),
+			},
+			originFromContext(c, "bearer"),
+		)
+	}
+}
+
+// auditAuthzDenied records one refusal. Every branch that returns 403 calls it,
+// because "who was refused" must not depend on WHICH way they were refused —
+// until 2026-10-06 only the user-row branch wrote a row, so a caller refused for
+// being unauthenticated, for being an app principal, or for carrying a delegated
+// role left nothing behind. `reason` is what makes the five distinguishable once
+// they all land in the same table.
+func auditAuthzDenied(db *ent.Client, c echo.Context, actor, reason string, minRole user.Role, userRole string) {
+	details := map[string]any{
+		"method":       c.Request().Method,
+		"uri":          c.Request().URL.Path,
+		"reason":       reason,
+		"requiredRole": string(minRole),
+	}
+	if userRole != "" {
+		details["userRole"] = userRole
+	}
+	writeAuditEvent(db, slog.Default(), "management", actor, "authorizationDenied",
+		[]string{"authorizationDenied"},
+		[]string{},
+		[]string{},
+		details,
+		originFromContext(c, "rest"),
+	)
+}
+
 func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -325,6 +387,7 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 					"user_role", roleStr,
 					"reason", "context_role_below_required",
 				)
+				auditAuthzDenied(db, c, actorFromContext(c), "context_role_below_required", minRole, roleStr)
 				return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("role %q is below required %q for this action", roleStr, minRole))
 			}
 			// App-only (client credentials) callers were authenticated by the
@@ -345,6 +408,7 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 					"required_role", string(minRole),
 					"reason", "app_caller_below_required_role",
 				)
+				auditAuthzDenied(db, c, actorFromContext(c), "app_caller_below_required_role", minRole, "")
 				return echo.ErrForbidden
 			}
 			userID, _ := c.Get("user_id").(int)
@@ -355,6 +419,7 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 					"uri", c.Request().URL.Path,
 					"reason", "unauthenticated",
 				)
+				auditAuthzDenied(db, c, actorFromContext(c), "unauthenticated", minRole, "")
 				return echo.NewHTTPError(http.StatusForbidden, "not authenticated — sign in and retry")
 			}
 			u, err := db.User.Get(c.Request().Context(), userID)
@@ -365,6 +430,7 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 					"uri", c.Request().URL.Path,
 					"reason", "user_not_found",
 				)
+				auditAuthzDenied(db, c, actorFromContext(c), "user_not_found", minRole, "")
 				return echo.NewHTTPError(http.StatusForbidden, "user record not found — sign in and retry")
 			}
 			// The handler downstream will ask for this same role. Seed the memo
@@ -378,18 +444,7 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 					"required_role", string(minRole),
 					"user_role", string(u.Role),
 				)
-				writeAuditEvent(db, slog.Default(), "management", u.Email, "authorizationDenied",
-					[]string{"authorizationDenied"},
-					[]string{},
-					[]string{},
-					map[string]any{
-						"method":       c.Request().Method,
-						"uri":          c.Request().URL.Path,
-						"requiredRole": string(minRole),
-						"userRole":     string(u.Role),
-					},
-					originFromContext(c, "rest"),
-				)
+				auditAuthzDenied(db, c, u.Email, "user_role_below_required", minRole, string(u.Role))
 				return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("role %q is below required %q for this action", u.Role, minRole))
 			}
 			return next(c)

@@ -179,7 +179,7 @@ func TestCASRace_MergeItemLosingToAConcurrentEditFailsRatherThanSilentlySucceedi
 	stale := mergeTarget{Exists: true, Version: readVersion(t, crServerA) - 1, Current: map[string]any{}}
 
 	err := f.crh.applyItem(context.Background(), author,
-		callerRole{Role: user.RoleAdmin, Source: "user"}, 1, item, stale)
+		callerRole{Role: user.RoleAdmin, Source: "user"}, 1, item, stale, auditInternal())
 	if err == nil {
 		t.Fatal("a merge item that lost the race reported success")
 	}

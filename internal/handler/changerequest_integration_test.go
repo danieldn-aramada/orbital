@@ -110,7 +110,7 @@ func TestCR_CreateApproveMerge_LandsInDGraph(t *testing.T) {
 		t.Fatalf("status = %q, want approved after 1 of 1", st.Status)
 	}
 
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err != nil {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 
@@ -150,7 +150,7 @@ func TestCR_MergedRequestDoesNotReportItselfStale(t *testing.T) {
 	if _, err := f.crh.Approve(ctx, cr.ID, reviewer, user.RoleDev, "ok"); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err != nil {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 
@@ -218,7 +218,7 @@ func TestCR_StaleBlocksMergeAndIsDerivedWithNoHook(t *testing.T) {
 		t.Errorf("the approval row should still exist so the UI can say 'approved an earlier version'")
 	}
 
-	_, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false)
+	_, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, "")
 	if err == nil {
 		t.Fatal("merge succeeded against a stale base")
 	}
@@ -236,7 +236,7 @@ func TestCR_StaleBlocksMergeAndIsDerivedWithNoHook(t *testing.T) {
 	if st := f.state(t, cr.ID); st.Valid != 1 || st.Status != approval.StatusApproved {
 		t.Fatalf("after re-approval: valid=%d status=%q", st.Valid, st.Status)
 	}
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err != nil {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err != nil {
 		t.Fatalf("merge after re-approval: %v", err)
 	}
 	if got := readHostname(t, crServerA); got != "proposed" {
@@ -279,7 +279,7 @@ func TestCR_StaleWithValidApprovals_IsMVCCConflict(t *testing.T) {
 		t.Fatalf("restamp: %v", err)
 	}
 
-	_, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false)
+	_, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, "")
 	if err == nil {
 		t.Fatal("merge succeeded with a moved base")
 	}
@@ -312,7 +312,7 @@ func TestCR_PartialMerge_ApprovalsSurviveAndRemainderReMerges(t *testing.T) {
 	}
 	deleteEntity(t, "Rack", crRack)
 
-	_, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false)
+	_, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, "")
 	if err == nil {
 		t.Fatal("merge reported success despite a failing item")
 	}
@@ -362,7 +362,7 @@ func TestCR_PartialMerge_ApprovalsSurviveAndRemainderReMerges(t *testing.T) {
 
 	// Retrying is safe: item 1 re-applies as a no-op, and item 2 now succeeds.
 	addRack(t)
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err != nil {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err != nil {
 		t.Fatalf("re-merge after fixing the cause: %v", err)
 	}
 	final, err := f.crh.Get(ctx, cr.ID)
@@ -496,7 +496,7 @@ func TestCR_CreateNewEntity(t *testing.T) {
 	if _, err := f.crh.Approve(ctx, cr.ID, reviewer, user.RoleDev, ""); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err != nil {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 	if got := readHostname(t, newServer); got != "brand-new" {
@@ -531,7 +531,7 @@ func TestCR_TargetDeletedDuringReview_IsHardFailure(t *testing.T) {
 	if _, err := f.crh.Approve(ctx, cr.ID, reviewer, user.RoleDev, ""); err != nil {
 		t.Fatalf("re-approve: %v", err)
 	}
-	_, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false)
+	_, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, "")
 	if err == nil {
 		t.Fatal("merge recreated a deleted entity from a field delta")
 	}
@@ -627,7 +627,7 @@ func TestCR_NoPolicy_IsUngovernedButStillMVCCGuarded(t *testing.T) {
 	if st.Status != approval.StatusApproved {
 		t.Fatalf("status = %q, want approved — nothing governs this change", st.Status)
 	}
-	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false); err != nil {
+	if _, err := f.crh.Merge(ctx, cr.ID, author, user.RoleDev, false, ""); err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 	if got := readHostname(t, crServerA); got != "ungoverned" {
@@ -641,7 +641,7 @@ func TestCR_NoPolicy_IsUngovernedButStillMVCCGuarded(t *testing.T) {
 		Set: map[string]any{"hostname": "second"},
 	})
 	setHostname(t, crServerB, "someone-else")
-	if _, err := f.crh.Merge(ctx, cr2.ID, author, user.RoleDev, false); err == nil {
+	if _, err := f.crh.Merge(ctx, cr2.ID, author, user.RoleDev, false, ""); err == nil {
 		t.Fatal("an ungoverned request merged against a moved base")
 	} else if !errors.Is(err, errCRStale) {
 		t.Fatalf("merge error = %v, want stale", err)
@@ -664,7 +664,7 @@ func TestCR_RejectAndCloseAreTerminal(t *testing.T) {
 	if _, err := f.crh.Approve(ctx, rejected.ID, reviewer, user.RoleDev, ""); err == nil {
 		t.Error("a rejected request accepted an approval")
 	}
-	if _, err := f.crh.Merge(ctx, rejected.ID, author, user.RoleDev, false); err == nil {
+	if _, err := f.crh.Merge(ctx, rejected.ID, author, user.RoleDev, false, ""); err == nil {
 		t.Error("a rejected request merged")
 	}
 
@@ -677,7 +677,7 @@ func TestCR_RejectAndCloseAreTerminal(t *testing.T) {
 	if _, err := f.crh.Close(ctx, closed.ID, author, user.RoleDev); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	if _, err := f.crh.Merge(ctx, closed.ID, author, user.RoleDev, false); err == nil {
+	if _, err := f.crh.Merge(ctx, closed.ID, author, user.RoleDev, false, ""); err == nil {
 		t.Error("a closed request merged")
 	}
 }

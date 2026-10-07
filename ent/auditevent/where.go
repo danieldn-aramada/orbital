@@ -91,6 +91,16 @@ func RequestID(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldRequestID, v))
 }
 
+// AuthorizationType applies equality check predicate on the "authorization_type" field. It's identical to AuthorizationTypeEQ.
+func AuthorizationType(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldAuthorizationType, v))
+}
+
+// AuthorizationID applies equality check predicate on the "authorization_id" field. It's identical to AuthorizationIDEQ.
+func AuthorizationID(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldAuthorizationID, v))
+}
+
 // OperationsIsNil applies the IsNil predicate on the "operations" field.
 func OperationsIsNil() predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldIsNull(FieldOperations))
@@ -579,6 +589,156 @@ func RequestIDEqualFold(v string) predicate.AuditEvent {
 // RequestIDContainsFold applies the ContainsFold predicate on the "request_id" field.
 func RequestIDContainsFold(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldContainsFold(FieldRequestID, v))
+}
+
+// AuthorizationTypeEQ applies the EQ predicate on the "authorization_type" field.
+func AuthorizationTypeEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldAuthorizationType, v))
+}
+
+// AuthorizationTypeNEQ applies the NEQ predicate on the "authorization_type" field.
+func AuthorizationTypeNEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldAuthorizationType, v))
+}
+
+// AuthorizationTypeIn applies the In predicate on the "authorization_type" field.
+func AuthorizationTypeIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIn(FieldAuthorizationType, vs...))
+}
+
+// AuthorizationTypeNotIn applies the NotIn predicate on the "authorization_type" field.
+func AuthorizationTypeNotIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotIn(FieldAuthorizationType, vs...))
+}
+
+// AuthorizationTypeGT applies the GT predicate on the "authorization_type" field.
+func AuthorizationTypeGT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGT(FieldAuthorizationType, v))
+}
+
+// AuthorizationTypeGTE applies the GTE predicate on the "authorization_type" field.
+func AuthorizationTypeGTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGTE(FieldAuthorizationType, v))
+}
+
+// AuthorizationTypeLT applies the LT predicate on the "authorization_type" field.
+func AuthorizationTypeLT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLT(FieldAuthorizationType, v))
+}
+
+// AuthorizationTypeLTE applies the LTE predicate on the "authorization_type" field.
+func AuthorizationTypeLTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLTE(FieldAuthorizationType, v))
+}
+
+// AuthorizationTypeContains applies the Contains predicate on the "authorization_type" field.
+func AuthorizationTypeContains(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContains(FieldAuthorizationType, v))
+}
+
+// AuthorizationTypeHasPrefix applies the HasPrefix predicate on the "authorization_type" field.
+func AuthorizationTypeHasPrefix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasPrefix(FieldAuthorizationType, v))
+}
+
+// AuthorizationTypeHasSuffix applies the HasSuffix predicate on the "authorization_type" field.
+func AuthorizationTypeHasSuffix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasSuffix(FieldAuthorizationType, v))
+}
+
+// AuthorizationTypeIsNil applies the IsNil predicate on the "authorization_type" field.
+func AuthorizationTypeIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldAuthorizationType))
+}
+
+// AuthorizationTypeNotNil applies the NotNil predicate on the "authorization_type" field.
+func AuthorizationTypeNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldAuthorizationType))
+}
+
+// AuthorizationTypeEqualFold applies the EqualFold predicate on the "authorization_type" field.
+func AuthorizationTypeEqualFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEqualFold(FieldAuthorizationType, v))
+}
+
+// AuthorizationTypeContainsFold applies the ContainsFold predicate on the "authorization_type" field.
+func AuthorizationTypeContainsFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContainsFold(FieldAuthorizationType, v))
+}
+
+// AuthorizationIDEQ applies the EQ predicate on the "authorization_id" field.
+func AuthorizationIDEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldAuthorizationID, v))
+}
+
+// AuthorizationIDNEQ applies the NEQ predicate on the "authorization_id" field.
+func AuthorizationIDNEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldAuthorizationID, v))
+}
+
+// AuthorizationIDIn applies the In predicate on the "authorization_id" field.
+func AuthorizationIDIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIn(FieldAuthorizationID, vs...))
+}
+
+// AuthorizationIDNotIn applies the NotIn predicate on the "authorization_id" field.
+func AuthorizationIDNotIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotIn(FieldAuthorizationID, vs...))
+}
+
+// AuthorizationIDGT applies the GT predicate on the "authorization_id" field.
+func AuthorizationIDGT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGT(FieldAuthorizationID, v))
+}
+
+// AuthorizationIDGTE applies the GTE predicate on the "authorization_id" field.
+func AuthorizationIDGTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGTE(FieldAuthorizationID, v))
+}
+
+// AuthorizationIDLT applies the LT predicate on the "authorization_id" field.
+func AuthorizationIDLT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLT(FieldAuthorizationID, v))
+}
+
+// AuthorizationIDLTE applies the LTE predicate on the "authorization_id" field.
+func AuthorizationIDLTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLTE(FieldAuthorizationID, v))
+}
+
+// AuthorizationIDContains applies the Contains predicate on the "authorization_id" field.
+func AuthorizationIDContains(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContains(FieldAuthorizationID, v))
+}
+
+// AuthorizationIDHasPrefix applies the HasPrefix predicate on the "authorization_id" field.
+func AuthorizationIDHasPrefix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasPrefix(FieldAuthorizationID, v))
+}
+
+// AuthorizationIDHasSuffix applies the HasSuffix predicate on the "authorization_id" field.
+func AuthorizationIDHasSuffix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasSuffix(FieldAuthorizationID, v))
+}
+
+// AuthorizationIDIsNil applies the IsNil predicate on the "authorization_id" field.
+func AuthorizationIDIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldAuthorizationID))
+}
+
+// AuthorizationIDNotNil applies the NotNil predicate on the "authorization_id" field.
+func AuthorizationIDNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldAuthorizationID))
+}
+
+// AuthorizationIDEqualFold applies the EqualFold predicate on the "authorization_id" field.
+func AuthorizationIDEqualFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEqualFold(FieldAuthorizationID, v))
+}
+
+// AuthorizationIDContainsFold applies the ContainsFold predicate on the "authorization_id" field.
+func AuthorizationIDContainsFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContainsFold(FieldAuthorizationID, v))
 }
 
 // HasResources applies the HasEdge predicate on the "resources" edge.

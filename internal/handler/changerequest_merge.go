@@ -44,7 +44,10 @@ type mergeTarget struct {
 //
 // So a transient failure costs one retry click, while a genuine third-party
 // write still forces re-review. Nothing has to be cleaned up by hand.
-func (h *ChangeRequest) Merge(ctx context.Context, id int64, actor string, role user.Role, noAuthz bool) (*ent.ApprovalRequest, error) {
+// requestID correlates every write this merge produces back to the one HTTP
+// request that asked for it. Merge runs INSIDE that request — it is not a
+// background job — so a live request id exists to carry.
+func (h *ChangeRequest) Merge(ctx context.Context, id int64, actor string, role user.Role, noAuthz bool, requestID string) (*ent.ApprovalRequest, error) {
 	cr, err := h.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -153,7 +156,11 @@ func (h *ChangeRequest) Merge(ctx context.Context, id int64, actor string, role 
 		if failure != nil {
 			break
 		}
-		err := h.applyItem(ctx, actor, caller, cr.ID, item, targets[item.OrbID])
+		// Every item this merge applies is authorized by the SAME change request,
+		// including items applied on a later retry after a partial merge — the
+		// request authorized all of them, whenever they land.
+		origin := auditAuthorized("changeRequest", fmt.Sprintf("%s-%d", cr.Namespace, cr.Number), requestID)
+		err := h.applyItem(ctx, actor, caller, cr.ID, item, targets[item.OrbID], origin)
 		results = append(results, approval.ItemResult{
 			OrbID:   item.OrbID,
 			Applied: err == nil,
@@ -250,7 +257,7 @@ func (h *ChangeRequest) rebaseOrStale(ctx context.Context, cr *ent.ApprovalReque
 // DGraph-write function everything else uses. A merge is not a privileged
 // side-channel into the graph; it is an ordinary write with a change request
 // behind it.
-func (h *ChangeRequest) applyItem(ctx context.Context, actor string, caller callerRole, crID int64, item approval.ChangeItem, target mergeTarget) error {
+func (h *ChangeRequest) applyItem(ctx context.Context, actor string, caller callerRole, crID int64, item approval.ChangeItem, target mergeTarget, origin auditOrigin) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	// gateExempt, and this is the ONE place it is legitimate.
@@ -278,7 +285,7 @@ func (h *ChangeRequest) applyItem(ctx context.Context, actor string, caller call
 		query := fmt.Sprintf(`mutation Delete%s($orbId: String!) { delete%s(filter: {orbId: {eq: $orbId}}) { numUids } }`,
 			item.Type, item.Type)
 		_, err := h.gql.DispatchMutation(ctx, actor, caller, gate, query,
-			map[string]any{"orbId": item.OrbID, "version": target.Version}, nil)
+			map[string]any{"orbId": item.OrbID, "version": target.Version}, nil, origin)
 		return err
 
 	case !target.Exists:
@@ -300,7 +307,7 @@ func (h *ChangeRequest) applyItem(ctx context.Context, actor string, caller call
 		query := fmt.Sprintf(`mutation Add%s($input: [Add%sInput!]!) { add%s(input: $input, upsert: true) { numUids } }`,
 			item.Type, item.Type, item.Type)
 		_, err := h.gql.DispatchMutation(ctx, actor, caller, gate, query,
-			map[string]any{"input": []any{input}}, nil)
+			map[string]any{"input": []any{input}}, nil, origin)
 		return err
 
 	default:
@@ -352,7 +359,7 @@ func (h *ChangeRequest) applyItem(ctx context.Context, actor string, caller call
 		for k, v := range target.Current {
 			before[k] = v
 		}
-		_, err := h.gql.DispatchMutation(ctx, actor, caller, gate, query, vars, before)
+		_, err := h.gql.DispatchMutation(ctx, actor, caller, gate, query, vars, before, origin)
 		return err
 	}
 }

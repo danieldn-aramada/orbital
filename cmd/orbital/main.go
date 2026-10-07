@@ -28,6 +28,7 @@ import (
 	"github.com/armada/orbital/ent"
 	"github.com/armada/orbital/internal/config"
 	orbitaldb "github.com/armada/orbital/internal/db"
+	"github.com/armada/orbital/internal/metrics"
 	"github.com/armada/orbital/internal/server"
 	"github.com/armada/orbital/internal/version"
 )
@@ -83,6 +84,10 @@ func main() {
 	if err := orbitaldb.Migrate(ctx, sqlDB, db, cfg.MigrationLockTimeout, slog.Default()); err != nil {
 		log.Fatalf("migrate: %v", err)
 	}
+	// Append-only enforcement, in the database rather than by convention. Runs
+	// after migration because the tables must exist, and deliberately does not
+	// fail startup — see EnsureAuditGuard.
+	orbitaldb.EnsureAuditGuard(ctx, sqlDB, slog.Default(), metrics.SetAuditTablesUnprotected)
 
 	srv, err := server.New(cfg, db, sqlDB)
 	if err != nil {

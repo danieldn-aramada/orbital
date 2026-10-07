@@ -355,7 +355,7 @@ func (h *DivergenceHandler) applyResolution(ctx context.Context, origin auditOri
 	// Accept dispatches a mutation BEFORE recording the resolution. On failure,
 	// the resolution is not written so the entry stays visible as pending.
 	if action == divergenceresolution.ActionAccept {
-		pending, err := h.dispatchAcceptMutation(ctx, entry, actor, caller)
+		pending, err := h.dispatchAcceptMutation(ctx, entry, actor, caller, origin.RequestID)
 		if err != nil {
 			return resolutionOutcome{}, err
 		}
@@ -434,7 +434,7 @@ func (h *DivergenceHandler) applyResolution(ctx context.Context, origin auditOri
 // Returns a non-nil pendingApprovalItem when the field belongs to a protected
 // class the caller may not write directly: a change request is opened instead
 // and NOTHING is mutated. Otherwise an HTTPError suitable to propagate verbatim.
-func (h *DivergenceHandler) dispatchAcceptMutation(ctx context.Context, entry *ent.DivergenceEntry, actor string, caller callerRole) (*pendingApprovalItem, error) {
+func (h *DivergenceHandler) dispatchAcceptMutation(ctx context.Context, entry *ent.DivergenceEntry, actor string, caller callerRole, requestID string) (*pendingApprovalItem, error) {
 	if h.gql == nil {
 		// Defensive: server.go must wire gql into DivergenceHandler.
 		return nil, echo.NewHTTPError(http.StatusInternalServerError, "graphql dispatcher not configured")
@@ -487,7 +487,8 @@ func (h *DivergenceHandler) dispatchAcceptMutation(ctx context.Context, entry *e
 	// like any other and the chokepoint is the single authority on whether it is
 	// allowed. Asking the policy here as well would be a second copy of the rule
 	// to keep in sync — instead this REACTS to the gate's refusal.
-	if _, err := h.gql.DispatchMutation(ctx, actor, caller, gateEnforce, mutation, variables, before); err != nil {
+	if _, err := h.gql.DispatchMutation(ctx, actor, caller, gateEnforce, mutation, variables, before,
+		auditAuthorized("divergenceResolution", entry.ID.String(), requestID)); err != nil {
 		var gerr *gatedError
 		if errors.As(err, &gerr) && gerr.Code == CodeApprovalRequired {
 			return h.openChangeRequestFor(ctx, entry, typeName, overrideVal, actor)

@@ -44,10 +44,40 @@ var (
 		Help:    "Duration of orbital's HTTP round-trip to DGraph by call kind. The gap between http_request_duration and this attributes latency: orbital overhead vs the DGraph call.",
 		Buckets: prometheus.DefBuckets,
 	}, []string{"kind"})
+
+	// A dropped audit event is the one failure in orbital that changes nothing
+	// observable at the time: the mutation succeeded, the caller got its 200, and
+	// the only trace is a log line. It surfaces much later, as a question that can
+	// no longer be answered. This counter exists so it is alertable instead.
+	// A gauge, not a counter: the question is "are the audit tables protected
+	// RIGHT NOW", and the answer must be able to go back down when someone
+	// reinstalls the guard. Alert on > 0, not on increase.
+	auditTablesUnprotected = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "orbital_audit_tables_unprotected",
+		Help: "Audit tables lacking an enforced append-only guard. ANY non-zero value means audit records can be edited or deleted without trace — alert on > 0.",
+	})
+
+	auditWriteFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "orbital_audit_write_failures_total",
+		Help: "Audit events that could not be persisted, by the stage that failed. ANY non-zero value means provenance was lost for a write that succeeded — alert on increase, not on a threshold.",
+	}, []string{"stage"})
 )
 
 func init() {
-	prometheus.MustRegister(requestsTotal, requestDuration, graphqlOperationErrors, graphqlOpDuration, dgraphRequestDuration)
+	prometheus.MustRegister(requestsTotal, requestDuration, graphqlOperationErrors, graphqlOpDuration, dgraphRequestDuration, auditWriteFailures, auditTablesUnprotected)
+}
+
+// SetAuditTablesUnprotected records how many audit tables lack the append-only
+// guard. Called at startup after the guard is installed and verified; passed as
+// a callback so internal/db needs no dependency on this package.
+func SetAuditTablesUnprotected(n int) { auditTablesUnprotected.Set(float64(n)) }
+
+// RecordAuditWriteFailure counts one audit event that could not be persisted.
+// stage must be a small fixed set ("begin_tx", "event", "resources",
+// "resource_types", "commit") — never caller-controlled, or the series
+// cardinality is unbounded.
+func RecordAuditWriteFailure(stage string) {
+	auditWriteFailures.WithLabelValues(stage).Inc()
 }
 
 // ObserveDGraphCall records one orbital→DGraph HTTP round-trip. kind must be a

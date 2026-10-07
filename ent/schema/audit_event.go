@@ -49,6 +49,15 @@ func (AuditEvent) Fields() []ent.Field {
 		field.String("acting_client").Optional(),
 		field.String("source_ip_address").Optional(), // caller IP (c.RealIP()); empty for internal writers
 		field.String("request_id").Optional(),        // X-Request-Id: ties every event from one HTTP request together
+		// authorization_* name the act that authorized this write — a merged
+		// change request, an accepted divergence. COLUMNS rather than a key in
+		// `details`, because this is a fact about any event (like who called and
+		// from where) and not operation-specific payload like query/variables.
+		// That is the line the rest of this table draws, and putting it in
+		// `details` while also returning it top-level made it appear twice in
+		// one response. Nullable and usually null, exactly like the four above.
+		field.String("authorization_type").Optional(), // "changeRequest" | "divergenceResolution"
+		field.String("authorization_id").Optional(),   // the human identifier, e.g. "colo-58"
 	}
 }
 
