@@ -37,7 +37,7 @@ func seedCREngineFixture(t *testing.T) {
 				"dataCenter": map[string]any{"orbId": crDC},
 			},
 		}})
-	// The owned child gets its own mutation — nesting it under the Server would
+	// The subgraph member gets its own mutation — nesting it under the Server would
 	// only link, discarding these values.
 	crGQL(t, `mutation($input:[AddIdracSettingsInput!]!){ addIdracSettings(input:$input, upsert:true){ numUids } }`,
 		map[string]any{"input": []any{map[string]any{

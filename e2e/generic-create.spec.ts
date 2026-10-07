@@ -84,7 +84,7 @@ test('the orbId is constructed from the schema pattern and shown before submit',
 
 test('creating a server with its iDRAC settings writes both, linked', async ({ page, request }) => {
   // Acceptance 6, 7 and 9 — the headline. ONE nested mutation creates the server
-  // AND its owned child, and the data centre is LINKED rather than copied.
+  // AND its subgraph member, and the data centre is LINKED rather than copied.
   await page.goto('/servers');
   await page.getByTestId('create-open').click();
   const modal = page.locator('.modal.is-active');
@@ -124,7 +124,7 @@ test('creating a server with its iDRAC settings writes both, linked', async ({ p
   expect(srv.dataCenter.orbId).toBe('colo:colo-galleon');
   expect(srv.dataCenter.name, 'the existing data centre must be untouched').toBe('colo-galleon');
 
-  // Acceptance 6: the owned child exists, carries ITS OWN values, and points back.
+  // Acceptance 6: the subgraph member exists, carries ITS OWN values, and points back.
   expect(srv.idracSettings, 'the unit child must be created too').toBeTruthy();
   expect(srv.idracSettings.firmwareVersion,
     'a nested child that LINKED instead of being created would silently drop this').toBe('7.10.00.00');

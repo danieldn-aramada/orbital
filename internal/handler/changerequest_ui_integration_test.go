@@ -247,7 +247,7 @@ func TestListFilter_SQLPushdownReturnsTheSameResults(t *testing.T) {
 
 // AC 18 — the whole reason the filters moved into SQL.
 //
-// Rendering a request derives staleness, which costs a subtree query and a hash
+// Rendering a request derives staleness, which costs a subgraph query and a hash
 // per request. The pending-change badge fires on every detail view and almost
 // always matches nothing, so the common case has to touch DGraph zero times.
 // Asserted on a counting stub rather than by reading the code, because the
@@ -848,12 +848,12 @@ func deletePolicy(t *testing.T, f *crFixture, id string) *httptest.ResponseRecor
 	return rec
 }
 
-// ── Repeatable ?orbId= (subtree pending-change lookup) ──────────────────────
+// ── Repeatable ?orbId= (subgraph pending-change lookup) ──────────────────────
 //
 // Transcribed from the acceptance list before any body was written. The bug
 // these pin: the filter read c.QueryParam("orbId"), which returns the FIRST
 // value only, so ?orbId=a&orbId=b silently answered about `a` alone. A page
-// asking "is anything in flight for this server and the children it owns" got
+// asking "is anything in flight for this server and its subgraph" got
 // an answer about the server, and a pending edit to its ServerMaintenance or
 // IdracSettings child read as "nothing in flight".
 
@@ -905,7 +905,7 @@ func TestListFilter_SingleOrbIDIsUnchangedByTheRepeatableForm(t *testing.T) {
 		t.Errorf("an unmatched orbId returned %v, want none", keysOf(ids))
 	}
 	// An empty value is dropped rather than treated as a filter for "" — the
-	// page hands this over as data-related-orb-ids="" when the subtree is
+	// page hands this over as data-subgraph-orb-ids="" when the subgraph is
 	// unknown, and an unfiltered list would be a wildly wrong answer.
 	if ids := listIDs(t, f, "?orbId="); len(ids) != 2 {
 		t.Errorf("an empty orbId returned %v, want the unfiltered list", keysOf(ids))
@@ -956,8 +956,8 @@ func TestListFilter_OverTheOrbIDCapIsRefused(t *testing.T) {
 	}
 }
 
-// Item 4 — the reported bug. A change to an owned child names the CHILD's orbId
-// and never the parent's, so the parent's own orbId finds nothing; the subtree
+// Item 4 — the reported bug. A change to a subgraph member names the CHILD's orbId
+// and never the parent's, so the parent's own orbId finds nothing; the subgraph
 // list is what makes the pending notice appear on the parent's editor.
 func TestPendingChanges_SubtreeQueryFindsAChangeOnAChildOnly(t *testing.T) {
 	f := newCRFixture(t)
@@ -970,20 +970,20 @@ func TestPendingChanges_SubtreeQueryFindsAChangeOnAChildOnly(t *testing.T) {
 		t.Fatalf("the server's own orbId matched a child-only changeset (%v) — the fixture no longer reproduces the bug", keysOf(ids))
 	}
 
-	// What it asks now: the parent plus everything it owns, the same list the
-	// audit tab already carries as data-related-orb-ids.
-	subtree := collectRelatedOrbIDsBatch(context.Background(), testutil.DGraphURL(),
+	// What it asks now: the parent plus its subgraph, the same list the
+	// audit tab already carries as data-subgraph-orb-ids.
+	subgraph := subgraphOrbIDsBatch(context.Background(), testutil.DGraphURL(),
 		liveViewSet(t, testutil.DGraphURL()), []string{crServerA},
 		map[string]approval.EntityRef{crServerA: {Type: "Server"}})[crServerA]
-	if !containsStr(subtree, crIdracA) {
-		t.Fatalf("the server's subtree %v does not include its IdracSettings child", subtree)
+	if !containsStr(subgraph, crIdracA) {
+		t.Fatalf("the server's subgraph %v does not include its IdracSettings child", subgraph)
 	}
 	q := "?status=active"
-	for _, id := range subtree {
+	for _, id := range subgraph {
 		q += "&orbId=" + id
 	}
 	if ids := listIDs(t, f, q); !ids[crHumanID(cr)] {
-		t.Errorf("the subtree query returned %v, want the change request naming only the child", keysOf(ids))
+		t.Errorf("the subgraph query returned %v, want the change request naming only the child", keysOf(ids))
 	}
 }
 

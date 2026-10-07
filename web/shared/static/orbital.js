@@ -55,7 +55,7 @@ import {
   formatTimestamp,
   dtIPv4Render,
   safeDomId,
-  subtreeOrbIds,
+  subgraphOrbIds,
   initListPages,
   initGenericTable,
 } from './shared.js'
@@ -816,11 +816,11 @@ document.addEventListener('click', (e) => {
 // the edit modal — by the time someone opens the editor they have usually
 // decided what to type.
 //
-// The scope is the entity AND everything it owns, because a change to an owned
-// child records the CHILD's orbId: a maintenance edit on a server lands as
+// The scope is the entity AND its subgraph, because a change to a subgraph
+// member records the CHILD's orbId: a maintenance edit on a server lands as
 // `<ns>:server-maintenance-<serial>`, so a banner asking about the server alone
 // would stay silent while a proposal for that server sits in review. The list
-// comes from the audit tab's data-related-orb-ids — one source, so the banner
+// comes from the audit tab's data-subgraph-orb-ids — one source, so the banner
 // and the audit panel always mean the same thing by "this server".
 //
 // Nothing in flight renders NOTHING. An always-present banner reading "0
@@ -864,7 +864,7 @@ function loadPendingChangeBanners(root = document) {
   for (const holder of holders) {
     const orbId = holder.dataset.pendingChangesFor
     if (!orbId) continue
-    activeChangeRequestsFor(subtreeOrbIds(orbId))
+    activeChangeRequestsFor(subgraphOrbIds(orbId))
       .then(j => {
         if (!j || !j.total) {
           holder.replaceChildren()
@@ -1994,8 +1994,8 @@ document.addEventListener('submit', (e) => {
 ;(function () {
   let pendingDelete = null
 
-  function openCfgDeleteModal(id, type, name, dcId) {
-    pendingDelete = { id, type, dcId }
+  function openCfgDeleteModal(id, slug, type, name, dcId) {
+    pendingDelete = { id, slug, type, dcId }
     const modal     = document.getElementById('cfg-delete-modal')
     const title     = document.getElementById('cfg-delete-modal-title')
     const loading   = document.getElementById('cfg-delete-modal-loading')
@@ -2013,7 +2013,7 @@ document.addEventListener('submit', (e) => {
     confirmBtn.classList.remove('is-loading')
     modal.classList.add('is-active')
 
-    fetch(BASE + '/config-items/delete-preview?id=' + encodeURIComponent(id) + '&type=' + type)
+    fetch(BASE + '/' + slug + '/' + encodeURIComponent(id) + '/delete-preview')
       .then(r => r.ok ? r.text() : r.text().then(t => Promise.reject(t)))
       .then(html => {
         loading.style.display = 'none'
@@ -2039,6 +2039,7 @@ document.addEventListener('submit', (e) => {
     if (!btn) return
     openCfgDeleteModal(
       btn.dataset.cfgDeleteId,
+      btn.dataset.cfgDeleteSlug,
       btn.dataset.cfgDeleteType,
       btn.dataset.cfgDeleteName || btn.dataset.cfgDeleteType,
       btn.dataset.cfgDeleteDcId || ''
@@ -2052,7 +2053,7 @@ document.addEventListener('submit', (e) => {
   document.addEventListener('click', async function (e) {
     if (!e.target.closest('#cfg-delete-confirm-btn')) return
     if (!pendingDelete) return
-    const { id, type, dcId } = pendingDelete
+    const { id, slug, type, dcId } = pendingDelete
     const btn = document.getElementById('cfg-delete-confirm-btn')
     btn.classList.add('is-loading')
     btn.disabled = true
@@ -2065,7 +2066,7 @@ document.addEventListener('submit', (e) => {
       const shown = versionEl ? parseInt(versionEl.dataset.version || '', 10) : NaN
       const guard = Number.isInteger(shown) && shown > 0 ? '?version=' + shown : ''
 
-      const r = await fetch(BASE + '/api/v1/config-items/' + encodeURIComponent(type) + '/' + encodeURIComponent(id) + guard, { method: 'DELETE' })
+      const r = await fetch(BASE + '/' + slug + '/' + encodeURIComponent(id) + guard, { method: 'DELETE' })
       if (!r.ok) {
         // A 409 is not a failure to report and forget — it is a redirect: the
         // entity moved, so re-read it and decide again. The modal stays open
@@ -2461,7 +2462,7 @@ document.addEventListener('DOMContentLoaded', () => {
         + '</div>'
     } else if (cr.subtreeChanged) {
       // The scope moved but nothing the author proposed went out of date —
-      // typically an owned child. The REVIEWER clears this one.
+      // typically a subgraph member. The REVIEWER clears this one.
       b.innerHTML = '<div class="notification is-warning is-light py-2 is-size-7 mb-4">'
         + '<strong>Changed since review.</strong> Re-approve to merge.'
         + '</div>'

@@ -431,8 +431,17 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	// gql is passed for the approval gate only — this endpoint writes via DQL,
 	// so it cannot reach the check through writeToDGraph's chokepoint.
 	delH := handler.NewDeleteHandler(cfg.DGraphURL, db, logger, gql, handler.WithFieldSource(fieldSource))
-	root.GET("/config-items/delete-preview", delH.Preview)
-	api.DELETE("/config-items/:type/:id", delH.Execute)
+	// The cascade delete is a verb on the PAGE's URL — DELETE /{slug}/{orbId} —
+	// because it follows that page's declared subgraph. It is orbital's UI's
+	// route, not an API: an API client deletes through /graphql. Dispatched
+	// from the generic Fallback (a param route at the root would turn every
+	// unmatched GET into a 405), so the auth chain is applied here.
+	if g := ui.Generic(); g != nil {
+		g.SetDelete(
+			withMiddleware(delH.Execute, append(append([]echo.MiddlewareFunc{}, apiAuth...), handler.RequireRole(db, user.RoleDev))...),
+			withMiddleware(delH.Preview, apiAuth...),
+		)
+	}
 
 	if db != nil {
 		exp := handler.NewExport(db, cfg.DGraphURL, cfg.DGraphScratchURL, cfg.DGraphScratchAdminURL, cfg.DGraphScratchZeroURL, cfg.ExportDir, cfg.DGraphScratchExportDir, cfg.SchemaPath, logger)
@@ -759,4 +768,13 @@ func authProviderSpecs(cfg *config.Config) []auth.ProviderSpec {
 		specs = append(specs, s)
 	}
 	return specs
+}
+
+// withMiddleware wraps a handler in a middleware chain, outermost first — what
+// a route group does for a route registered on it.
+func withMiddleware(h echo.HandlerFunc, mw ...echo.MiddlewareFunc) echo.HandlerFunc {
+	for i := len(mw) - 1; i >= 0; i-- {
+		h = mw[i](h)
+	}
+	return h
 }

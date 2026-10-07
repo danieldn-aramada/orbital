@@ -128,65 +128,36 @@ func fixtureMeta(typeName string) TypeInfo {
 }
 
 // fixtureViews stands in for the resolved views in tests that assert edit-tree
-// STRUCTURE. Only the members matter here, so the fields, columns and labels are
-// left out — a view's shape, not its content, is what BuildEditTargets reads.
+// STRUCTURE. Only the subgraph matters here, so the fields, columns and labels
+// are left out — a view's shape, not its content, is what BuildEditTargets reads.
 //
 // It mirrors config/views.yaml for the two roots these tests exercise. The live
 // file is asserted against the deployed schema separately; this exists so the
 // structural assertions need no services.
 func fixtureViews() ViewSet {
-	member := func(field, typeName string, isList, editable bool) ViewTab {
-		return ViewTab{Field: field, Type: typeName, IsList: isList, Editable: editable}
-	}
-	// Contains is CONTAINMENT, derived from the schema in production. Tabs is
-	// what the page shows and which of it the editor writes. BuildEditTargets
-	// needs both: owned AND declared editable AND single.
-	contains := func(ms ...OwnedMember) []OwnedMember { return ms }
-	owned := func(field, typeName, parentEdge string, isList bool) OwnedMember {
-		return OwnedMember{ChildType: typeName, ChildField: field, ParentEdge: parentEdge, IsList: isList}
+	member := func(field, typeName, parentEdge string, isList, editable bool) ViewTab {
+		return ViewTab{Field: field, Type: typeName, ParentEdge: parentEdge, IsList: isList, Editable: editable}
 	}
 	return ViewSet{
-		{Type: "Server", Slug: "servers", Dependents: contains(
-			owned("idracSettings", "IdracSettings", "server", false),
-			owned("serverMaintenance", "ServerMaintenance", "server", false),
-			owned("storageControllers", "StorageController", "server", true),
-			owned("networkAdapters", "NetworkAdapter", "server", true),
-			owned("oobIP", "IPAddress", "", false),
-		), Tabs: []ViewTab{
-			member("dataCenter", "DataCenter", false, false),
-			member("idracSettings", "IdracSettings", false, true),
-			member("serverMaintenance", "ServerMaintenance", false, true),
-			member("storageControllers", "StorageController", true, true),
-			member("networkAdapters", "NetworkAdapter", true, true),
-			member("oobIP", "IPAddress", false, true),
-			member("storageControllers.storageDevices", "StorageDevice", true, false),
+		{Type: "Server", Slug: "servers", Relations: map[string]string{
+			"idracSettings": "IdracSettings", "serverMaintenance": "ServerMaintenance", "kubernetesNode": "KubernetesNode",
+			"storageControllers": "StorageController", "networkAdapters": "NetworkAdapter",
+		}, Subgraph: []ViewTab{
+			member("idracSettings", "IdracSettings", "server", false, true),
+			member("serverMaintenance", "ServerMaintenance", "server", false, true),
+			member("kubernetesNode", "KubernetesNode", "server", false, false),
+			member("storageControllers", "StorageController", "server", true, false),
+			member("networkAdapters", "NetworkAdapter", "server", true, false),
+			member("storageControllers.storageDevices", "StorageDevice", "storageController", true, false),
 		}},
-		{Type: "EksaKubernetesCluster", Slug: "eksa-kubernetes-clusters", Dependents: contains(
-			owned("nodes", "KubernetesNode", "cluster", true),
-			owned("backup", "ClusterBackup", "cluster", false),
-		), Tabs: []ViewTab{
-			member("dataCenter", "DataCenter", false, false),
-			member("nodes", "KubernetesNode", true, true),
-			member("backup", "ClusterBackup", false, true),
-		}},
-		{Type: "ClusterBackup", Slug: "cluster-backups", Dependents: contains(
-			owned("etcd", "EtcdBackup", "clusterBackupEtcd", false),
-			owned("velero", "VeleroBackup", "clusterBackupVelero", false),
-			owned("s3Sync", "S3Sync", "clusterBackupS3Sync", false),
-		), Tabs: []ViewTab{
-			member("etcd", "EtcdBackup", false, true),
-			member("velero", "VeleroBackup", false, true),
-			member("s3Sync", "S3Sync", false, true),
-		}},
-		{Type: "StorageController", Slug: "storage-controllers", Dependents: contains(
-			owned("storageDevices", "StorageDevice", "storageController", true),
-		), Tabs: []ViewTab{
-			member("storageDevices", "StorageDevice", true, true),
-		}},
-		{Type: "NetworkAdapter", Slug: "network-adapters", Dependents: contains(
-			owned("networkInterfaces", "NetworkInterface", "networkAdapter", true),
-		), Tabs: []ViewTab{
-			member("networkInterfaces", "NetworkInterface", true, true),
+		{Type: "EksaKubernetesCluster", Slug: "eksa-kubernetes-clusters", Relations: map[string]string{
+			"nodes": "KubernetesNode", "backup": "ClusterBackup",
+		}, Subgraph: []ViewTab{
+			member("backup", "ClusterBackup", "cluster", false, false),
+			member("backup.etcd", "EtcdBackup", "clusterBackupEtcd", false, true),
+			member("backup.velero", "VeleroBackup", "clusterBackupVelero", false, true),
+			member("backup.s3Sync", "S3Sync", "clusterBackupS3Sync", false, true),
+			member("nodes", "KubernetesNode", "cluster", true, false),
 		}},
 	}
 }

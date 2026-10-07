@@ -47,7 +47,7 @@ export async function openRow(page: Page, index = 0) {
 export async function openDetail(page: Page, slug: string, orbId: string) {
   await page.goto(`/${slug}?open=${encodeURIComponent(orbId)}`);
   await expect(page.getByTestId('generic-fields')).toBeVisible();
-  // Owned children, relationship tables and the audit log live in one tab
+  // Subgraph members, relationship tables and the audit log live in one tab
   // strip, so all but the first start hidden. Specs that assert on their
   // CONTENT want them reachable; a spec about the tab strip ITSELF should
   // navigate with page.goto directly and use openDetailPanel.
@@ -103,7 +103,7 @@ export async function saveEditor(page: Page, domId: string) {
 
 // openDetailPanel activates a detail-page tab by its visible label.
 //
-// The detail page puts owned children, relationship tables and the audit log
+// The detail page puts subgraph members, relationship tables and the audit log
 // in ONE tab strip, so all but the first panel start `display:none`. A spec
 // that asserts on content inside one has to open it first — which is also what
 // a person does.
@@ -125,6 +125,17 @@ export async function openDetailPanel(page: Page, label: string | RegExp) {
   return panel;
 }
 
+// openAuditPanel activates the detail view's audit tab and waits for its rows.
+//
+// Explicit, and only in specs that read audit content. The tab's activation is
+// also remembered across a reload (localStorage), so a spec that reloads and
+// then reads the audit panel must call this AFTER the reload — relying on an
+// earlier helper having clicked it is a dependency nobody can see.
+export async function openAuditPanel(page: Page) {
+  await page.locator('[id^="generic-detail-tabs-"] li[data-orb-id]').first().click();
+  await expect(page.getByTestId('generic-audit')).not.toBeEmpty({ timeout: 10_000 });
+}
+
 // openAllDetailPanels reveals every panel at once.
 //
 // For specs asserting that content EXISTS rather than that a user can reach it
@@ -141,20 +152,12 @@ export async function openAllDetailPanels(page: Page) {
   const strip = page.locator('[id^="generic-detail-tabs-"]');
   if (!await strip.count()) return;
 
-  // Click the audit tab first. It is the one panel that LAZY-LOADS — that is
-  // the point of tabbing it — so merely un-hiding it leaves an empty div, and
-  // a spec asserting on audit content fails for a reason that has nothing to
-  // do with what it is testing.
-  const audit = strip.locator('li[data-orb-id]');
-  if (await audit.count()) {
-    await audit.first().click();
-    // Generous: the audit panel fetches on activation, and under the full
-    // suite's parallelism that round trip is a load-dependent wait rather than
-    // a claim about the product. A tight bound here fails specs that are
-    // testing something else entirely.
-    await expect(page.getByTestId('generic-audit')).not.toBeEmpty({ timeout: 30_000 });
-  }
-
+  // The audit panel is NOT loaded here. It LAZY-LOADS on activation, so
+  // un-hiding it below leaves it empty — a spec asserting audit content calls
+  // openAuditPanel, which pays for the fetch only where it is the thing under
+  // test. Waiting on it here put a load-dependent round trip inside every spec
+  // that uses this helper, and under a busy machine it outran the per-test
+  // budget in whichever spec happened to be running.
   await page.evaluate(() => {
     const s = document.querySelector('[id^="generic-detail-tabs-"]');
     if (!s) return;

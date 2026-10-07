@@ -1006,23 +1006,20 @@ div.dt-container {
 div[id^="generic-detail-tabs-"] {
   overflow-x: visible;
 
-  // Slightly tighter than Bulma's 0.5em 1em.
-  //
-  // A derived tab strip has more tabs than a hand-written one — a Server has
-  // eight — and at 1440px they overflowed by ~37px, which is nothing. Trimming
-  // the horizontal padding fits them on ONE row, which matters for more than
-  // width: `is-boxed` draws its underline on the ul, so with two rows the
-  // active tab floats above a line drawn under the row below it and the boxed
-  // look falls apart. One row keeps the tab sitting on its line.
+  // Slightly tighter than Bulma's 0.5em 1em, so more tabs fit on one row.
+  // `is-boxed` draws its underline on the ul, so with two rows the active tab
+  // floats above a line drawn under the row below — accepted for now (a
+  // Server has nine tabs and wraps at 1440px); an overflow affordance is the
+  // scalable fix.
   li a {
     padding-left: 0.7em;
     padding-right: 0.7em;
   }
 
   ul {
-    // Wrap is the FALLBACK, for narrow viewports where no amount of trimming
-    // fits. Bulma's default is nowrap + overflow-x:auto, which clips the last
-    // tab mid-word with no sign that more exist.
+    // Wrap when the tabs do not fit. Bulma's default is nowrap +
+    // overflow-x:auto, which clips the last tab mid-word with no sign that
+    // more exist.
     flex-wrap: wrap;
     // Bulma sets flex-shrink:0 on the ul, so it keeps its full content width
     // inside the flex container and wrap never gets a chance to act — the

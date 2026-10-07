@@ -88,7 +88,7 @@ type GenericDetail struct {
 	CanMutate bool
 
 	// HasEditable is whether the editor has ANYTHING to write — the type's own
-	// fields OR an owned child's. Gating on the type's own fields hid the Edit
+	// fields OR a subgraph member's. Gating on the type's own fields hid the Edit
 	// button on a wrapper like ClusterBackup, which has no scalars of its own
 	// but whose etcd/velero/s3Sync children are exactly what you edit there.
 	HasEditable bool
@@ -113,11 +113,11 @@ type GenericDetail struct {
 	// several detail fragments open at once as tabs.
 	AuditPanelID string
 
-	// RelatedOrbIDsCSV is this entity's orbId plus every orbId it owns. A
-	// change to an owned child records the CHILD's orbId and never the
+	// SubgraphOrbIDsCSV is this entity's orbId plus every orbId in its subgraph. A
+	// change to a subgraph member records the CHILD's orbId and never the
 	// parent's, so an audit query for the parent alone answers "nothing here"
 	// while its iDRAC settings are being rewritten.
-	RelatedOrbIDsCSV string
+	SubgraphOrbIDsCSV string
 
 	// FieldValuesJSON carries the entity's RAW editable values, keyed by field,
 	// for the proposed-change marks. Raw rather than rendered because a mark is
@@ -143,17 +143,16 @@ type GenericDetail struct {
 	ListSlug  string
 	ListLabel string
 
-	// Refs are the entity's SINGLE relationships to things it does not own —
-	// a cluster's data centre, its management cluster, its control-plane
-	// endpoint. They render as rows in the field list, as links, because that
-	// is what every hand-written page did with them. A box per single
-	// relationship would put five one-row tables on a cluster page.
+	// Refs are the entity's SINGLE relationships outside its subgraph — a
+	// cluster's data centre, its control-plane endpoint. They render as link
+	// rows in the field list: navigation, never edited, audited or deleted from
+	// this page.
 	Refs []GenericRef
 
-	// Owned are single relationships the entity DOES own, each rendered as its
-	// own box. An owned child carries real data and is edited inline through
-	// the parent, so a link to it would be a worse answer than showing it.
-	Owned []GenericOwned
+	// Inline are the single members of the page's subgraph, each rendered as
+	// its own box. A member carries real data and may be edited through the
+	// page, so a link to it would be a worse answer than showing it.
+	Inline []GenericInline
 
 	// Actions gates page chrome the two apps differ on — orb has no audit log.
 	Actions layout.PageActions
@@ -224,24 +223,24 @@ type GenericRef struct {
 	Name  string
 }
 
-// GenericOwned is an owned child rendered inline.
+// GenericInline is a single subgraph member rendered inline.
 //
-// Children handles the WRAPPER case: ClusterBackup has no scalars of its own
-// and exists only to hold etcd/velero/s3Sync, so rendering it without its
-// grandchildren shows an empty box where the backup configuration should be.
-type GenericOwned struct {
+// Children are the single members one hop below it. ClusterBackup has no
+// scalars of its own and exists only to hold etcd/velero/s3Sync, so rendering
+// it without them shows an empty box where the backup configuration should be.
+type GenericInline struct {
 	Label  string
 	Slug   string
 	OrbID  string
 	Name   string
 	Fields []MetaRow
 
-	// FieldValuesJSON is this CHILD's raw editable values. An edit to an owned
-	// child records the child's orbId and never the parent's, so a mark on
-	// these rows can only fire from the child's own id.
+	// FieldValuesJSON is this MEMBER's raw editable values. An edit to a
+	// member records the member's orbId and never the parent's, so a mark on
+	// these rows can only fire from the member's own id.
 	FieldValuesJSON string
 
-	Children []GenericOwned
+	Children []GenericInline
 }
 
 // ColumnHeader is one table column: the schema field it reads, and the label
@@ -319,7 +318,7 @@ type CreateForm struct {
 	Fields    []CreateField
 	Relations []CreateRelation
 
-	// Unit are the owned children created in the SAME mutation — the set
+	// Unit are the subgraph members created in the SAME mutation — the set
 	// the editor already edits. Nested, because a nested create is the one
 	// nesting DGraph performs atomically.
 	Unit []CreateUnitChild
@@ -370,7 +369,7 @@ type CreateOption struct {
 	Name  string
 }
 
-// CreateUnitChild is a owned child created alongside its parent.
+// CreateUnitChild is a subgraph member created alongside its parent.
 type CreateUnitChild struct {
 	Field string
 	Label string

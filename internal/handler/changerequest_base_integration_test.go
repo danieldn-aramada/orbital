@@ -17,7 +17,7 @@ import (
 // The base hash is the whole staleness mechanism. Three behaviours it has to
 // have, each of which silently breaks a different guarantee if wrong:
 //
-//   - an owned child changing must move the parent's hash (else a reviewer's
+//   - a subgraph member changing must move the parent's hash (else a reviewer's
 //     approval of a Server survives someone editing its iDRAC)
 //   - a declared-but-absent orbId must be in scope (else creating that entity
 //     mid-review is invisible and the create silently becomes an overwrite)
@@ -42,7 +42,7 @@ func TestBaseSnapshot_ScopeAndHash(t *testing.T) {
 		t.Fatalf("resolve: %v", err)
 	}
 
-	// The owned child is pulled in without the caller naming it.
+	// The subgraph member is pulled in without the caller naming it.
 	scope := baseScope(ctx, url, liveViewSet(t, url), []string{cbServer}, existing)
 	if !contains(scope, cbServer) || !contains(scope, cbIdrac) {
 		t.Fatalf("scope = %v, want it to contain the server and its idrac", scope)
@@ -63,14 +63,14 @@ func TestBaseSnapshot_ScopeAndHash(t *testing.T) {
 		t.Errorf("present = %v, want all of scope %v", present, scope)
 	}
 
-	// (1) The owned child moves the parent's hash.
+	// (1) The subgraph member moves the parent's hash.
 	setIdracFirmware(t, "9.9.9")
 	snap, err = baseSnapshot(ctx, url, scope)
 	if err != nil {
 		t.Fatalf("baseSnapshot after child edit: %v", err)
 	}
 	if snap.ContentHash() == h0 {
-		t.Error("editing an owned child did not move the hash — approvals would survive it")
+		t.Error("editing a subgraph member did not move the hash — approvals would survive it")
 	}
 	setIdracFirmware(t, "1.0.0")
 	snap, err = baseSnapshot(ctx, url, scope)
@@ -198,7 +198,7 @@ func seedBaseFixture(t *testing.T) {
 	// The child gets its OWN mutation, and it is not optional. Nesting
 	// idracSettings under the Server would only LINK — the child's field values
 	// are discarded, so firmwareVersion would never be written and the "editing
-	// an owned child moves the hash" assertion below would pass vacuously.
+	// a subgraph member moves the hash" assertion below would pass vacuously.
 	// The link comes back the other way for free via @hasInverse.
 	gqlMutate(t, `mutation($input:[AddIdracSettingsInput!]!){ addIdracSettings(input:$input, upsert:true){ numUids } }`,
 		map[string]any{"input": []any{map[string]any{

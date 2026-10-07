@@ -86,7 +86,7 @@ func derivedScalars(t *testing.T) (map[string][]string, []string, map[string][]s
 		t.Fatalf("the shipped views config must validate clean against the deployed schema:\n  %s",
 			strings.Join(warn, "\n  "))
 	}
-	views, err := ResolveViewsFromConfig(full, ifaceFields, validated)
+	views, err := ResolveViewsFromConfig(full, ifaceFields, validated, nil)
 	if err != nil {
 		t.Fatalf("resolve views: %v", err)
 	}
@@ -359,7 +359,7 @@ func containsField(list []string, s string) bool {
 //
 // Those were switch statements naming six irregular types — IdracSettings is
 // `idrac`, not `idracsettings`. The convention belongs with the type it names,
-// and an owned child's orbId is DERIVED from it (`<ns>:<parent>-<suffix>`), so a
+// and a subgraph member's orbId is DERIVED from it (`<ns>:<parent>-<suffix>`), so a
 // wrong value silently creates a phantom entity rather than editing the real one.
 func TestDerivedOrbIDSuffix(t *testing.T) {
 	gql, admin := dgraphURLs()
@@ -384,7 +384,7 @@ func TestDerivedOrbIDSuffix(t *testing.T) {
 			continue
 		}
 		if info.OrbIDSuffix != want {
-			t.Errorf("%s: derived orbId suffix %q, want %q — an owned child's orbId is built from "+
+			t.Errorf("%s: derived orbId suffix %q, want %q — a subgraph member's orbId is built from "+
 				"this, so a wrong value addresses an entity that does not exist", typeName, info.OrbIDSuffix, want)
 		}
 	}

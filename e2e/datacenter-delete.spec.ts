@@ -63,7 +63,7 @@ test('DataCenter delete works for orbId containing ":"', async ({ page }) => {
     await expect(page.getByTestId('generic-fields')).toBeVisible()
 
     // Click Delete in the tab, then Confirm in the modal. The Confirm hits
-    // DELETE /api/v1/config-items/DataCenter/<orbId> — the route under test.
+    // DELETE /data-centers/<orbId> — the route under test.
     // Match by data attribute — the modal's Confirm button also says "Delete".
     await page.locator(`[data-cfg-delete-id="${orbId}"]`).click()
     await expect(page.locator('#cfg-delete-modal.is-active')).toBeVisible()

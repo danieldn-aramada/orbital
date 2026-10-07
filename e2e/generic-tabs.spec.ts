@@ -291,8 +291,11 @@ test('the tab strip stays put when switching between panels', async ({ page }) =
   }
 });
 
-// The is-boxed underline is what makes a tab look attached to its panel.
-test('the tab strip keeps its underline and fits on one row', async ({ page }) => {
+// The is-boxed underline is what makes a tab look attached to its panel, and
+// a strip with more tabs than fit WRAPS rather than clipping. Bulma's default
+// is nowrap + overflow-x:auto, which cut the last tab off mid-word with no
+// sign that more existed — a tab nobody finds.
+test('the tab strip keeps its underline and never clips a tab', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/servers?open=' + encodeURIComponent('colo:server-7MP6K74'));
   await expect(page.getByTestId('generic-fields')).toBeVisible({ timeout: 15_000 });
@@ -301,14 +304,14 @@ test('the tab strip keeps its underline and fits on one row', async ({ page }) =
   const width = await ul.evaluate(el => getComputedStyle(el).borderBottomWidth);
   expect(width, 'the is-boxed underline must not be removed to make tabs wrap').not.toBe('0px');
 
-  // One row at this width: a wrapped strip puts the active tab above a line
-  // drawn under the row below it, and the boxed look falls apart.
+  const overflow = await ul.evaluate(el => el.scrollWidth - el.clientWidth);
+  expect(overflow, 'the strip overflows sideways — a tab is clipped instead of wrapping').toBeLessThanOrEqual(1);
+  const right = (await ul.boundingBox())!.x + (await ul.boundingBox())!.width;
   const lis = page.locator('[id^="generic-detail-tabs-"] li');
-  const tops = new Set<number>();
   for (let i = 0; i < await lis.count(); i++) {
-    tops.add(Math.round((await lis.nth(i).boundingBox())!.y));
+    const b = (await lis.nth(i).boundingBox())!;
+    expect(b.x + b.width, `tab ${i} extends past the strip`).toBeLessThanOrEqual(right + 1);
   }
-  expect(tops.size, 'eight tabs should fit on one row at 1440px').toBe(1);
 });
 
 // ── Acceptance 1–3: lazy restoration ────────────────────────────────────────

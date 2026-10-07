@@ -134,9 +134,13 @@ type View struct {
 	// showed them.
 	Meta []string `json:"meta"`
 
-	// Tabs are the relationships this type has to other ConfigItem types — what
-	// a detail page renders as tabs.
-	Tabs []ViewTab `json:"tabs"`
+	// Subgraph is the page's declared subgraph, in display order: what the
+	// page shows, edits, audits and deletes. A type with no page has none.
+	Subgraph []ViewTab `json:"subgraph"`
+
+	// Relations maps every relationship field to the type at its far end — the
+	// one lookup a walk over declared paths needs at each hop.
+	Relations map[string]string `json:"-"`
 
 	// Labels override the title-cased field name, for the fields where
 	// title-casing is wrong — acronyms, essentially (`cni` → "Cni",
@@ -148,30 +152,10 @@ type View struct {
 	// agree with orbital's own headers.
 	Labels map[string]string `json:"labels,omitempty"`
 
-	// Contains is what this type cannot be deleted without taking with it —
-	// derived from the schema's non-null back-edges, plus the one declared
-	// exception. It drives the delete cascade, the audit roll-up and the reach
-	// of the editor's tree.
-	//
-	// A property of the TYPE, not of a page: a StorageController contains its
-	// devices whether or not any page shows them.
-	// Dependents is what this type OWNS — what dies with it, what rolls up onto
-	// its audit tab, and what its editor may reach.
-	//
-	// Derived from the schema (non-null back-edges) plus `ownerReferences:`, not
-	// from the page. A StorageController owns its devices whether or not any page
-	// shows them, and a type with no page at all still owns things. Reading this
-	// off a page's tab list was the overload that put `editable: true` on lists
-	// the editor has never been able to edit.
-	//
-	// Not to be confused with EditorMembers(), which is the SUBSET a page
-	// declares `editable: true` on. Those were one letter apart as
-	// EditableMembers()/EditorMembers() and the audit roll-up read the wrong
-	// intent off the name.
-	Dependents []OwnedMember `json:"contains,omitempty"`
-
-	// SummaryRefs are the link rows under a detail page's field list, in the
-	// order declared. A PAGE fact: it is what that one screen shows.
+	// SummaryRefs are the link rows under a detail page's field list: every
+	// single relationship to a ConfigItem that is not in the subgraph and not
+	// ignored, in schema order. DERIVED, and display-only — navigation, never
+	// edited, audited or deleted from this page.
 	//
 	// Separate from RefColumns, which is a TYPE fact — the two were briefly one
 	// field, and collapsing them emptied the reference columns of every table
@@ -223,9 +207,9 @@ type ViewColumn struct {
 	Selection string `json:"selection"`
 }
 
-// ViewTab is one relationship, as a detail page would render it.
+// ViewTab is one subgraph member, as a detail page would render it.
 type ViewTab struct {
-	// Field is the GraphQL field holding the relationship.
+	// Field is the declared path: a field name, or a dotted path from the root.
 	Field string `json:"field"`
 	// Type is the ConfigItem type at the other end.
 	Type string `json:"type"`
@@ -235,14 +219,14 @@ type ViewTab struct {
 	// IsList distinguishes a table of children from a single related entity.
 	IsList bool `json:"isList"`
 
-	// Editable marks the member as part of THIS page's edit unit: fetched with
-	// its own fields, written through the parent's JSON tree, and rolled up onto
-	// the parent's audit tab.
-	//
-	// Published because it answers a question an integrator has to answer too —
-	// "if I write this entity, do I write it here or on its own page?" — and the
-	// alternative is every client re-deriving ownership from the graph.
+	// Editable marks the member as written through THIS page's editor.
 	Editable bool `json:"editable,omitempty"`
+
+	// ParentEdge is the field on the member pointing back at the entity one
+	// hop up its path — the `@hasInverse` partner of the last hop. It is the
+	// edge a first-time CREATE links through. Empty when the schema declares
+	// no inverse.
+	ParentEdge string `json:"parentEdge,omitempty"`
 }
 
 // ColumnFields returns the scalar fields a LIST page renders as columns:

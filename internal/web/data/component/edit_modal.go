@@ -50,7 +50,7 @@ type EditModal struct {
 	// where the concrete type cannot be inferred from the prefix.
 	Typename string
 
-	// Idrac* are the Server family's owned child, carried so the editor can
+	// Idrac* are the Server family's subgraph member, carried so the editor can
 	// version-guard it alongside the parent.
 	IdracOrbID   string
 	IdracVersion int

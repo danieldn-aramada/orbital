@@ -23,11 +23,12 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 ## [Unreleased]
 
 ### Added
-- **Orphaning is now structurally impossible rather than guarded against.** A
-  child whose back-edge is non-null is contained by derivation, so there is no
-  view declaration that can fail to say so. Relaxing the edge to nullable is how a
-  child opts out — which is what `ServerConfigurationProfile.server` does as of
-  schema v13.
+- **A page declares its subgraph** (`subgraph:` in `config/views.yaml`): one list
+  drives what the page shows, edits, audits and deletes. Replaces ownership
+  derived from non-null edges. `tabs:`, `summary.refs:` and `ownerReferences:` are
+  retired (warned if present); single relationships outside the subgraph become
+  link rows automatically. The delete preview now names entities left
+  **orphaned** with a broken non-null edge.
 - **Per-deployment view overrides, as a partial ConfigMap overlay**
   (`ORBITAL_VIEWS_OVERLAY_PATH`). A deployment declares only the views it changes;
   every view it does not name keeps receiving whatever ships in later releases.
@@ -137,6 +138,9 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   spelled three different ways.
 
 ### Removed
+- **`DELETE /api/v1/config-items/{type}/{id}` and `GET /config-items/delete-preview`.**
+  The cascade delete is a UI route on the page URL now (`DELETE /{slug}/{orbId}`,
+  `GET /{slug}/{orbId}/delete-preview`); API clients delete through `/graphql`.
 - **The Views page and `GET /api/v1/views`.** Both existed to show what orbital
   derived from schema annotations, back when that was the only way to see it.
   Page configuration is a file now — `config/views.yaml` — and nothing consumed
@@ -146,6 +150,7 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   them.
 
 ### Fixed
+- The delete preview required no login and returned hostnames and IPs.
 - **A parent's Audit Log tab shows its owned children's events again — all of
   them.** The walk that builds the tab's orbId list read only single-object
   children, so every list the entity owns was skipped in silence: a server's

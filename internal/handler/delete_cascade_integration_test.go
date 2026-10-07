@@ -4,18 +4,25 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/armada/orbital/internal/configitems"
+	"github.com/labstack/echo/v4"
 )
 
-// The cascade is derived from the view: an editable member is part of this
-// page's unit — edited with it, audited with it, and DELETED with it.
+// The cascade is the page's DECLARED subgraph: the root plus every entity its
+// `subgraph:` paths reach, and nothing else. Every survivor's edge into the
+// deleted set is cleared, and a survivor holding a NON-NULL edge into it is
+// named in the preview as orphaned.
 //
-// These tests exist because the three hand-written traversals this replaced had
-// drifted into four silent defects, and nothing could have caught them: there
-// was no model to check the code against. Each test below pins one half of the
-// sentence, or one of the defects.
+// The hand-written traversals this lineage replaced had drifted into four
+// silent defects with no model to check them against. Each test below pins one
+// clause of the model, or one of the defects.
 
 const (
 	cascadeDC     = crNS + ":dc-cascade"
@@ -88,31 +95,106 @@ func seedCascadeFixture(t *testing.T) {
 	})
 }
 
-// Criterion 1 — an editable member is deleted with its parent, transitively.
-func TestCascade_FollowsOwnedMembersTransitively(t *testing.T) {
+// withSubgraph runs the handler against the shipped views with one page's
+// subgraph replaced — so a test can pin a clause of the model without depending
+// on how the shipped file happens to lay that page out.
+func withSubgraph(t *testing.T, h *DeleteHandler, typeName string, members ...configitems.ViewTab) {
+	t.Helper()
+	live, err := h.views(context.Background())
+	if err != nil {
+		t.Fatalf("views: %v", err)
+	}
+	patched := make(configitems.ViewSet, len(live))
+	copy(patched, live)
+	for i := range patched {
+		if patched[i].Type == typeName {
+			patched[i].Subgraph = members
+		}
+	}
+	h.views = func(context.Context) (configitems.ViewSet, error) { return patched, nil }
+}
+
+// A multi-hop path is followed, and ONLY the declared hop dies: no composition
+// through the reached type's own page, and an intermediate the path passes
+// through survives. The intermediate's NON-NULL edge into the deleted root then
+// points at nothing, so it is named ORPHANED — and the delete still proceeds.
+func TestCascade_DeletesExactlyTheDeclaredPathsAndNamesOrphans(t *testing.T) {
 	h, _ := deleteFixture(t)
 	seedCascadeFixture(t)
+	withSubgraph(t, h, "DataCenter",
+		configitems.ViewTab{Field: "servers.networkAdapters", Type: "NetworkAdapter", IsList: true})
+
+	plan, err := h.planFor(context.Background(), "DataCenter", cascadeDC)
+	if err != nil {
+		t.Fatalf("plan: %v", err)
+	}
+	var orphaned string
+	for _, g := range plan.preview.Orphaned {
+		orphaned += g.Label + ": " + strings.Join(g.Items, ",") + "; "
+	}
+	for _, want := range []string{"Servers: cascade server", "Racks: cascade rack", "Network Devices: cascade switch"} {
+		if !strings.Contains(orphaned, want) {
+			t.Errorf("preview must name %q as orphaned — each holds `dataCenter: DataCenter!`; got %q", want, orphaned)
+		}
+	}
 
 	if rec := deleteReq(t, h, "DataCenter", cascadeDC, "", "admin"); rec.Code != http.StatusOK {
-		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
+		t.Fatalf("an orphaning delete is informed, not refused: %d %s", rec.Code, rec.Body.String())
 	}
-	// The data centre's editable members, and THEIR editable members: the walk
-	// has to reach the NIC two levels down, not just the server one level down.
-	for _, gone := range [][2]string{
-		{"DataCenter", cascadeDC}, {"Rack", cascadeRack},
-		{"Server", cascadeServer}, {"NetworkAdapter", cascadeNIC},
-	} {
-		if exists(t, gone[0], gone[1]) {
-			t.Errorf("%s %s survived; it is inside the data centre's unit", gone[0], gone[1])
-		}
+	if exists(t, "DataCenter", cascadeDC) || exists(t, "NetworkAdapter", cascadeNIC) {
+		t.Error("the root and the declared two-hop member must both be gone")
+	}
+	if !exists(t, "Server", cascadeServer) {
+		t.Error("the server is an INTERMEDIATE hop, not a declared member — it must survive")
+	}
+	if !exists(t, "KubernetesNode", cascadeNode) {
+		t.Error("the server's node is in the SERVER page's subgraph, not the data centre's — " +
+			"a delete never composes through another page")
 	}
 }
 
-// Criterion 2 — a non-editable member survives, and is NAMED in the preview.
+// A non-null child the subgraph does NOT claim is orphaned, said, and left.
+// The shipped Server page claims its KubernetesNode; a dev who drops it gets
+// the consequence named in the dialog rather than a silent dangling edge.
+func TestCascade_UnclaimedNonNullChildIsNamedOrphaned(t *testing.T) {
+	h, _ := deleteFixture(t)
+	seedCascadeFixture(t)
+	withSubgraph(t, h, "Server",
+		configitems.ViewTab{Field: "networkAdapters", Type: "NetworkAdapter", IsList: true})
+
+	plan, err := h.planFor(context.Background(), "Server", cascadeServer)
+	if err != nil {
+		t.Fatalf("plan: %v", err)
+	}
+	var orphaned, preserved string
+	for _, g := range plan.preview.Orphaned {
+		orphaned += g.Label + " " + strings.Join(g.Items, " ")
+	}
+	for _, g := range plan.preview.Preserved {
+		preserved += g.Label + " " + strings.Join(g.Items, " ")
+	}
+	if !strings.Contains(orphaned, "cascade node") {
+		t.Errorf("KubernetesNode.server is Server! — the node must be named orphaned; got %q", orphaned)
+	}
+	// The negative: a NULLABLE edge is preserved, not orphaned. A flag that
+	// fires for every survivor trains the operator to ignore it.
+	if strings.Contains(orphaned, "scp") || !strings.Contains(preserved, "scp") {
+		t.Errorf("ServerConfigurationProfile.server is nullable — preserved, never orphaned; orphaned=%q preserved=%q",
+			orphaned, preserved)
+	}
+	if rec := deleteReq(t, h, "Server", cascadeServer, "", "admin"); rec.Code != http.StatusOK {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	if !exists(t, "KubernetesNode", cascadeNode) {
+		t.Error("an unclaimed node is the dev's choice — it must survive the delete")
+	}
+}
+
+// A relationship outside the subgraph survives, and is NAMED in the preview.
 //
 // Both halves. Surviving silently is how an operator discovers after the fact
 // that something they expected to go is still there.
-func TestCascade_NonOwnedMemberIsPreservedAndSaidSo(t *testing.T) {
+func TestCascade_UndeclaredRelationshipIsPreservedAndSaidSo(t *testing.T) {
 	h, _ := deleteFixture(t)
 	seedCascadeFixture(t)
 	ctx := context.Background()
@@ -138,18 +220,18 @@ func TestCascade_NonOwnedMemberIsPreservedAndSaidSo(t *testing.T) {
 		{"IPAddress", cascadeIP}, {"Rack", cascadeRack}, {"DataCenter", cascadeDC},
 	} {
 		if !exists(t, kept[0], kept[1]) {
-			t.Errorf("%s %s was deleted; it is not part of the server's unit", kept[0], kept[1])
+			t.Errorf("%s %s was deleted; it is not in the server's subgraph", kept[0], kept[1])
 		}
 	}
 }
 
-// Criterion 6 — deleting a server leaves no orphans.
+// The SHIPPED Server page leaves no orphans.
 //
-// Three live defects in one test, every one of them a child holding a NON-NULL
+// Three past defects in one test, every one of them a child holding a NON-NULL
 // edge to a node that no longer existed. DGraph propagates a missing non-null
 // field to the ROOT of any query that selects it, so each was one delete away
-// from taking out every query that walked there.
-func TestCascade_ServerDeleteLeavesNoOrphans(t *testing.T) {
+// from taking out every query that walked there. The page now declares each.
+func TestCascade_ShippedServerPageLeavesNoOrphans(t *testing.T) {
 	h, _ := deleteFixture(t)
 	seedCascadeFixture(t)
 
@@ -166,20 +248,20 @@ func TestCascade_ServerDeleteLeavesNoOrphans(t *testing.T) {
 	if exists(t, "KubernetesNode", cascadeNode) {
 		t.Error("the server's KubernetesNode survived, holding a non-null edge to a deleted server")
 	}
-	// …and the cluster it belonged to is NOT the server's to delete.
+	// …and the cluster it belonged to is NOT in the server's subgraph.
 	if !exists(t, "EksaKubernetesCluster", cascadeClust) {
-		t.Error("deleting a server destroyed its node's cluster; a cluster is not part of a server's unit")
+		t.Error("deleting a server destroyed its node's cluster; a cluster is not in a server's subgraph")
 	}
 	assertNoEdgeTo(t, "EksaKubernetesCluster", cascadeClust, "nodes")
-	// ServerConfigurationProfile.server is nullable as of v13, and the SCP is
-	// not a member of the Server view, so it legitimately survives — but then
-	// NOTHING may be left pointing at the dead server.
+	// ServerConfigurationProfile.server is nullable, and the SCP is not in the
+	// Server page's subgraph, so it legitimately survives — but then NOTHING
+	// may be left pointing at the dead server.
 	if exists(t, "ServerConfigurationProfile", cascadeSCP) {
 		assertNoEdgeTo(t, "ServerConfigurationProfile", cascadeSCP, "server")
 	}
 }
 
-// Criterion 7 — deleting a data centre removes its network devices.
+// Deleting a data centre removes its network devices.
 //
 // `NetworkDevice.dataCenter` is `DataCenter!`, and no cascade touched them: a
 // data-centre delete left every switch in it pointing at a tombstone.
@@ -195,12 +277,11 @@ func TestCascade_DataCenterDeleteRemovesNetworkDevices(t *testing.T) {
 	}
 }
 
-// Criterion 8 — a shared IPAddress survives every delete that reaches it.
+// A shared IPAddress survives every delete that reaches it.
 //
 // The same edge used to have opposite answers depending on which page you
 // clicked Delete on: a server delete preserved the IP, a data-centre delete
-// destroyed it. An IPAddress is claimed by four types, so no single parent owns
-// it — the same reasoning that makes it render as a link rather than inline.
+// destroyed it. No shipped page lists one in its subgraph.
 func TestCascade_SharedIPAddressSurvivesEveryParent(t *testing.T) {
 	for _, root := range []struct{ typeName, orbID string }{
 		{"Server", cascadeServer},
@@ -213,14 +294,14 @@ func TestCascade_SharedIPAddressSurvivesEveryParent(t *testing.T) {
 				t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
 			}
 			if !exists(t, "IPAddress", cascadeIP) {
-				t.Errorf("deleting a %s destroyed a shared IP address; no single parent owns one",
+				t.Errorf("deleting a %s destroyed a shared IP address; no page declares one",
 					root.typeName)
 			}
 		})
 	}
 }
 
-// Criterion 4 — a survivor's edge into the deleted set is cleared.
+// A survivor's edge into the deleted set is cleared.
 //
 // Derived, not listed: `@hasInverse` tells orbital which field points back, so
 // there is no hand-maintained table to forget an entry in. A DQL delete does not
@@ -243,7 +324,7 @@ func TestCascade_ClearsEdgesHeldBySurvivors(t *testing.T) {
 	}
 }
 
-// Criterion 5 — the preview and the delete are built from one walk.
+// The preview and the delete are built from one walk.
 //
 // Two walks would be two chances to disagree, and the disagreement would be
 // invisible: an operator confirms a dialog describing one set and a different
@@ -299,4 +380,53 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(b)
+}
+
+// A delete through the page route leaves an audit event an operator can find
+// through GET /api/v1/audit-log — read back through that API, not the write
+// path — and planning one (the preview) leaves none.
+//
+// A missing audit row changes nothing observable at the time; it is found only
+// when someone asks a question that can no longer be answered. debt.md carried
+// this as untested.
+func TestCascade_DeleteIsAuditedAndPreviewIsNot(t *testing.T) {
+	h, f := deleteFixture(t)
+	seedCascadeFixture(t)
+	events := func() []eventItem {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		c := echo.New().NewContext(httptest.NewRequest(http.MethodGet, "/api/v1/audit-log?orbId="+cascadeServer, nil), rec)
+		if err := (&AuditHandler{db: f.db, logger: slog.Default()}).List(c); err != nil {
+			t.Fatalf("audit-log: %v", err)
+		}
+		var body auditLogResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode audit-log: %v (%s)", err, rec.Body.String())
+		}
+		var out []eventItem
+		for _, e := range body.Events {
+			if strings.Join(e.Operations, ",") == "deleteServer" {
+				out = append(out, e)
+			}
+		}
+		return out
+	}
+
+	if _, err := h.planFor(context.Background(), "Server", cascadeServer); err != nil {
+		t.Fatalf("plan: %v", err)
+	}
+	if got := events(); len(got) != 0 {
+		t.Fatalf("a preview must not record a delete; got %+v", got)
+	}
+
+	if rec := deleteReq(t, h, "Server", cascadeServer, "", "admin"); rec.Code != http.StatusOK {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	got := events()
+	if len(got) != 1 {
+		t.Fatalf("want exactly one deleteServer event for %s, got %d", cascadeServer, len(got))
+	}
+	if got[0].Actor != "deleter@test.com" || strings.Join(got[0].ResourceTypes, ",") != "Server" {
+		t.Errorf("event = actor %q types %v, want deleter@test.com / [Server]", got[0].Actor, got[0].ResourceTypes)
+	}
 }

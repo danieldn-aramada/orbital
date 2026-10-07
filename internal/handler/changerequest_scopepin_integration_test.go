@@ -87,7 +87,7 @@ func TestChangeRequest_ScopeResolvedOnceAtCreation(t *testing.T) {
 		t.Errorf("base_scope %v must contain the declared entity %s", cr.BaseScope, pinServer)
 	}
 	if !contains(cr.BaseScope, pinIdrac) {
-		t.Errorf("base_scope %v must contain the owned child %s that ownership pulled in", cr.BaseScope, pinIdrac)
+		t.Errorf("base_scope %v must contain the subgraph member %s that the subgraph pulled in", cr.BaseScope, pinIdrac)
 	}
 }
 
@@ -100,11 +100,11 @@ func TestChangeRequest_AmendRePinsScope(t *testing.T) {
 	f := newCRFixture(t)
 	seedPinFixture(t)
 
-	// Opened against the DATA CENTRE, amended DOWN to the server it owns.
+	// Opened against the DATA CENTRE, amended DOWN to a server in its subgraph.
 	//
-	// The direction matters: a DataCenter owns its servers, so amending the
+	// The direction matters: a DataCenter's subgraph includes its servers, so amending the
 	// other way leaves the old root's orbIds legitimately in scope and the
-	// assertion cannot tell "carried forward" from "owned by the new root".
+	// assertion cannot tell "carried forward" from "in the new root's subgraph".
 	// Downward, the old root is NOT owned by the new one — a server does not
 	// own its data centre — so its disappearance is the whole claim.
 	cr, problems, err := f.crh.Create(context.Background(), author, "pin test", "",
@@ -125,7 +125,7 @@ func TestChangeRequest_AmendRePinsScope(t *testing.T) {
 		t.Fatalf("get: %v", err)
 	}
 	if !contains(before.BaseScope, pinDC) || !contains(before.BaseScope, pinServer) {
-		t.Fatalf("precondition: base_scope %v should contain the data centre and the server it owns",
+		t.Fatalf("precondition: base_scope %v should contain the data centre and its server",
 			before.BaseScope)
 	}
 
@@ -149,7 +149,7 @@ func TestChangeRequest_AmendRePinsScope(t *testing.T) {
 		t.Errorf("after amend, base_scope %v must contain the newly declared %s", after.BaseScope, pinServer)
 	}
 	if !contains(after.BaseScope, pinIdrac) {
-		t.Errorf("after amend, base_scope %v must still pull in the new root's owned child %s",
+		t.Errorf("after amend, base_scope %v must still pull in the new root's subgraph member %s",
 			after.BaseScope, pinIdrac)
 	}
 	if contains(after.BaseScope, pinDC) {
@@ -174,7 +174,7 @@ func TestChangeRequest_StalenessHashComputedOverStoredScope(t *testing.T) {
 			t.Errorf("scope names %s but no version was read for it — the hash does not cover the stored scope", orbID)
 		}
 	}
-	// Editing the owned child must still move staleness: the pin must not turn
+	// Editing the subgraph member must still move staleness: the pin must not turn
 	// the mechanism off, only stop it re-deriving WHICH entities to watch.
 	firstHash := versionHash(st.Versions)
 	setPinIdracFirmware(t, "2.0.0", 2)
@@ -199,7 +199,7 @@ func TestChangeRequest_OwnershipChangeDoesNotMovePinnedScope(t *testing.T) {
 		t.Fatalf("precondition: %s must be in the pinned scope, got %v", pinIdrac, cr.BaseScope)
 	}
 
-	// Remove the owned child, so re-deriving would now produce a SMALLER scope.
+	// Remove the subgraph member, so re-deriving would now produce a SMALLER scope.
 	deleteByOrbID(t, "IdracSettings", pinIdrac)
 
 	// Prove the test is meaningful: a fresh derivation really does drop it.

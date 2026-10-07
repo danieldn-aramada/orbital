@@ -19,7 +19,7 @@ import (
 
 // baseScope expands a change request's DECLARED orbIds into the full set its
 // base hash covers: each declared orbId plus, for the ones that exist, every
-// entity they own.
+// entity in their page's declared subgraph.
 //
 // Two properties matter and both are deliberate:
 //
@@ -30,8 +30,8 @@ import (
 //     proposal was written as a create and is now an overwrite. No extra
 //     detection machinery; the mechanism falls out of the scoping.
 //
-//   - Including the owned subtree. A Server's approved change is not independent
-//     of its IdracSettings: the owned subtree is the unit a reviewer actually
+//   - Including the subgraph. A Server's approved change is not independent
+//     of its IdracSettings: the subgraph is the unit a reviewer actually
 //     looked at (D1), so a third party editing the child must invalidate the
 //     review of the parent.
 func baseScope(ctx context.Context, dgraphURL string, views configitems.ViewSet, declared []string, existing map[string]approval.EntityRef) []string {
@@ -45,14 +45,14 @@ func baseScope(ctx context.Context, dgraphURL string, views configitems.ViewSet,
 		scope = append(scope, id)
 	}
 
-	// One query for every declared entity's owned subtree, not one per entity.
+	// One query for every declared entity's subgraph, not one per entity.
 	// This runs for every change request a list renders, and the badge renders
 	// the whole open queue on every page load — so a per-entity round-trip here
 	// multiplies by two factors at once.
-	owned := collectRelatedOrbIDsBatch(ctx, dgraphURL, views, declared, existing)
+	subgraphs := subgraphOrbIDsBatch(ctx, dgraphURL, views, declared, existing)
 	for _, id := range declared {
 		add(id)
-		for _, o := range owned[id] {
+		for _, o := range subgraphs[id] {
 			add(o)
 		}
 	}
@@ -61,15 +61,15 @@ func baseScope(ctx context.Context, dgraphURL string, views configitems.ViewSet,
 	return scope
 }
 
-// collectRelatedOrbIDsBatch expands many roots' owned subtrees in ONE GraphQL
+// subgraphOrbIDsBatch expands many roots' declared subgraphs in ONE GraphQL
 // round-trip, using aliases so each root keeps its own type-specific selection.
 //
-// Roots absent from `existing` are creates and own nothing yet, so they are
+// Roots absent from `existing` are creates and have no subgraph yet, so they are
 // skipped rather than queried for.
 //
-// Failure is non-fatal: a root whose subtree cannot be read contributes only
+// Failure is non-fatal: a root whose subgraph cannot be read contributes only
 // itself, which narrows the scope rather than corrupting it.
-func collectRelatedOrbIDsBatch(ctx context.Context, dgraphURL string, views configitems.ViewSet, declared []string, existing map[string]approval.EntityRef) map[string][]string {
+func subgraphOrbIDsBatch(ctx context.Context, dgraphURL string, views configitems.ViewSet, declared []string, existing map[string]approval.EntityRef) map[string][]string {
 	out := make(map[string][]string, len(declared))
 
 	type rootAlias struct{ alias, id, typeName string }
@@ -81,9 +81,9 @@ func collectRelatedOrbIDsBatch(ctx context.Context, dgraphURL string, views conf
 		if !ok || ref.Type == "" {
 			continue
 		}
-		sel := views.OwnedOrbIDSelection(ref.Type)
+		sel := views.SubgraphSelection(ref.Type)
 		if sel == "" {
-			continue // the type owns nothing — no query needed to learn that
+			continue // the page declares no subgraph — no query needed to learn that
 		}
 		q, err := json.Marshal(id)
 		if err != nil {
@@ -124,10 +124,10 @@ func collectRelatedOrbIDsBatch(ctx context.Context, dgraphURL string, views conf
 		if !ok {
 			continue
 		}
-		// The SAME walk the detail page's audit roll-up uses. Two walks over
-		// the same ownership set is how the pin and the audit tab came to
-		// disagree about what a server covers.
-		out[r.id] = ownedSubtreeOrbIDs(views, r.typeName, r.id, node)
+		// The SAME walk the detail page's audit tab uses. Two walks over the
+		// same set is how the pin and the audit tab came to disagree about what
+		// a server covers.
+		out[r.id] = subgraphOrbIDs(views, r.typeName, r.id, node)
 	}
 	return out
 }
@@ -381,7 +381,7 @@ func presentInVersions(versions map[string]int, scope []string) []string {
 //
 // NEVER FAILS THE CALLER. A returned nil means "no stored effect", and the read
 // path falls back to counting the changeset. This is deliberate: the effect is
-// a display convenience, and a subtree read that hiccups must not cost someone
+// a display convenience, and a subgraph read that hiccups must not cost someone
 // the proposal they just wrote — especially when the proposal itself is already
 // validated and its staleness anchor already captured. The error is returned so
 // the caller can log it, not so it can abort.

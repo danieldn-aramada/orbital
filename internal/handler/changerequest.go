@@ -112,10 +112,10 @@ var (
 // with the graph (D13).
 type crState struct {
 	Changeset approval.Changeset
-	// Scope is the declared orbIds plus their owned subtrees — what the hash covers.
+	// Scope is the declared orbIds plus their declared subgraphs — what the hash covers.
 	Scope []string
 	// Snapshot is the scope's full content. Populated ONLY by StateWithSnapshot
-	// — reading it costs a subtree fetch per request, which is why the render
+	// — reading it costs a subgraph fetch per request, which is why the render
 	// path does not.
 	Snapshot graphdiff.Snapshot
 	// Versions is the scope's OCC version vector, and the thing CurrentHash is
@@ -135,7 +135,7 @@ type crState struct {
 	// asked is a wrong answer, not a missing one.
 	StalenessKnown bool
 	// SubtreeChanged means the reviewed scope moved without any change object
-	// going out of date — typically an edit to an owned child. It is the
+	// going out of date — typically an edit to a subgraph member. It is the
 	// REVIEWER's to clear, by approving again, which re-anchors the base.
 	//
 	// Two signals, two owners: the author owns what they proposed, the reviewer
@@ -506,7 +506,7 @@ func (h *ChangeRequest) storedState(ctx context.Context, cr *ent.ApprovalRequest
 
 // StateWithSnapshot is State plus the scope's full content.
 //
-// Separate from State because the snapshot is the expensive half — a subtree
+// Separate from State because the snapshot is the expensive half — a subgraph
 // fetch and a normalize per request — and only two callers need it: the diff
 // view, which renders field-level changes, and merge, which needs the before
 // state to decide what actually applied. Everything that merely displays a
@@ -1403,7 +1403,7 @@ func namedStale(cr *ent.ApprovalRequest, st crState) error {
 		now, present := st.Versions[id]
 		if !present {
 			// Gone. TARGET_MISSING covers a DECLARED target that vanished; this
-			// is a subtree member, which makes the review stale rather than
+			// is a subgraph member, which makes the review stale rather than
 			// unmergeable.
 			problems = append(problems, approval.ValidationError{
 				OrbID: id,
@@ -1457,7 +1457,7 @@ func (e *preconditionFailed) Error() string {
 // the caller's raw input instead would put a hand-written value on one side of
 // that comparison and a DGraph round-trip on the other.
 //
-// Scoped to the fields the changeset touches, not the whole subtree: a six-field
+// Scoped to the fields the changeset touches, not the whole subgraph: a six-field
 // changeset stores six values.
 func baseValuesFrom(snap graphdiff.Snapshot, cs approval.Changeset) map[string]map[string]any {
 	out := make(map[string]map[string]any, len(cs.Changes))

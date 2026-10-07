@@ -2,16 +2,28 @@
 #
 # TWO NOUNS
 #   pages:  a URL + a menu entry + a detail layout.  THE TOP LEVEL IS THE MENU.
-#             summary.refs: link rows under the field list
-#             tabs:         the tab strip, in the order you see it
+#             subgraph: the entities connected to this one that the page
+#                       SHOWS, EDITS, AUDITS and DELETES. One declaration, four
+#                       consumers. Order is display order.
 #   types:  how a type renders WHEREVER it renders. Declared once, because
 #           IPAddress appears on four pages and NetworkInterface on three.
 #           INHERITS along the schema's interfaces.
 #
+# THE SUBGRAPH IS DECLARED, NEVER DERIVED
+#   GraphQL has no concept of ownership; `!` means non-null and nothing more.
+#   What a page deletes is what it lists here — a path, one or more hops
+#   (`storageControllers.storageDevices`). An entity not listed is not in the
+#   subgraph, whatever the schema says about it.
+#   ⚠️ DELETE IS LITERAL. Deleting a server removes the server and the entities
+#      its paths reach — no more. Another page's subgraph is not consulted.
+#      Anything left holding a NON-NULL edge into what was deleted is named in
+#      the delete preview as ORPHANED; the delete still proceeds.
+#
 # TWO RULES
 #   scalars        SUBTRACTIVE — a field added to the schema shows up on its own.
 #                  Four keys remove or shape one, each naming its own surface:
-#                    summary.ignoreFields   gone entirely (page-level)
+#                    summary.ignoreFields   gone entirely (page-level) — also
+#                                           removes a derived link row
 #                    fields.<f>.tableHidden gone from TABLE columns — the list
 #                                           page and relationship tabs alike.
 #                                           Still shown in the detail summary.
@@ -19,22 +31,19 @@
 #                    fields.<f>.editable    whether the EDITOR may write it
 #                  ⚠️ tableHidden is type-wide: two tables of one type cannot
 #                     show different scalars.
-#   relationships  LISTED — summary.refs (a row), tabs (a table), refColumns (a cell)
-#   ⚠️ So a relationship added to the schema appears NOWHERE until it is listed.
-#      That is deliberate: a column or table arriving uninvited is a layout change.
+#   link rows      DERIVED — every SINGLE relationship outside the subgraph is a
+#                  link row under the field list. Navigation only: never edited,
+#                  audited or deleted from the page.
 #
 # EDITABLE
-#   `editable: true` on a tab = this page's editor may write that child.
-#   It gates the TOP LEVEL only; below it, ownership governs — which is how a
-#   cluster's etcd schedule is editable while ClusterBackup has no page at all.
-#   A LIST cannot be editable (a path cannot name one row); declaring it is
-#   refused out loud at load and the tab renders read-only.
+#   `editable: true` on a subgraph entry = this page's editor writes it.
+#   Single-cardinality at every hop and at most two hops; anything else is
+#   refused out loud at load and renders read-only.
 #
 # DERIVED, never declared here
 #   inline panel vs table   <- cardinality
-#   what dies together      <- the schema's NON-NULL back-edges (+ ownerReferences:)
 #   does a row link         <- does its type have a page
-#   the Audit Log tab       <- always last, on every page
+#   the Audit Log tab       <- always last, on every page; covers the subgraph
 #
 # A deployment overrides this with a PARTIAL overlay (ORBITAL_VIEWS_OVERLAY_PATH)
 # declaring only the pages or types it changes. Copying this whole file into an
@@ -46,9 +55,7 @@ pages:
 
   DataCenter:
     menuWeight: 10
-    summary:
-      refs: []
-    tabs:
+    subgraph:
       - servers
       - racks
       - kubernetesClusters
@@ -57,40 +64,30 @@ pages:
   Server:
     menuWeight: 20
     filterBy: dataCenter
-    summary:
-      refs:
-        - dataCenter
-        - rack
-        - kubernetesNode
-        - oobIP
-    tabs:
+    subgraph:
       - { path: idracSettings, editable: true }
       - { path: serverMaintenance, editable: true }
+      - kubernetesNode
       - storageControllers
       - networkAdapters
       - networkInterfaces
       - storageControllers.storageDevices
+      - storageControllers.storageVolumes
 
   KubernetesCluster:
     slug: clusters
     menuWeight: 30
     filterBy: dataCenter
-    summary:
-      refs:
-        - controlPlaneEndpoint
-        - dataCenter
-    tabs:
-      - { path: backup, editable: true }
+    subgraph:
+      - backup
+      - { path: backup.etcd, editable: true }
+      - { path: backup.velero, editable: true }
+      - { path: backup.s3Sync, editable: true }
       - nodes
 
   NetworkDevice:
     menuWeight: 40
-    summary:
-      refs:
-        - dataCenter
-        - rack
-        - virtualChassis
-    tabs:
+    subgraph:
       - virtualChassisMembers
       - networkInterfaces
       - networkInterfaceConnectedNetworkDevice
@@ -228,46 +225,6 @@ types:
       model: { editable: false }
       serialNumber: { editable: false }
       wwn: { editable: false }
-
-# ── owner references ─────────────────────────────────────────────────────────
-# Which node OWNS this one — Kubernetes' `metadata.ownerReferences` by another
-# route: a dependent names its owner, and when the owner goes the dependent goes
-# with it.
-#
-# DERIVED from NON-NULL back-edges: `Child.parent: Parent!` is the schema saying
-# the child has no existence without that parent. 13 of 14 relations derive.
-# ONE cannot:
-#
-# NetworkInterface is owned by exactly one of {server, networkDevice,
-# networkAdapter} — the schema says so in a comment, because "DGraph can't
-# enforce" it. All three edges are nullable, so nullability cannot express it.
-#
-# Ordered, most-specific first, so a NIC is claimed by its adapter before its
-# server.
-#
-# WHAT READS IT — three consumers, and only one is deletion:
-#   delete cascade     what dies with the owner
-#   audit before-fetch which subtree to read BEFORE a write, so the event can
-#                      diff old against new. A child edited through its owner's
-#                      editor is a separate mutation; without this the diff for
-#                      it is empty and the event says a change happened without
-#                      saying what.
-#   audit roll-up      which orbIds the owner's Audit Log tab asks about, so an
-#                      iDRAC change shows on the server you made it from.
-#
-# ⚠️ NOT identity — that is `orbIdPattern` in the schema, and the two are
-# different questions with different answers. A NIC's id derives from its
-# server's serviceTag or its device's serial; `networkAdapter` appears here and
-# in NEITHER pattern, because a NIC is OWNED by an adapter without being NAMED
-# after one. Deleting this section does not break ids; it stops a server delete
-# cascading to its NICs, which is the orphan class the cascade exists to
-# prevent. Measured: without it, Server has only IdracSettings as a dependent.
-#
-# ⚠️ The real fix is a schema change — splitting the type by owner so each has a
-# non-null edge DELETES this section. It is a data migration that collides with
-# spike 32's switch-port work, so it is recorded, not done.
-ownerReferences:
-  NetworkInterface: [networkAdapter, server, networkDevice]
 
 # ── which page is a node's HOME ──────────────────────────────────────────────
 # The inverse question to a page. An IPAddress is deleted by nobody and shown by

@@ -40,7 +40,7 @@ func TestLoadViews_EmbeddedDefaultAloneResolvesEveryView(t *testing.T) {
 			strings.Join(dropped, "\n  "))
 	}
 
-	views, err := ResolveViewsFromConfig(types, iface, validated)
+	views, err := ResolveViewsFromConfig(types, iface, validated, nil)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -81,11 +81,10 @@ func TestLoadViews_EmbeddedDefaultAloneResolvesEveryView(t *testing.T) {
 	// at once: links, tables, an inline child and a two-segment path.
 	server := got["Server"]
 	var links, tables, paths, editable int
-	for _, m := range server.RefColumns {
-		_ = m
+	for range server.SummaryRefs {
 		links++
 	}
-	for _, m := range server.Tabs {
+	for _, m := range server.Subgraph {
 		switch {
 		case strings.Contains(m.Field, "."):
 			paths++
@@ -99,9 +98,6 @@ func TestLoadViews_EmbeddedDefaultAloneResolvesEveryView(t *testing.T) {
 	if links == 0 || tables == 0 || paths == 0 || editable == 0 {
 		t.Errorf("Server = %d summary refs, %d tables, %d paths, %d editable; every shape must survive the round trip",
 			links, tables, paths, editable)
-	}
-	if len(server.Dependents) == 0 {
-		t.Error("Server must CONTAIN children — derived from the schema, not from the page")
 	}
 
 	// Acceptance 8 — nav membership comes from the views config.
@@ -135,7 +131,7 @@ func TestResolveViews_SlugIsTheLinkTargetBothWays(t *testing.T) {
 		t.Fatal(err)
 	}
 	validated, _ := cfg.Validate(types, "")
-	views, err := ResolveViewsFromConfig(types, iface, validated)
+	views, err := ResolveViewsFromConfig(types, iface, validated, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +143,7 @@ func TestResolveViews_SlugIsTheLinkTargetBothWays(t *testing.T) {
 	}
 
 	var sawIdrac, sawDC bool
-	for _, tab := range server.Tabs {
+	for _, tab := range server.Subgraph {
 		if tab.Field == "idracSettings" {
 			sawIdrac = true
 			if tab.Slug != "" {
@@ -187,7 +183,7 @@ func TestResolveMembers_TwoSegmentPathRendersFarType(t *testing.T) {
 		t.Fatal(err)
 	}
 	validated, _ := cfg.Validate(types, "")
-	views, err := ResolveViewsFromConfig(types, iface, validated)
+	views, err := ResolveViewsFromConfig(types, iface, validated, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,9 +194,9 @@ func TestResolveMembers_TwoSegmentPathRendersFarType(t *testing.T) {
 		}
 	}
 	var found *ViewTab
-	for i, m := range server.Tabs {
+	for i, m := range server.Subgraph {
 		if m.Field == "storageControllers.storageDevices" {
-			found = &server.Tabs[i]
+			found = &server.Subgraph[i]
 		}
 	}
 	if found == nil {
@@ -219,73 +215,9 @@ func TestResolveMembers_TwoSegmentPathRendersFarType(t *testing.T) {
 	}
 }
 
-// Acceptance 5 — a relationship absent from a view's members does not render.
-//
-// ServerConfigurationProfile is the live case: the Server page declares every
-// other edge and omits this one, so it has no tab and no reference column there
-// while keeping its own page. Under the old model this needed a separate
-// annotation that could only ever say "hide"; omission says it directly.
-func TestResolveMembers_NonMemberRelationshipRendersNowhere(t *testing.T) {
-	gql, admin := dgraphURLs()
-	types, iface, err := NewDGraphSchemaClient(gql, admin).Introspect(context.Background())
-	if err != nil {
-		t.Fatalf("introspect: %v", err)
-	}
-	if _, declared := fieldNamed(types["Server"], "serverConfigurationProfile"); !declared {
-		t.Fatal("precondition: the schema must still declare Server.serverConfigurationProfile, " +
-			"or this test proves nothing about omission")
-	}
-	cfg, _, _, err := LoadViewConfig(viewsConfigPath(t), "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	validated, _ := cfg.Validate(types, "")
-	views, err := ResolveViewsFromConfig(types, iface, validated)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var server, scp View
-	for _, v := range views {
-		switch v.Type {
-		case "Server":
-			server = v
-		case "ServerConfigurationProfile":
-			scp = v
-		}
-	}
-	for _, m := range server.Tabs {
-		if m.Field == "serverConfigurationProfile" {
-			t.Error("an omitted relationship must not become a tab")
-		}
-	}
-	for _, r := range server.SummaryRefs {
-		if r.Field == "serverConfigurationProfile" {
-			t.Error("an omitted relationship must not become a summary row either; " +
-				"both tabs and summary rows are PAGE facts, declared on the page")
-		}
-	}
-	// RefColumns is the OTHER surface and deliberately not filtered by the page:
-	// it describes a Server rendered as a ROW in somebody else's table, which no
-	// Server page declaration can speak for. Collapsing the two emptied the
-	// reference columns of every pageless type's table.
-	if len(server.RefColumns) == 0 {
-		t.Error("RefColumns is derived from the type, not the page, so a Server row " +
-			"keeps its reference columns wherever it is rendered")
-	}
-	// Omitted from one page AND pageless, so it renders nowhere and has no URL.
-	// It still RESOLVES — a type always does — which is what keeps its display
-	// config available the day a page does list it.
-	if scp.Slug != "" {
-		t.Errorf("ServerConfigurationProfile has no page entry, so it must have no slug; got %q", scp.Slug)
-	}
-	if scp.Type == "" {
-		t.Error("…but it must still resolve, so promoting it to a page needs no other change")
-	}
-}
-
 func memberFields(v View) []string {
-	out := make([]string, 0, len(v.Tabs))
-	for _, m := range v.Tabs {
+	out := make([]string, 0, len(v.Subgraph))
+	for _, m := range v.Subgraph {
 		out = append(out, m.Field)
 	}
 	sort.Strings(out)

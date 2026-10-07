@@ -63,7 +63,7 @@ type ChangeItem struct {
 	// identity key (orbId/id); anything else is REJECTED at creation by
 	// validateFields, because DGraph LINKS on an edge rather than writing
 	// through it — a nested payload returns success and silently discards the
-	// child's field values. An owned child therefore gets its own entry in
+	// child's field values. A subgraph member therefore gets its own entry in
 	// Changes under its own orbId; nothing is split at merge.
 	//
 	// Flatness is load-bearing, not stylistic: the field-level conflict guard

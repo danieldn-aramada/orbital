@@ -32,8 +32,8 @@ func TestResolver_ViewsFileChangeRederivesWithoutRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("initial resolve: %v", err)
 	}
-	if len(viewFor(t, first, "Server").Tabs) != 1 {
-		t.Fatalf("Server should start with one member; got %+v", viewFor(t, first, "Server").Tabs)
+	if len(viewFor(t, first, "Server").Subgraph) != 1 {
+		t.Fatalf("Server should start with one member; got %+v", viewFor(t, first, "Server").Subgraph)
 	}
 	firstHash := r.ViewsHash()
 	introAfterFirst := f.introCalls
@@ -43,7 +43,7 @@ func TestResolver_ViewsFileChangeRederivesWithoutRestart(t *testing.T) {
 	if err := os.WriteFile(views, []byte("views:\n  Server: {}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := r.Views(ctx); len(viewFor(t, got, "Server").Tabs) != 1 {
+	if got, _ := r.Views(ctx); len(viewFor(t, got, "Server").Subgraph) != 1 {
 		t.Error("inside the check window the cached views must still serve")
 	}
 
@@ -54,7 +54,7 @@ func TestResolver_ViewsFileChangeRederivesWithoutRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve after the edit: %v", err)
 	}
-	if n := len(viewFor(t, second, "Server").Tabs); n != 0 {
+	if n := len(viewFor(t, second, "Server").Subgraph); n != 0 {
 		t.Errorf("Server has %d members after the edit, want 0 — the file change was not picked up", n)
 	}
 	if r.ViewsHash() == firstHash {
@@ -79,18 +79,14 @@ func TestResolver_ViewsFileChangeRederivesWithoutRestart(t *testing.T) {
 // them; the same edge on a different page could.
 func TestEditTargets_OnlyEditorMembersAreWritable(t *testing.T) {
 	views := ViewSet{
-		{Type: "Server", Dependents: []OwnedMember{
-			{ChildType: "IdracSettings", ChildField: "idracSettings", ParentEdge: "server"},
-			{ChildType: "ServerMaintenance", ChildField: "serverMaintenance", ParentEdge: "server"},
-			{ChildType: "StorageDevice", ChildField: "storageDevices", IsList: true},
-			{ChildType: "NetworkInterface", ChildField: "networkInterfaces", IsList: true},
-		}, Tabs: []ViewTab{
-			{Field: "idracSettings", Type: "IdracSettings", Editable: true},
-			{Field: "serverMaintenance", Type: "ServerMaintenance", Editable: true},
+		{Type: "Server", Subgraph: []ViewTab{
+			{Field: "idracSettings", Type: "IdracSettings", Editable: true, ParentEdge: "server"},
+			{Field: "serverMaintenance", Type: "ServerMaintenance", Editable: true, ParentEdge: "server"},
 			// Shown, not written. It renders as a table and produces no target.
 			{Field: "networkInterfaces", Type: "NetworkInterface", IsList: true},
-			// A path member: its rows come out of a subtree another member owns,
-			// and a dotted name is not a legal GraphQL selection.
+			// A LIST path carrying a stray flag Validate would have cleared:
+			// EditorMembers must still refuse it, because a path cannot name
+			// one row.
 			{Field: "storageControllers.storageDevices", Type: "StorageDevice", IsList: true, Editable: true},
 		}},
 		{Type: "IdracSettings"}, {Type: "ServerMaintenance"},
@@ -126,8 +122,7 @@ func TestEditTargets_OnlyEditorMembersAreWritable(t *testing.T) {
 			"and configitem-editor.js refuses the whole save naming it")
 	}
 	if writable["StorageDevice"] {
-		t.Error("a PATH member must not become an edit target: its rows live in another " +
-			"member's subtree, and a dotted name is not a legal GraphQL selection")
+		t.Error("a LIST member must not become an edit target: a path cannot name one row")
 	}
 }
 
@@ -160,10 +155,9 @@ func TestOrbIDDerivation_FromSchemaNotFromViewConfig(t *testing.T) {
 		return EditTarget{}
 	}
 
-	contains := []OwnedMember{{ChildType: "IdracSettings", ChildField: "idracSettings", ParentEdge: "server"}}
+	idrac := ViewTab{Field: "idracSettings", Type: "IdracSettings", Editable: true, ParentEdge: "server"}
 	base := ViewSet{
-		{Type: "Server", Dependents: contains, Tabs: []ViewTab{
-			{Field: "idracSettings", Type: "IdracSettings", Editable: true}}},
+		{Type: "Server", Subgraph: []ViewTab{idrac}},
 		{Type: "IdracSettings"},
 	}
 	first := idracTarget(base)
@@ -171,19 +165,17 @@ func TestOrbIDDerivation_FromSchemaNotFromViewConfig(t *testing.T) {
 		t.Errorf("orbId = %q, want colo:A-idrac — derived from the suffix the SCHEMA declares", first.OrbID)
 	}
 	if first.ParentInverseField != "server" {
-		t.Errorf("ParentInverseField = %q, want server — it comes from CONTAINMENT now, "+
-			"because for a multi-parent type the answer depends on which page you create from, "+
-			"which a single-valued derivesIdFrom: could not say", first.ParentInverseField)
+		t.Errorf("ParentInverseField = %q, want server — the @hasInverse partner of the "+
+			"declared path, because for a multi-parent type the answer depends on which page "+
+			"you create from, which a single-valued derivesIdFrom: could not say", first.ParentInverseField)
 	}
 
 	// Re-lay out the page: another member before it, a different field order,
 	// the whole view rebuilt. Identity must not notice.
 	relaid := ViewSet{
-		{Type: "Server", Dependents: append([]OwnedMember{
-			{ChildType: "ServerMaintenance", ChildField: "serverMaintenance", ParentEdge: "server"}},
-			contains...), Tabs: []ViewTab{
-			{Field: "serverMaintenance", Type: "ServerMaintenance", Editable: true},
-			{Field: "idracSettings", Type: "IdracSettings", Editable: true},
+		{Type: "Server", Subgraph: []ViewTab{
+			{Field: "serverMaintenance", Type: "ServerMaintenance", Editable: true, ParentEdge: "server"},
+			idrac,
 		}},
 		{Type: "IdracSettings"}, {Type: "ServerMaintenance"},
 	}
@@ -196,7 +188,7 @@ func TestOrbIDDerivation_FromSchemaNotFromViewConfig(t *testing.T) {
 	// compiles with one, identity has moved into the view and the Hi-severity
 	// orbId-mutability debt is back.
 	var decl PageDecl
-	if _, _, _ = decl.Slug, decl.MenuWeight, decl.Tabs; false {
+	if _, _, _ = decl.Slug, decl.MenuWeight, decl.Subgraph; false {
 		t.Fatal("unreachable")
 	}
 }
@@ -209,34 +201,26 @@ func kinds(targets []EditTarget) []string {
 	return out
 }
 
-// A wrapper two hops down has no page, so the page's declaration cannot gate it
-// — ownership does.
+// A two-hop member carries its intermediate as a WRAPPER, and the top level is
+// still the page's call.
 //
-// This is a regression test with a name: reading `editable:` at EVERY level
-// emptied the cluster editor. ClusterBackup has no page, so it declared no
-// members; the edit DATA tree still carried `backup.etcd` because that tree
-// follows ownership, and the TARGET list did not. The editor rendered an etcd
-// schedule, accepted a change, and wrote nothing — no error, no audit row, no
-// trace. The page gates the top level; below it, the unit is the unit.
-func TestEditTargets_WrapperDescentFollowsOwnershipNotThePage(t *testing.T) {
+// The regression this guards has a name: the edit DATA tree and the TARGET list
+// once read different declarations, and the cluster editor rendered an etcd
+// schedule, accepted a change, and wrote nothing — no error, no audit row. Both
+// now read EditorMembers; this pins the target half for the two-hop shape.
+func TestEditTargets_TwoHopMemberCarriesItsIntermediateAsWrapper(t *testing.T) {
 	views := ViewSet{
 		{Type: "EksaKubernetesCluster",
-			Dependents: []OwnedMember{
-				{ChildType: "ClusterBackup", ChildField: "backup", ParentEdge: "cluster"},
-				{ChildType: "KubernetesNode", ChildField: "nodes", ParentEdge: "cluster", IsList: true},
-			},
+			Relations: map[string]string{"backup": "ClusterBackup", "nodes": "KubernetesNode"},
 			// Supplied by the INTERFACE page — the concrete type has none of its
 			// own, which is what keeps one entry in the menu per provider family.
-			Tabs: []ViewTab{
-				{Field: "backup", Type: "ClusterBackup", Editable: true},
-				{Field: "nodes", Type: "KubernetesNode", IsList: true},
+			Subgraph: []ViewTab{
+				{Field: "backup", Type: "ClusterBackup", ParentEdge: "cluster"},
+				{Field: "backup.etcd", Type: "EtcdBackup", Editable: true, ParentEdge: "clusterBackupEtcd"},
+				{Field: "backup.s3Sync", Type: "S3Sync", Editable: true, ParentEdge: "clusterBackupS3Sync"},
+				{Field: "nodes", Type: "KubernetesNode", IsList: true, ParentEdge: "cluster"},
 			}},
-		// Pageless, therefore tab-less. Its children are owned all the same.
-		{Type: "ClusterBackup", Dependents: []OwnedMember{
-			{ChildType: "EtcdBackup", ChildField: "etcd", ParentEdge: "clusterBackupEtcd"},
-			{ChildType: "S3Sync", ChildField: "s3Sync", ParentEdge: "clusterBackupS3Sync"},
-		}},
-		{Type: "EtcdBackup"}, {Type: "S3Sync"}, {Type: "KubernetesNode"},
+		{Type: "ClusterBackup"}, {Type: "EtcdBackup"}, {Type: "S3Sync"}, {Type: "KubernetesNode"},
 	}
 	fields := func(typeName string) []string {
 		return map[string][]string{
@@ -261,7 +245,7 @@ func TestEditTargets_WrapperDescentFollowsOwnershipNotThePage(t *testing.T) {
 	for _, want := range []string{"EtcdBackup", "S3Sync"} {
 		tgt, ok := byKind[want]
 		if !ok {
-			t.Fatalf("%s must be a target: it is owned by a wrapper the page declared editable; got %v", want, kinds(got))
+			t.Fatalf("%s must be a target: the page declares it editable; got %v", want, kinds(got))
 		}
 		if strings.Join(tgt.Path, ".") != "backup."+map[string]string{"EtcdBackup": "etcd", "S3Sync": "s3Sync"}[want] {
 			t.Errorf("%s path = %v, want the two-segment path the edit tree nests at", want, tgt.Path)
@@ -273,11 +257,9 @@ func TestEditTargets_WrapperDescentFollowsOwnershipNotThePage(t *testing.T) {
 	if _, ok := byKind["ClusterBackup"]; ok {
 		t.Error("a wrapper is a path segment, not a target — it has no editable fields to write")
 	}
-	// The TOP level is still the page's call. `nodes` is owned and would be
-	// reachable under ownership alone; the page does not declare it editable,
-	// so it must not be writable from here.
+	// `nodes` is in the subgraph and not declared editable, so it must not be
+	// writable from here.
 	if _, ok := byKind["KubernetesNode"]; ok {
-		t.Error("ownership governs BELOW the page's declaration, never at it — " +
-			"an undeclared top-level member must stay unwritable")
+		t.Error("a member without `editable` must stay unwritable")
 	}
 }

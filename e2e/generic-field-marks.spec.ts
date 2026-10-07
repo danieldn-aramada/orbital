@@ -69,8 +69,8 @@ test('a pending proposal marks the field it targets, and only that field', async
   }
 });
 
-test('owned children carry their own marks, keyed to the child', async ({ page }) => {
-  // An edit to an owned child records the CHILD's orbId and never the
+test('subgraph members carry their own marks, keyed to the child', async ({ page }) => {
+  // An edit to a subgraph member records the CHILD's orbId and never the
   // parent's, so a child's rows can only be marked from the child's own id.
   // Getting this wrong shows a backup-schedule proposal on the cluster's own
   // fields, or nowhere at all.
@@ -90,9 +90,9 @@ test('owned children carry their own marks, keyed to the child', async ({ page }
   expect(root, `no mark table for the root: ${JSON.stringify(tables)}`).toBeTruthy();
   expect(root!.rows).toBeGreaterThan(0);
 
-  // Every owned child gets its own table under its own orbId.
+  // Every subgraph member gets its own table under its own orbId.
   const children = tables.filter((t) => t.orbId !== CLUSTER);
-  expect(children.length, 'owned children must carry their own mark tables').toBeGreaterThan(0);
+  expect(children.length, 'subgraph members must carry their own mark tables').toBeGreaterThan(0);
   for (const c of children) {
     expect(c.orbId, 'a child mark table must name the CHILD').not.toBe(CLUSTER);
     // A slot per markable row, never more: a slot with no data-field can never

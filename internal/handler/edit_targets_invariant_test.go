@@ -136,7 +136,7 @@ func editActions(echo.Context) layout.PageActions { return layout.OrbitalActions
 // The DataCenter case is GONE: that page moved to the generic renderer, and the
 // same invariant is asserted there by
 // e2e/generic-editor.spec.ts "every reachable edit target ... carries an OCC
-// version", which additionally proves an owned child is reachable so the check
+// version", which additionally proves a subgraph member is reachable so the check
 // cannot pass on an empty tree.
 
 // TestEditTargets_NetworkDeviceEveryEditableEntityCarriesAVersion was DELETED

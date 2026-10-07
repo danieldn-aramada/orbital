@@ -34,12 +34,12 @@ type TypeInfo struct {
 	Fields []DerivedField
 
 	// Implements lists the interfaces this type implements, straight from
-	// introspection. Used to resolve interface-typed ownership: the backup
-	// sub-kinds declare an owner of `KubernetesCluster` (the interface), and a
-	// concrete EksaKubernetesCluster owns them because it implements it.
+	// introspection. Used to resolve interface-typed fields: `backup` is declared
+	// on the KubernetesCluster INTERFACE, and an EksaKubernetesCluster carries it
+	// because it implements it.
 	Implements []string
 
-	// OrbIDSuffix is the token an owned child's derived orbId ends with:
+	// OrbIDSuffix is the token a subgraph member's derived orbId ends with:
 	// `<namespace>:<parentName>-<suffix>`. Defaults to the lower-cased type
 	// name, so only the irregular ones need an annotation.
 	OrbIDSuffix string
@@ -92,11 +92,8 @@ type DerivedField struct {
 
 	// NonNull is the OUTERMOST wrapper — `Server!`, not `[Server!]`.
 	//
-	// It is where CONTAINMENT comes from. `Child.parent: Parent!` is the schema
-	// saying the child has no existence without that parent, so it dies with it
-	// and its audit rolls up onto it. 13 of orbital's 14 ownership relations
-	// derive from this; the one that cannot is NetworkInterface, whose owner is
-	// an XOR across three nullable edges.
+	// Non-null, and nothing more — it is not ownership. A delete reads it to
+	// name a survivor left holding a required edge to nothing as orphaned.
 	NonNull bool
 }
 
@@ -108,11 +105,11 @@ type DerivedField struct {
 // never set is dropped, and one mutation only ever reaches one type's scalars —
 // a nested object in `set` links by @id and its values are discarded
 // (DGRAPH.md § "A nested child update in a `set` is SILENTLY DISCARDED").
-// Selecting owned children here widened the stored `before` snapshot with
+// Selecting subgraph members here widened the stored `before` snapshot with
 // fields no diff could reach.
 //
 // A parent's Audit Log tab still carries its children's events. That roll-up is
-// read-side and by orbId — see ownedSubtreeOrbIDs.
+// read-side and by orbId — see subgraphOrbIDs.
 func BeforeSelection(typeName string, fields FieldsFor) string {
 	sel := "id orbId name version"
 	for _, f := range fields(typeName) {
@@ -427,7 +424,8 @@ func (r *Resolver) ensure(ctx context.Context) error {
 	// views document creates. Unsupportable declarations are dropped here, and
 	// reported below — never fatal, never silent.
 	validated, viewWarn := cfg.Validate(types, r.schemaVersion)
-	views, viewsErr := ResolveViewsFromConfig(types, iface, validated)
+	inverse := InverseEdges(sdl)
+	views, viewsErr := ResolveViewsFromConfig(types, iface, validated, func(t, f string) string { return inverse[t+"."+f] })
 
 	// ONE editable-field set, built from the views. The editor's field list and
 	// the audit before-fetch both read it, and a second derivation beside the
@@ -447,7 +445,7 @@ func (r *Resolver) ensure(ctx context.Context) error {
 
 	r.mu.Lock()
 	r.derived = derived
-	r.inverse = InverseEdges(sdl)
+	r.inverse = inverse
 	r.typeNames = names
 	r.mutationRe = MutationRegexFor(names)
 	r.snapshot = types
@@ -468,7 +466,7 @@ func (r *Resolver) ensure(ctx context.Context) error {
 		members := 0
 		var pages []string
 		for _, v := range views {
-			members += len(v.Tabs)
+			members += len(v.Subgraph)
 			if v.Slug != "" {
 				pages = append(pages, v.Slug)
 			}
@@ -619,7 +617,7 @@ func IsJSONString(doc string) bool {
 	return hasAnnotationLine(doc, JSONStringAnnotation)
 }
 
-// OrbIDSuffixAnnotation overrides the token an owned child's orbId ends with.
+// OrbIDSuffixAnnotation overrides the token a subgraph member's orbId ends with.
 //
 //	"""orbIdSuffix: idrac"""
 //	type IdracSettings implements ConfigItem {

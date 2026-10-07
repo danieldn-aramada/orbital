@@ -12,6 +12,7 @@ The definitions behind `ROADMAP.md`'s one-line entries.
 
 | Spike | Status | Question |
 |---|---|---|
+| Change-request staleness scope | Not started | Correction (owner, 2026-10-07): staleness covers only the nodes a request writes. `baseScope` still adds each node's subgraph (CHANGE-CONTROL.md:28, :289) — remove it. |
 | [One audit event per entity](../spikes/spike-audit-event-per-entity.md) | §4 + `request_id` shipped; §§1–3 design-only | Should an event describe one entity rather than a whole request, so `?orbId=` is exact and `changes` is single-entity by construction? |
 | [Advisory enforcement](../spikes/spike-advisory-enforcement.md) | Not started | Should a policy have a middle state — evaluate and record, but do not block? **Verdict "yes" withdrawn 2026-09-17** — a lockout is not possible (disabling is never gated) and the retrospective dry run is already an audit-log filter. Ergonomics, not safety. |
 | [Approval on publish (`export.publish`)](../spikes/spike-approval-on-publish.md) | Not started | Should publishing an artifact require approval? **Verdict: yes** — publish is the last reversible point. |

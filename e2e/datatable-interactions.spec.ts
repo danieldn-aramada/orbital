@@ -154,7 +154,7 @@ test.describe('DataTable interactions', () => {
   // The capability did not disappear, it MOVED: a management cluster's workload
   // clusters are a relationship table on its detail page, asserted by
   // e2e/clusters-generic.spec.ts. Nested rows in a LIST were a per-page feature
-  // of that table; the generic list expands owned children only, and a workload
+  // of that table; the generic list expands subgraph members only, and a workload
   // cluster is a peer, not a child.
 
 

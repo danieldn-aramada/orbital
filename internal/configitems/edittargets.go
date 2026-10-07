@@ -67,22 +67,18 @@ type MetaFor func(typeName string) TypeInfo
 // BuildEditTargets composes the targets list for a root entity's edit modal:
 // one for the root, one for each member its page writes.
 //
-// Structure from the VIEW, identity from the SCHEMA. An owned child may not
+// Structure from the VIEW, identity from the SCHEMA. A subgraph member may not
 // exist yet, so its orbId is DERIVED — `<namespace>:<parentName>-<suffix>` —
 // which is what lets the editor address a child the first time someone
 // configures it. The caller overrides that with the stored id wherever the fetch
 // found one, because a derived id that differs would upsert a phantom entity
 // instead of editing the real one.
 //
-// Two-level hierarchies (cluster → ClusterBackup → EtcdBackup/…) work because
-// the walk descends through WRAPPERS: a type with members and no editable fields
-// of its own is not a target, it is a path segment, surfaced via ParentWrapper
-// so the JS module can create it on a first-time configure.
-//
-// The page gates only the TOP level (EditorMembers); below it the walk follows
-// CONTAINMENT (DependentSingles). A wrapper has no page to declare anything on,
-// so reading the page at every level emptied the cluster editor: the data tree
-// carried backup.etcd and the target list did not, and the write went nowhere.
+// Every target is a subgraph member the page declares `editable: true`. A
+// two-hop member (cluster → backup → etcd) carries its intermediate as a
+// ParentWrapper, so the JS module can create that intermediate on a first-time
+// configure — ClusterBackup has no editable fields and exists only to hold its
+// three sub-kinds.
 func BuildEditTargets(views ViewSet, fields FieldsFor, meta MetaFor, rootType, rootOrbID, namespace, name string, rootValues map[string]string) []EditTarget {
 	root := views.Of(rootType)
 	if root.Type == "" {
@@ -102,52 +98,38 @@ func BuildEditTargets(views ViewSet, fields FieldsFor, meta MetaFor, rootType, r
 		Namespace:        namespace,
 	}}
 
-	for _, child := range root.EditorMembers() {
-		// EditorMembers has already excluded lists: a wrapper descent names ONE
-		// entity by path — ["backup", "etcd"] — and a path cannot say which row
-		// of a list it means.
-		if isWrapper(fields, views, child.ChildType) {
-			wrapperOrbID := childOrbID(child.ChildType)
-			wrapper := &EditWrapper{
-				Kind:        child.ChildType,
-				OrbID:       wrapperOrbID,
-				Name:        name + "-" + orbIDSuffix(meta, child.ChildType),
-				Namespace:   namespace,
-				ParentField: child.ChildField, // field on the root that points at the wrapper
-			}
-			for _, leaf := range views.Of(child.ChildType).DependentSingles() {
-				out = append(out, EditTarget{
-					Path:               []string{child.ChildField, leaf.ChildField},
-					Kind:               leaf.ChildType,
-					OrbID:              childOrbID(leaf.ChildType),
-					Fields:             fields(leaf.ChildType),
-					JSONStringFields:   JSONStringFieldsFor(meta(leaf.ChildType)),
-					PayloadField:       meta(leaf.ChildType).PayloadField,
-					Namespace:          namespace,
-					ParentInverseField: leaf.ParentEdge,
-					ParentOrbID:        wrapperOrbID,
-					ParentWrapper:      wrapper,
-				})
-			}
+	for _, m := range root.EditorMembers() {
+		// A member with no editable fields is not something to offer a human —
+		// a scanned NetworkAdapter whose every field is a hardware fact, or a
+		// ClusterBackup that only holds its sub-kinds.
+		if len(fields(m.Type)) == 0 {
 			continue
 		}
-		// A member with no editable fields is owned but not user-editable — a
-		// scanned NetworkAdapter whose every field is a hardware fact. It stays
-		// in the tree the page fetches; it is not something to offer a human.
-		if len(fields(child.ChildType)) == 0 {
-			continue
-		}
-		out = append(out, EditTarget{
-			Path:               []string{child.ChildField},
-			Kind:               child.ChildType,
-			OrbID:              childOrbID(child.ChildType),
-			Fields:             fields(child.ChildType),
-			JSONStringFields:   JSONStringFieldsFor(meta(child.ChildType)),
-			PayloadField:       meta(child.ChildType).PayloadField,
+		t := EditTarget{
+			Path:               strings.Split(m.Field, "."),
+			Kind:               m.Type,
+			OrbID:              childOrbID(m.Type),
+			Fields:             fields(m.Type),
+			JSONStringFields:   JSONStringFieldsFor(meta(m.Type)),
+			PayloadField:       meta(m.Type).PayloadField,
 			Namespace:          namespace,
-			ParentInverseField: child.ParentEdge,
+			ParentInverseField: m.ParentEdge,
 			ParentOrbID:        rootOrbID,
-		})
+		}
+		if len(t.Path) == 2 {
+			// Validate refuses `editable` beyond two hops, so this is the only
+			// intermediate there can be.
+			mid := root.Relations[t.Path[0]]
+			t.ParentOrbID = childOrbID(mid)
+			t.ParentWrapper = &EditWrapper{
+				Kind:        mid,
+				OrbID:       t.ParentOrbID,
+				Name:        name + "-" + orbIDSuffix(meta, mid),
+				Namespace:   namespace,
+				ParentField: t.Path[0],
+			}
+		}
+		out = append(out, t)
 	}
 	return out
 }
@@ -170,7 +152,7 @@ func OverrideEditTargetOrbID(targets []EditTarget, kind, orbID string) []EditTar
 // StampEditTargetVersion records an entity's current OCC version on its edit
 // target so the editor can send `version`.
 //
-// Keyed by orbId rather than kind: a root and its owned children are different
+// Keyed by orbId rather than kind: a root and its subgraph members are different
 // entities with independent counters, and several targets can share a kind (two
 // StorageDevices under one controller). OverrideEditTargetOrbID keys by kind
 // because an orbId convention is per-type; this is the opposite question.
@@ -188,17 +170,7 @@ func StampEditTargetVersion(targets []EditTarget, orbID string, version int) []E
 	return out
 }
 
-// isWrapper returns true for structural-only member types — types that own
-// members but whose own fields aren't user-editable. ClusterBackup is the
-// worked example: it wraps etcd/velero/s3Sync and has no editable fields of its
-// own. Wrappers don't appear as edit targets; they surface via EditWrapper on
-// their children's targets, so the editor can create one on a first-time
-// configure.
-func isWrapper(fields FieldsFor, views ViewSet, typeName string) bool {
-	return len(fields(typeName)) == 0 && len(views.Of(typeName).DependentSingles()) > 0
-}
-
-// orbIDSuffix returns the token an owned child's derived orbId ends with.
+// orbIDSuffix returns the token a subgraph member's derived orbId ends with.
 //
 // This was two switch statements naming six irregular types (IdracSettings is
 // "idrac", not "idracsettings"). The convention travels with the type, as an
@@ -206,10 +178,10 @@ func isWrapper(fields FieldsFor, views ViewSet, typeName string) bool {
 // lower-cased type name. A wrong value here does not error — it builds an orbId
 // for an entity that does not exist, and upserts a phantom instead of editing
 // the real one.
-// derivedChildOrbID builds the orbId an owned child WILL have, from the child
+// derivedChildOrbID builds the orbId a subgraph member WILL have, from the child
 // type's `orbIdPattern:` and the values of the root entity it hangs off.
 //
-// A owned child's pattern always walks back to the root it is owned in
+// A subgraph member's pattern always walks back to the root it hangs off
 // — IdracSettings is `{server.serviceTag}-{kind}`, EtcdBackup is
 // `{clusterBackupEtcd.cluster.name}-{kind}` — so a path that crosses at least
 // one edge is resolved by taking its LAST segment from the root's own values.

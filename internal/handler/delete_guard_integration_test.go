@@ -19,7 +19,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// The cascade-delete endpoint is orbital's THIRD write path. It plans a cascade
+// The cascade delete (DELETE /{slug}/{orbId}) is orbital's THIRD write path. It plans a cascade
 // and POSTs a DQL delete, so it never passes through writeToDGraph — which is
 // where both the approval gate and the MVCC check live for everything else.
 //
@@ -47,14 +47,24 @@ func deleteFixture(t *testing.T) (*DeleteHandler, *crFixture) {
 			ViewsSource{Path: testutil.ViewsPath()}, slog.Default()))), f
 }
 
+// deleteReq issues DELETE /{slug}/{orbId} from the page of `typeName` — the
+// page's slug is what the route resolves, and its subgraph is what dies.
 func deleteReq(t *testing.T, h *DeleteHandler, typeName, orbID, query string, role user.Role) *httptest.ResponseRecorder {
 	t.Helper()
+	views, err := h.views(context.Background())
+	if err != nil {
+		t.Fatalf("views: %v", err)
+	}
+	slug := views.Of(typeName).Slug
+	if slug == "" {
+		t.Fatalf("%s has no page, so there is no URL to delete it from", typeName)
+	}
 	e := echo.New()
-	url := "/api/v1/config-items/" + typeName + "/" + orbID + query
+	url := "/" + slug + "/" + orbID + query
 	rec := httptest.NewRecorder()
 	c := e.NewContext(httptest.NewRequest(http.MethodDelete, url, nil), rec)
-	c.SetParamNames("type", "id")
-	c.SetParamValues(typeName, orbID)
+	c.SetParamNames("slug", "orbId")
+	c.SetParamValues(slug, orbID)
 	c.Set("user_email", "deleter@test.com")
 	c.Set("role", string(role))
 	if err := h.Execute(c); err != nil {
@@ -101,7 +111,7 @@ func TestDeleteGuard_CurrentIfVersionDeletesAndCascades(t *testing.T) {
 	h, _ := deleteFixture(t)
 
 	if !exists(t, "IdracSettings", crIdracA) {
-		t.Fatal("fixture is missing the owned child this asserts the cascade on")
+		t.Fatal("fixture is missing the subgraph member this asserts the cascade on")
 	}
 	rec := deleteReq(t, h, "Server", crServerA,
 		fmt.Sprintf("?version=%d", readVersion(t, crServerA)), user.RoleAdmin)
@@ -112,7 +122,7 @@ func TestDeleteGuard_CurrentIfVersionDeletesAndCascades(t *testing.T) {
 		t.Error("the server was not deleted")
 	}
 	if exists(t, "IdracSettings", crIdracA) {
-		t.Error("the owned child survived — the cascade changed")
+		t.Error("the subgraph member survived — the cascade changed")
 	}
 }
 
@@ -160,7 +170,7 @@ func TestDeleteGuard_ApprovalPolicyRefusesTheCascadeDelete(t *testing.T) {
 	}
 }
 
-// A policy protecting only an OWNED CHILD must still refuse the parent delete
+// A policy protecting only a SUBGRAPH MEMBER must still refuse the parent delete
 // that would take the child with it. This is why the gate reads the types of
 // the planned cascade rather than the declared type alone.
 func TestDeleteGuard_PolicyOnAnOwnedChildRefusesTheParentDelete(t *testing.T) {
@@ -290,10 +300,10 @@ func TestDeleteGuard_ChildEditedAfterPlanningRefusesAndDeletesNothing(t *testing
 		t.Fatalf("plan: %v", err)
 	}
 	if !exists(t, "IdracSettings", crIdracA) {
-		t.Fatal("fixture is missing the owned child this test turns on")
+		t.Fatal("fixture is missing the subgraph member this test turns on")
 	}
 
-	// A third party edits an OWNED CHILD — not the parent — after planning.
+	// A third party edits an SUBGRAPH MEMBER — not the parent — after planning.
 	// `?version=` would not have noticed this even if the caller had sent it.
 	crGQL(t, `mutation($orbId: String!, $set: IdracSettingsPatch!) { updateIdracSettings(input: {filter: {orbId: {eq: $orbId}}, set: $set}) { numUids } }`,
 		map[string]any{"orbId": crIdracA, "set": map[string]any{
@@ -341,7 +351,7 @@ func TestDeleteGuard_UntouchedPlanDeletesTheWholeSet(t *testing.T) {
 		t.Error("the server survived a clean guarded delete")
 	}
 	if exists(t, "IdracSettings", crIdracA) {
-		t.Error("the owned child survived — the cascade changed")
+		t.Error("the subgraph member survived — the cascade changed")
 	}
 }
 

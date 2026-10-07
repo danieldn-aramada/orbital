@@ -4,7 +4,6 @@
 //
 // @tag.name         audit
 // @tag.name         backup
-// @tag.name         config-items
 // @tag.name         divergence
 // @tag.name         export
 // @tag.name         graphql

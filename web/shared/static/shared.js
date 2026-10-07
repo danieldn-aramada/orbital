@@ -354,7 +354,7 @@ export function fetchWithMinDelay(url, minMs = 500) {
 //   • Each tab <li> declares its panel target via data-panel="…", and the
 //     matching <div id="…"> lives as a sibling of tabContainer.
 //   • The audit tab is identified by carrying data-orb-id (no other tab does).
-//     Optional data-related-orb-ids carries a CSV of subgraph orbIds so the
+//     Optional data-subgraph-orb-ids carries a CSV of subgraph orbIds so the
 //     audit panel can aggregate events for the parent and its nested items.
 //   • Active-tab persistence is keyed off tabContainer.id, which is already
 //     unique on the page and already prefixed by page family.
@@ -474,7 +474,7 @@ export function initDetailTabs(tabContainer, options = {}) {
   }
 }
 
-// splitOrbIds parses a data-related-orb-ids CSV, falling back to a single orbId
+// splitOrbIds parses a data-subgraph-orb-ids CSV, falling back to a single orbId
 // when the attribute is absent or empty.
 function splitOrbIds(csv, fallback) {
   const ids = String(csv || '').split(',').map(s => s.trim()).filter(Boolean)
@@ -482,29 +482,28 @@ function splitOrbIds(csv, fallback) {
   return fallback ? [fallback] : []
 }
 
-// subtreeOrbIds returns a rendered ConfigItem's orbId plus every orbId it owns,
-// read from the data-related-orb-ids the page handler already emits
-// (collectRelatedOrbIDs in Go — see AUDIT.md, the page composer owns the
-// parent→child knowledge, not the API).
+// subgraphOrbIds returns a rendered ConfigItem's orbId plus every orbId in its
+// declared subgraph, read from the data-subgraph-orb-ids the page handler
+// already emits (subgraphOrbIDs in Go — see AUDIT.md).
 //
 // Any per-node query about "this item" needs this list, not the bare orbId: a
-// change to an owned child records the CHILD's orbId and never the parent's, so
+// change to a subgraph member records the CHILD's orbId and never the parent's, so
 // asking about the parent alone answers "nothing here" while something is in
 // flight. Both consumers — the audit panel and the pending-change lookups — read
 // the same attribute so they can never disagree about what the item covers.
-export function subtreeOrbIds(orbId, scope = document) {
+export function subgraphOrbIds(orbId, scope = document) {
   if (!orbId) return []
   // Attribute-selector values are quoted, so only " and \ need escaping;
   // CSS.escape would mangle the ":" every orbId carries.
   const q = String(orbId).replace(/(["\\])/g, '\\$1')
-  const el = scope.querySelector(`[data-related-orb-ids][data-orb-id="${q}"]`)
-  return splitOrbIds(el && el.dataset.relatedOrbIds, orbId)
+  const el = scope.querySelector(`[data-subgraph-orb-ids][data-orb-id="${q}"]`)
+  return splitOrbIds(el && el.dataset.subgraphOrbIds, orbId)
 }
 
 function loadAuditPanelForTab(tab, panel, onLoaded) {
-  // data-related-orb-ids embeds the full subgraph (parent + nested ConfigItems)
+  // data-subgraph-orb-ids embeds the full subgraph (parent + nested ConfigItems)
   // so one fetch pulls all relevant events. Falls back to data-orb-id alone.
-  const related = splitOrbIds(tab.dataset.relatedOrbIds, tab.dataset.orbId)
+  const related = splitOrbIds(tab.dataset.subgraphOrbIds, tab.dataset.orbId)
   if (related.length === 0) return
   const qs = related.map(id => `orbId=${encodeURIComponent(id)}`).join('&')
   fetch(BASE + `/api/v1/audit-log?${qs}&limit=${AUDIT_PANEL_LIMIT}`, {
@@ -553,7 +552,7 @@ document.addEventListener('htmx:afterSettle', (evt) => {
   if (!target) return
   renderTimestamps(target)
 
-  // The generic detail page's tab strip — owned children, relationship
+  // The generic detail page's tab strip — subgraph members, relationship
   // tables, then the audit log. Wired here for a fragment opened as a tab on a
   // list page, and on DOMContentLoaded in orbital.js/orb.js for a direct
   // navigation.

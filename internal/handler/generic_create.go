@@ -15,8 +15,8 @@ import (
 //
 // Every part is derived: the scalars from the view's editable set, the required
 // relationships from the SCHEMA's non-null edges, the identity inputs from the
-// type's `orbIdPattern`, and the unit from the same EditorMembers the editor
-// already writes. Nothing here is per-type, which is the whole point — a type
+// type's `orbIdPattern`, and the unit from the same editable subgraph members
+// the editor already writes. Nothing here is per-type, which is the whole point — a type
 // that earns a page earns a create form with no code.
 //
 // Returns nil when the type cannot be created, and the caller then renders no
@@ -144,10 +144,14 @@ func buildCreateForm(
 		return nil
 	}
 
-	// The unit: contained, page-declared, single-cardinality — the same set
-	// EditorMembers returns, created in the SAME nested mutation.
+	// The unit: the page's editable members one hop down — the same set the
+	// editor writes, created in the SAME nested mutation. A deeper member hangs
+	// off an intermediate this form does not create.
 	for _, m := range v.EditorMembers() {
-		cv, ok := byType[m.ChildType]
+		if strings.Contains(m.Field, ".") {
+			continue
+		}
+		cv, ok := byType[m.Type]
 		if !ok || len(cv.Fields) == 0 {
 			continue
 		}
@@ -159,11 +163,11 @@ func buildCreateForm(
 			continue
 		}
 		child := page.CreateUnitChild{
-			Field: m.ChildField, Label: labeller(m.ChildField), Kind: m.ChildType,
+			Field: m.Field, Label: labeller(m.Field), Kind: m.Type,
 			OrbIDTemplate: tmpl,
 		}
-		childLabel := labelFor(m.ChildType)
-		childInfo := meta(m.ChildType)
+		childLabel := labelFor(m.Type)
+		childInfo := meta(m.Type)
 		for _, f := range cv.Fields {
 			if cv.NoCreate[f] {
 				continue
