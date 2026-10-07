@@ -122,7 +122,7 @@ func TestValidate_Accepts(t *testing.T) {
 			}},
 		},
 		{
-			name: "parent and owned child as separate items",
+			name: "parent and subgraph member as separate items",
 			cs: Changeset{Namespace: "ns", Changes: []ChangeItem{
 				{OrbID: "ns:server-A", Op: OpUpdate, Set: map[string]any{"hostname": "edge-01"}},
 				{OrbID: "ns:idrac-A", Op: OpUpdate, Set: map[string]any{"firmwareVersion": "9.9.9"}},
@@ -179,7 +179,7 @@ func TestValidate_Rejects(t *testing.T) {
 		wantMatch string
 	}{
 		{
-			name: "nested owned-child fields under an edge are silently discarded by DGraph",
+			name: "nested subgraph-member fields under an edge are silently discarded by DGraph",
 			cs: Changeset{Namespace: "ns", Changes: []ChangeItem{
 				{OrbID: "ns:server-A", Op: OpUpdate, Set: map[string]any{
 					"idracSettings": map[string]any{"firmwareVersion": "9.9.9"},

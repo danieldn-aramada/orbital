@@ -19,7 +19,7 @@ import (
 //
 // It used to truncate — `orbIDFilter = orbIDFilter[:maxOrbIDs]`, silently, with
 // a 200. That made the Server audit tab lossy on ordinary data: the tab sends
-// the server's whole owned subtree, a populated server in the seeded namespace
+// the server's whole subgraph, a populated server in the seeded namespace
 // has 35 orbIds, and the cap was 32. Three children were dropped from every
 // query, and "no events for that disk" is indistinguishable from "that disk was
 // never asked about".

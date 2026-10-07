@@ -12,37 +12,21 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// The cascade delete, derived from the view.
+// The cascade delete: the root plus its page's DECLARED subgraph.
 //
-// One sentence governs it: **an editable member is part of this page's unit —
-// edited with it, audited with it, and deleted with it.** There is no separate
-// "what dies with what" declaration, because there was never a second question.
+// The page decides what dies — the paths under `subgraph:` in
+// config/views.yaml, and nothing derived from the schema. GraphQL has no
+// concept of ownership; `!` means non-null and nothing more. This route serves
+// orbital's own UI and follows that UI's page config; an API client deletes
+// through /graphql and composes its own set.
 //
-// This replaced three hand-written GraphQL traversals (`dcDeleteGQL`,
-// `srvDeleteGQL`, `clusterDeleteGQL`) and a three-way switch that consulted no
-// model at all. They had drifted into four live defects, each of the same class
-// and each silent:
-//
-//   - a server delete left its NICs, its ServerConfigurationProfile and its
-//     KubernetesNode behind, every one of them holding a NON-NULL edge to a
-//     node that no longer existed;
-//   - a data-centre delete left its network devices behind the same way;
-//   - the same IPAddress was preserved by a server delete and destroyed by a
-//     data-centre delete, depending only on which page you clicked Delete on.
-//
+// What the schema still decides is what must be REPAIRED. Every node outside
+// the deleted set that holds an edge into it has that edge cleared in the same
+// transaction, and a node whose edge is NON-NULL is named in the preview as
+// ORPHANED: the dev's subgraph left it holding a required link to nothing.
 // DGraph propagates a missing non-null field to the ROOT of any query selecting
-// it, so each of those is one delete away from breaking export for a whole data
-// centre — which is not hypothetical; DGRAPH.md records it happening.
-//
-// What keeps the one-sentence model safe is a constraint, not a second axis:
-// a child whose back-edge is non-null MUST be an editable member of that parent
-// (`ViewConfig.NonNullOrphans`, failed at build). So the only way to produce a
-// dangling non-null edge is to violate a rule the build already catches.
-
-// maxCascadeDepth bounds the walk. The member graph is operator-editable and
-// nothing stops someone declaring a cycle; a delete that followed one would
-// walk until it ran out of memory, holding a transaction open.
-const maxCascadeDepth = 8
+// it, so an orphan can break export for its whole data centre — DGRAPH.md
+// records it happening. The preview informs; it does not prevent.
 
 // cascadePlan is everything a delete needs, read in one query at one instant.
 type cascadePlan struct {
@@ -54,7 +38,7 @@ type cascadePlan struct {
 	dangling []danglingEdge
 }
 
-// planCascade reads the subtree a delete would remove, and the edges held by
+// planCascade reads the subgraph a delete would remove, and the edges held by
 // everything that survives it.
 //
 // Against the CONCRETE type, never an interface: DGraph generates no
@@ -90,7 +74,8 @@ func (h *DeleteHandler) planCascade(ctx context.Context, views configitems.ViewS
 
 	inverse := inverseWithInterfaces(views, h.inverseOf(ctx))
 	fieldsOf := h.fieldsOf()
-	sel := cascadeSelection(views, fieldsOf, inverse, typeName, 0, map[string]bool{})
+	tree := configitems.PathTree(views.SubgraphFor(typeName))
+	sel := cascadeSelection(views, fieldsOf, inverse, typeName, tree)
 	query := fmt.Sprintf(`query PlanDelete($orbId: String!) { get%s(orbId: $orbId) { %s } }`, typeName, sel)
 	raw, err := h.gqlQuery(ctx, query, map[string]any{"orbId": orbID})
 	if err != nil {
@@ -110,7 +95,7 @@ func (h *DeleteHandler) planCascade(ctx context.Context, views configitems.ViewS
 	}
 
 	w := &cascadeWalk{views: views, fieldsOf: fieldsOf, inverse: inverse, seenUID: map[string]bool{}}
-	w.walk(typeName, root, true)
+	w.walk(typeName, root, tree, true, true)
 	w.resolveSurvivors()
 
 	rootName, _ := root["name"].(string)
@@ -136,6 +121,7 @@ func (h *DeleteHandler) planCascade(ctx context.Context, views configitems.ViewS
 			Version:    version,
 			Groups:     w.groups(),
 			Preserved:  w.preservedGroups(),
+			Orphaned:   w.orphanedGroups(),
 		},
 		uids:     w.uids,
 		versions: versions,
@@ -145,30 +131,24 @@ func (h *DeleteHandler) planCascade(ctx context.Context, views configitems.ViewS
 	}, nil
 }
 
-// cascadeSelection builds the GraphQL selection for one level of the walk.
+// cascadeSelection builds the GraphQL selection for one node of the walk.
 //
-// It iterates the SCHEMA's relationship fields, not the view's members, and the
-// difference is a correctness requirement rather than a preference.
+// It iterates the SCHEMA's relationship fields, not only the declared paths,
+// and the difference is a correctness requirement rather than a preference.
 //
-// Membership decides what is DELETED. It does not get to decide what is
+// The subgraph decides what is DELETED. It does not get to decide what is
 // CLEARED: a node that points at something being deleted is left holding an
 // edge to a tombstone whether or not any page chose to show that edge, and
-// DGraph then fails every query that walks it. ServerConfigurationProfile is the
-// worked example — no view lists it, and a server delete still has to clear its
-// back-edge. `docs/reference/DGRAPH.md` states the obligation as a rule: any DQL
-// write that removes a node must also remove the edges held by nodes that
-// SURVIVE it.
+// DGraph then fails every query that walks it. `docs/reference/DGRAPH.md` states
+// the obligation as a rule: any DQL write that removes a node must also remove
+// the edges held by nodes that SURVIVE it.
 //
-// So: every relationship with a declared inverse is selected deeply enough to
-// identify the far node; only an EDITABLE member is followed.
+// So: a declared hop is followed; every other relationship with a declared
+// inverse is selected deeply enough to identify the far node. An INTERMEDIATE
+// hop — a node the path passes through without declaring — survives, so only
+// the declared hops below it are followed.
 func cascadeSelection(views configitems.ViewSet, fieldsOf func(string) []configitems.DerivedField,
-	inverse func(string, string) string, typeName string, depth int, path map[string]bool) string {
-
-	if depth > maxCascadeDepth || path[typeName] {
-		return idSel(views, typeName)
-	}
-	path[typeName] = true
-	defer delete(path, typeName)
+	inverse func(string, string) string, typeName string, n *configitems.PathNode) string {
 
 	sel := idSel(views, typeName)
 	if typeName == "Server" {
@@ -176,22 +156,20 @@ func cascadeSelection(views configitems.ViewSet, fieldsOf func(string) []configi
 		// hostname where it has one.
 		sel += " hostname"
 	}
-	// OWNED, not "shown as an editable tab". Ownership is a property of
-	// the type — a StorageController contains its devices whether or not any
-	// page shows them — and the delete follows it, not the page.
-	owned := containedFields(views, typeName)
+	dying := n.Member != nil || n.Field == ""
 	for _, f := range fieldsOf(typeName) {
 		if f.Kind == "SCALAR" || f.Kind == "ENUM" || f.TypeName == "" {
 			continue
 		}
-		if owned[f.Name] {
-			sel += " " + f.Name + " { " + cascadeSelection(views, fieldsOf, inverse, f.TypeName, depth+1, path) + " }"
+		if c := hop(n, f.Name); c != nil {
+			sel += " " + f.Name + " { " + cascadeSelection(views, fieldsOf, inverse, f.TypeName, c) + " }"
 			continue
 		}
-		if inverse(typeName, f.Name) == "" {
-			// Nothing points back along this edge, so nothing can be left
-			// dangling by removing this node. Not selected — a delete should not
-			// read more of the graph than it has an obligation to repair.
+		if !dying || inverse(typeName, f.Name) == "" {
+			// A surviving intermediate's edges are not ours to repair, and an
+			// edge nothing points back along cannot be left dangling. Not
+			// selected — a delete should not read more of the graph than it has
+			// an obligation to repair.
 			continue
 		}
 		sel += " " + f.Name + " { " + idSel(views, f.TypeName) + " }"
@@ -199,19 +177,14 @@ func cascadeSelection(views configitems.ViewSet, fieldsOf func(string) []configi
 	return sel
 }
 
-// containedFields is the set of this type's edges that lead to children it
-// cannot be deleted without.
-//
-// Derived from the schema (non-null back-edges) plus the one declared XOR
-// exception — never from a page's tab flags, which say what the EDITOR writes.
-// Reading ownership off the page is the overload that put `editable: true` on
-// lists the editor has never been able to edit.
-func containedFields(views configitems.ViewSet, typeName string) map[string]bool {
-	out := map[string]bool{}
-	for _, c := range views.Of(typeName).Dependents {
-		out[c.ChildField] = true
+// hop returns the declared path node one field below n, or nil.
+func hop(n *configitems.PathNode, field string) *configitems.PathNode {
+	for _, c := range n.Children {
+		if c.Field == field {
+			return c
+		}
 	}
-	return out
+	return nil
 }
 
 // idSel is enough to identify and name a node. `id` and `orbId` live on the
@@ -236,6 +209,7 @@ type cascadeWalk struct {
 	seenUID   map[string]bool
 	byType    map[string][]string // type -> display names, for the preview
 	preserved map[string][]string
+	orphaned  map[string][]string
 
 	// candidates are edges into the deleted set from nodes that MIGHT survive.
 	// Resolved after the walk, because survival is a property of the whole set:
@@ -252,6 +226,9 @@ type survivorEdge struct {
 	typeName string
 	name     string
 	edge     danglingEdge
+	// required marks a NON-NULL edge: the survivor is left holding a required
+	// link to nothing.
+	required bool
 }
 
 // resolveSurvivors keeps only the edges held by nodes that OUTLIVE the delete.
@@ -262,15 +239,38 @@ type survivorEdge struct {
 // of one upsert, which the version guard then reads as a concurrent edit and
 // refuses the whole delete.
 func (w *cascadeWalk) resolveSurvivors() {
+	// A survivor can hold several edges into the deleted set. Every edge is
+	// cleared, but the node is NAMED once — under orphaned if any of its edges
+	// is required, since that is the consequence the operator has to see.
+	type named struct {
+		typeName, name string
+		required       bool
+	}
+	byUID := map[string]*named{}
+	var order []string
 	for _, c := range w.candidates {
 		if w.seenUID[c.uid] {
 			continue
 		}
 		w.dangling = append(w.dangling, c.edge)
-		if w.preserved == nil {
-			w.preserved = map[string][]string{}
+		n, ok := byUID[c.uid]
+		if !ok {
+			n = &named{typeName: c.typeName, name: c.name}
+			byUID[c.uid] = n
+			order = append(order, c.uid)
 		}
-		w.preserved[c.typeName] = append(w.preserved[c.typeName], c.name)
+		n.required = n.required || c.required
+	}
+	for _, uid := range order {
+		n := byUID[uid]
+		into := &w.preserved
+		if n.required {
+			into = &w.orphaned
+		}
+		if *into == nil {
+			*into = map[string][]string{}
+		}
+		(*into)[n.typeName] = append((*into)[n.typeName], n.name)
 	}
 }
 
@@ -283,25 +283,40 @@ func displayName(node map[string]any) string {
 	return id
 }
 
-func (w *cascadeWalk) walk(typeName string, node map[string]any, isRoot bool) {
+// walk visits one node. `dying` is false for an intermediate hop: a node a
+// declared path passes through without declaring, which survives the delete.
+func (w *cascadeWalk) walk(typeName string, node map[string]any, n *configitems.PathNode, dying, isRoot bool) {
 	uid, _ := node["id"].(string)
-	if uid == "" || w.seenUID[uid] {
+	if uid == "" {
 		return
 	}
-	w.seenUID[uid] = true
-	w.uids = append(w.uids, uid)
-	if !isRoot {
-		w.record(&w.byType, typeName, node)
+	if dying {
+		if w.seenUID[uid] {
+			return
+		}
+		w.seenUID[uid] = true
+		w.uids = append(w.uids, uid)
+		if !isRoot {
+			w.record(&w.byType, typeName, node)
+		}
 	}
 
-	owned := containedFields(w.views, typeName)
 	for _, f := range w.fieldsOf(typeName) {
 		if f.Kind == "SCALAR" || f.Kind == "ENUM" || f.TypeName == "" {
 			continue
 		}
+		c := hop(n, f.Name)
 		for _, child := range childNodes(node[f.Name]) {
-			if owned[f.Name] {
-				w.walk(childTypeOf(f.TypeName, child), child, false)
+			childType := childTypeOf(f.TypeName, child)
+			if c != nil {
+				w.walk(childType, child, c, c.Member != nil, false)
+				if c.Member != nil {
+					continue
+				}
+				// An intermediate below a dying node survives it, so its edge
+				// back is a survivor's edge like any other.
+			}
+			if !dying {
 				continue
 			}
 			// A survivor. It is named in the preview so an operator can see what
@@ -315,20 +330,33 @@ func (w *cascadeWalk) walk(typeName string, node map[string]any, isRoot bool) {
 			}
 			// Recorded as a CANDIDATE. Whether this node survives is not known
 			// yet: an edge can be walked before the node at its far end is
-			// reached by another branch, and a cluster's node points back at the
-			// cluster that is deleting it. Resolved once the whole set is known.
+			// reached by another branch. Resolved once the whole set is known.
 			w.candidates = append(w.candidates, survivorEdge{
 				uid:      far,
-				typeName: childTypeOf(f.TypeName, child),
+				typeName: childType,
 				name:     displayName(child),
+				required: w.nonNull(childType, back),
 				edge: danglingEdge{
 					ParentUID: far,
-					Predicate: w.predicateFor(childTypeOf(f.TypeName, child), back),
+					Predicate: w.predicateFor(childType, back),
 					ChildUID:  uid,
 				},
 			})
 		}
 	}
+}
+
+// nonNull reports whether a type's field is declared non-null, on the type or
+// on an interface it implements.
+func (w *cascadeWalk) nonNull(typeName, field string) bool {
+	for _, t := range append([]string{typeName}, w.views.Implements(typeName)...) {
+		for _, f := range w.fieldsOf(t) {
+			if f.Name == field {
+				return f.NonNull
+			}
+		}
+	}
+	return false
 }
 
 // inverseWithInterfaces finds the edge pointing back, trying the concrete type
@@ -408,6 +436,10 @@ func (w *cascadeWalk) groups() []DeleteGroup { return countedGroups(w.byType) }
 // let an operator check that the right ones stayed.
 func (w *cascadeWalk) preservedGroups() []DeleteGroup { return namedGroups(w.preserved) }
 
+// orphanedGroups is what survives holding a NON-NULL edge into the deleted set
+// — named, for the same reason.
+func (w *cascadeWalk) orphanedGroups() []DeleteGroup { return namedGroups(w.orphaned) }
+
 func countedGroups(byType map[string][]string) []DeleteGroup {
 	return buildGroups(byType, func(label string, items []string) DeleteGroup {
 		return countGroup(label, len(items))
@@ -468,10 +500,9 @@ func (w *cascadeWalk) before(typeName string, root map[string]any, name, orbID s
 // childNodes normalises a relationship's value: DGraph returns an object for a
 // single edge and an array for a list, and a nil for neither.
 //
-// Shared by the delete cascade and the audit roll-up (ownedSubtreeOrbIDs), and
-// the roll-up is here BECAUSE it once had its own walk that handled only the
-// object form — so the cascade deleted a server's NICs while its audit tab
-// never showed their events.
+// Shared by the delete cascade and the subgraph walk (subgraphOrbIDs): an
+// earlier walk handled only the object form, so the cascade deleted a
+// server's NICs while its audit tab never showed their events.
 func childNodes(v any) []map[string]any {
 	switch t := v.(type) {
 	case map[string]any:

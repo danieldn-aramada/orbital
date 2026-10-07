@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/armada/orbital/ent"
+	"github.com/armada/orbital/internal/configitems"
 	"github.com/labstack/echo/v4"
 
 	"github.com/armada/orbital/web"
@@ -44,6 +45,10 @@ type DeletePreview struct {
 	TypeLabel string        `json:"typeLabel,omitempty"`
 	Groups    []DeleteGroup `json:"groups"`
 	Preserved []DeleteGroup `json:"preserved,omitempty"`
+	// Orphaned survive the delete holding a NON-NULL edge into it — the page's
+	// subgraph did not claim them. Named so an operator sees the consequence
+	// before confirming; the delete still proceeds.
+	Orphaned []DeleteGroup `json:"orphaned,omitempty"`
 }
 
 type DeleteHandler struct {
@@ -80,14 +85,15 @@ func parseDeletePreviewTmpl() *template.Template {
 	return template.Must(template.ParseFS(web.Dir(), "templates/orbital/partials/config-item-delete-preview.gohtml"))
 }
 
-// Preview returns an HTML fragment describing the impact of the delete without modifying anything.
+// Preview returns an HTML fragment describing the impact of the delete without
+// modifying anything. Served at GET /{slug}/{orbId}/delete-preview.
 func (h *DeleteHandler) Preview(c echo.Context) error {
-	id := c.QueryParam("id")
-	if id == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "id required")
-	}
 	ctx := c.Request().Context()
-	plan, err := h.planFor(ctx, c.QueryParam("type"), id)
+	typeName, id, err := h.target(c)
+	if err != nil {
+		return err
+	}
+	plan, err := h.planFor(ctx, typeName, id)
 	if err != nil {
 		return err
 	}
@@ -97,40 +103,44 @@ func (h *DeleteHandler) Preview(c echo.Context) error {
 	return renderHTML(c, tmpl, "", preview)
 }
 
-// Execute performs the cascade delete for the given config item.
-//
-// This REST endpoint exists specifically to back the UI's cascade-delete flow:
-// a DataCenter or Server delete must (a) gather a single before-state and
-// audit record, (b) remove the node together with its dependent children in
-// one transaction, and (c) pair with `GET /config-items/delete-preview` for
-// the impact summary. None of that fits a single auto-generated GraphQL
-// mutation cleanly.
-//
-// Single-entity, non-cascading mutations (CRUD on individual ConfigItems) go
-// through GraphQL at `/graphql`. This endpoint is not a general-purpose REST
-// CRUD surface — see CLAUDE.md § Settled Decisions, REST API convention.
-//
-// @Summary     Cascade-delete a config item (UI flow)
-// @Description Deletes a DataCenter or Server together with its dependent
-// @Description children. Bound to the UI delete modal's confirm action.
-// @Description Single-entity (non-cascading) deletes go through GraphQL.
-// @Tags        config-items
-// @Produce     json
-// @Param       type path string true "Config item type" Enums(DataCenter, Server)
-// @Param       id   path string true "DGraph node id"
-// @Success     200 {object} map[string]int "{ \"deleted\": N }"
-// @Failure     400 {object} errorResponse
-// @Failure     500 {object} errorResponse
-// @Router      /api/v1/config-items/{type}/{id} [delete]
-func (h *DeleteHandler) Execute(c echo.Context) error {
-	// Path-param decoding is handled by middleware.DecodePathParams.
-	id := c.Param("id")
-	if id == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "id required")
+// target resolves the page a delete was issued from: the slug names the page,
+// and the page's subgraph is what the cascade removes.
+func (h *DeleteHandler) target(c echo.Context) (typeName, orbID string, err error) {
+	orbID = c.Param("orbId")
+	if orbID == "" {
+		return "", "", echo.NewHTTPError(http.StatusBadRequest, "orbId required")
 	}
+	if h.views == nil {
+		return "", "", echo.NewHTTPError(http.StatusServiceUnavailable,
+			"orbital cannot read its view configuration, so it does not know what a delete would remove")
+	}
+	views, verr := h.views(c.Request().Context())
+	if verr != nil {
+		h.logger.Warn("delete: cannot resolve views", "slug", c.Param("slug"), "err", verr)
+		return "", "", echo.NewHTTPError(http.StatusServiceUnavailable,
+			"orbital cannot read the schema right now, so it does not know what a delete would remove")
+	}
+	v, ok := configitems.ViewSet(views).BySlug(c.Param("slug"))
+	if !ok {
+		return "", "", echo.NewHTTPError(http.StatusNotFound, "no page "+c.Param("slug"))
+	}
+	return v.Type, orbID, nil
+}
+
+// Execute performs the cascade delete: the root plus its page's declared
+// subgraph, in one version-guarded transaction, with one audit event.
+//
+// Served at DELETE /{slug}/{orbId} — a verb on the page's own URL, because it
+// is the page acting on its own config. It is orbital's UI's route, not an API:
+// it is not under /api/v1 and not in swagger. An API client deletes through
+// /graphql and composes its own set.
+func (h *DeleteHandler) Execute(c echo.Context) error {
 	ctx := c.Request().Context()
+	typeName, id, err := h.target(c)
+	if err != nil {
+		return err
+	}
 	actor := actorFromContext(c)
-	typeName := c.Param("type")
 	caller := resolveCallerRole(c, h.db)
 
 	// Before planning: a caller holding a stale view should be told to reload,
@@ -154,8 +164,9 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 		h.logger.Error("cascade delete failed", "type", typeName, "orbId", plan.orbID, "err", err)
 		return fmt.Errorf("delete %s: %w", typeName, err)
 	}
-	// One audit event per delete, naming the type the caller actually asked for.
-	// It used to be three near-identical blocks differing only in a literal.
+	// One audit event per delete, naming the CONCRETE type deleted — the page
+	// may be an interface's (/clusters), and the record is of what was removed.
+	typeName = plan.preview.Type
 	op := "delete" + typeName
 	writeAuditEvent(h.db, h.logger, "data", actor, op,
 		[]string{op}, []string{typeName}, []string{plan.orbID},
@@ -224,7 +235,7 @@ func (h *DeleteHandler) gqlQuery(ctx context.Context, query string, variables ma
 // planning time. It is the BASELINE for the compare-and-swap below.
 //
 // Read separately rather than threaded through the three plan queries: those
-// select four levels of owned children (server → controller → device → volume)
+// select several levels of subgraph members (server → controller → device)
 // and adding `version` to each selection and its struct would touch far more
 // code for the same value. One DQL read of the already-collected uid set gives
 // the same snapshot at the same instant.

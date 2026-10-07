@@ -1,4 +1,4 @@
-import { openAllDetailPanels, openEditor, editorState, setEditorState, saveEditor, listRows } from './helpers/generic';
+import { openAllDetailPanels, openAuditPanel, openEditor, editorState, setEditorState, saveEditor, listRows } from './helpers/generic';
 import { test, expect } from '@playwright/test';
 
 // Editing through the GENERIC detail page.
@@ -104,7 +104,7 @@ test('every reachable edit target on a generic page carries an OCC version', asy
   const unguarded = targets.filter((t: any) => t.reachable && !t.version);
   expect(unguarded, `reachable targets with no OCC version: ${JSON.stringify(unguarded)}`).toEqual([]);
 
-  // And at least one owned child IS reachable, or this passes for the wrong
+  // And at least one subgraph member IS reachable, or this passes for the wrong
   // reason — an all-inert tree satisfies the check while testing nothing.
   expect(targets.some((t: any) => t.reachable && t.path.length > 0)).toBe(true);
 });
@@ -156,9 +156,10 @@ test('an edit through the generic page produces an audit row with a diff', async
     .toContain('rackPosition');
 
   // And the operator must be able to SEE it without leaving the page. The panel
-  // is a separate wiring path from the API — template, data-related-orb-ids and
+  // is a separate wiring path from the API — template, data-subgraph-orb-ids and
   // the shared.js fetch — so a green API assertion says nothing about it.
   await page.reload();
+  await openAuditPanel(page);
   const audit = page.getByTestId('generic-audit');
   await expect(audit).toContainText('updateNetworkDevice', { timeout: 10_000 });
   await expect(audit).toContainText('rackPosition');

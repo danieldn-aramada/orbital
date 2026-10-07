@@ -27,7 +27,7 @@ test('the page hands the editor an OCC version for every entity it can edit', as
   await openEditor(page)
   const parsed = await editorTargets(page, domId)
 
-  // The root and its owned children exist, so each must carry a version. A
+  // The root and its subgraph members exist, so each must carry a version. A
   // target whose entity does not exist yet legitimately has none — a create has
   // nothing to assert — so this asserts only the ones that do.
   const byKind = Object.fromEntries(parsed.map((t: any) => [t.kind, t]))

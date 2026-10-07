@@ -2,7 +2,7 @@
 // ConfigItem page (Server / DataCenter / KubernetesCluster). Mirrors the
 // Go-side `internal/configitems` registry: the page handler hands this module
 // a `targets` array describing every editable entity in the JSON editor tree
-// (the parent itself + each owned child), and this module:
+// (the parent itself + each subgraph member), and this module:
 //
 //   1. Snapshots each target's subtree at modal open.
 //   2. On submit, diffs each target against its snapshot.
@@ -38,7 +38,7 @@
 //     // GraphQL response selection field name on Add{Kind}Payload — used so
 //     // the audit extractor finds the orbId in the response body.
 //     payloadField: string,
-//     // Optional: only present for owned children. The @hasInverse field on
+//     // Optional: only present for subgraph members. The @hasInverse field on
 //     // THIS type that points back to the parent (e.g. EtcdBackup.clusterBackupEtcd).
 //     parentInverseField?: string,
 //     // Optional: parent entity's orbId — used when linking a new child to
@@ -52,7 +52,7 @@
 // The page handler builds this list from the Go-side registry — see
 // internal/handler/cluster.go for the reference implementation.
 
-import { BASE, safeDomId, subtreeOrbIds, apiErrorFromBody, apiErrorText, gqlErrorMessage } from './shared.js'
+import { BASE, safeDomId, subgraphOrbIds, apiErrorFromBody, apiErrorText, gqlErrorMessage } from './shared.js'
 
 // getByPath walks `obj` following `path` (an array of keys) and returns the
 // value at that location, or undefined if any intermediate key is missing.
@@ -185,7 +185,7 @@ function removePayload(t, before, sub) {
 // with — which is the same bug pointing the other way, and is why an earlier
 // attempt at this was reverted.
 //
-// Structure is skipped, not reported: nested objects and arrays are owned-child
+// Structure is skipped, not reported: nested objects and arrays are subgraph-member
 // subtrees and edges, which the caller handles separately. Stamped fields are
 // orbital's to write and never the user's.
 function unknownKeys(t, sub) {
@@ -454,7 +454,7 @@ export function buildChangeset({
 }
 
 // activeChangeRequestsFor answers "what is in flight for this item?" for a whole
-// ConfigItem subtree — the entity plus everything it owns.
+// ConfigItem subtree — the entity plus its declared subgraph.
 //
 // `active` is open PLUS approved-not-yet-merged: `status=open` would miss the
 // approved ones, because approved is derived rather than stored.
@@ -695,15 +695,15 @@ function applyGateState({ modal, submitBtnId, reloadOrbId, rootKind, targets, na
     })
     .catch(() => {})
 
-  // Ask about the whole item, not just its root node. An edit to an owned child
+  // Ask about the whole item, not just its root node. An edit to a subgraph member
   // is recorded against the CHILD's orbId — a maintenance edit lands as
   // `<ns>:server-maintenance-<serial>` — so the root orbId alone reports
   // "nothing in flight" while a proposal for this very modal sits open.
   //
-  // Two sources, unioned: what the page rendered (data-related-orb-ids, the
+  // Two sources, unioned: what the page rendered (data-subgraph-orb-ids, the
   // children that EXIST) and what this modal can edit (targets, which include a
   // child that does not exist yet and whose orbId a proposal would create).
-  const scope = new Set(subtreeOrbIds(reloadOrbId))
+  const scope = new Set(subgraphOrbIds(reloadOrbId))
   for (const t of targets || []) if (t.orbId) scope.add(t.orbId)
 
   activeChangeRequestsFor([...scope])
@@ -757,7 +757,7 @@ function fallbackTitle(rootOrbId) {
 //
 // Reloading the fragment instead is what surfaces the answer: the entity's
 // pending-change banner appears ("1 change in review for this item or something
-// it owns — …"), naming the request and linking to it. The confirmation and the
+// in its subgraph — …"), naming the request and linking to it. The confirmation and the
 // way through are the same element, and the user chooses when to leave.
 async function proposeChange({
   namespace, rootTarget, rootOrbId, rootScalars, rootBefore, rootRemove,

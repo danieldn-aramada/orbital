@@ -120,13 +120,10 @@ test('Cluster delete cascades nodes but preserves servers', async ({ page }) => 
     // Confirm. Wait for the DELETE response explicitly — modal close transition
     // races with the verify-query otherwise.
     await expect(page.locator('#cfg-delete-confirm-btn')).toBeEnabled()
-    // The URL carries the CONCRETE type (EksaKubernetesCluster) now, because
-    // that is what the page resolved the item to be. The endpoint normalises it
-    // onto the cluster cascade plan, so both spellings work — asserting one
-    // exact name here would make the test a statement about naming rather than
-    // about deletion.
+    // DELETE /clusters/<orbId> — a verb on the page's own URL, which is what
+    // makes the cluster page's subgraph the thing that dies.
     const deleteDone = page.waitForResponse(r =>
-      /\/api\/v1\/config-items\/\w*KubernetesCluster\//.test(r.url()) && r.request().method() === 'DELETE',
+      /\/clusters\/[^/]+$/.test(new URL(r.url()).pathname) && r.request().method() === 'DELETE',
     )
     await page.locator('#cfg-delete-confirm-btn').click()
     const resp = await deleteDone

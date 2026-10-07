@@ -44,7 +44,7 @@ test.afterEach(async ({ page }) => {
 })
 
 // Maintenance is a BOX on the server page now, not a tab behind a click — the
-// generic renderer stacks owned children rather than tabbing them. Opening the
+// generic renderer stacks subgraph members rather than tabbing them. Opening the
 // page is all that is needed, which also means a mark is visible without
 // hunting for the panel holding it.
 async function openMaintenanceTab(page: Page) {
@@ -126,7 +126,7 @@ test('with nothing proposed, no field is marked', async ({ page }) => {
   }
 })
 
-// The server's OWN fields, not just its owned children.
+// The server's OWN fields, not just its subgraph members.
 //
 // Marks shipped wired to the maintenance panel alone, so a proposal against
 // `Server.manufacturer` raised the banner and then annotated nothing — the
@@ -163,7 +163,7 @@ test('a proposal on a server field is marked on the Server Summary table', async
 
 // A proposal on a child shows on the PARENT's relationship table.
 //
-// Field rows, the metadata box and owned-child boxes all carried marks; a child
+// Field rows, the metadata box and subgraph-member boxes all carried marks; a child
 // rendered as a TABLE did not — so a pending change to a rack was invisible on
 // the data centre page listing it. Each ROW is a different entity there, so the
 // mark attributes sit on the row rather than the table, and loadFieldMarks

@@ -12,12 +12,12 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 
 - **A DQL delete does NOT maintain `@hasInverse` — clear the surviving parent's edge yourself.** *(Added 2026-09-23.)* `@hasInverse` is a GraphQL-layer construct: DGraph keeps the two forward predicates in step only for mutations through its **GraphQL** endpoint. Orbital's cascade delete (`bulkDeleteGuarded`) is a **DQL** upsert — deliberately, because that is the only way to get a version-guarded CAS — so an `S * *` delete clears the child and leaves the parent's list edge pointing at an empty uid.
   ⚠️ **The consequence is not cosmetic.** Any later GraphQL query that walks that edge and selects a non-nullable field fails **entirely**, because DGraph propagates the error to the root: *"Non-nullable field 'orbId' (type String!) was not present in result from Dgraph."* The export subgraph query is exactly that shape, so **one cluster delete permanently broke export for its whole data centre** — while the delete returned `200` with a correct audit event, and the damage surfaced later, in a different subsystem, in an error naming neither the delete nor the node. Eight such corpses accumulated on `colo-galleon`, one per e2e run, unnoticed until someone tried to export.
-  **Rule:** any DQL write that removes a node must also remove the edges held by nodes that **SURVIVE** it, in the same transaction. Only survivors matter — when both ends are deleted the stale edge sits on a tombstone and is unreachable, which is what keeps this to a handful of cases rather than all 28 `@hasInverse` pairs. Today: `DataCenter.kubernetesClusters` (cluster delete); `DataCenter.servers`, `Rack.servers`, `KubernetesNode.server` (server delete); none for a data centre, which is the top of its own subtree. `TestDelete_LeavesNoDanglingParentEdge` reproduces the failure and is verified to fail without the fix. The same obligation applies to **any** new DQL write path, not just deletes.
+  **Rule:** any DQL write that removes a node must also remove the edges held by nodes that **SURVIVE** it, in the same transaction. Only survivors matter — when both ends are deleted the stale edge sits on a tombstone and is unreachable, which is what keeps this to a handful of cases rather than all 28 `@hasInverse` pairs. Today: `DataCenter.kubernetesClusters` (cluster delete); `DataCenter.servers`, `Rack.servers`, `KubernetesNode.server` (server delete); none for a data centre, which is the top of its own subgraph. `TestDelete_LeavesNoDanglingParentEdge` reproduces the failure and is verified to fail without the fix. The same obligation applies to **any** new DQL write path, not just deletes.
 
 ## Schema rules
 
 - **A DQL predicate is namespaced by the type that DECLARES the field, not by the row's concrete type.** *(Added 2026-10-04.)* `nodes` is declared on the `KubernetesCluster` INTERFACE, so the predicate is `KubernetesCluster.nodes` and **`EksaKubernetesCluster.nodes` does not exist**. Writing the wrong name removes nothing and reports nothing — the delete succeeds and the survivor is still pointing at a tombstone. Verified against the live DQL schema: of the `*.servers`/`*.nodes`/`*.kubernetesClusters` predicates, only `KubernetesCluster.nodes` is interface-namespaced, which is exactly why three hand-written edge lists got away with using the concrete type for years. Resolve it by walking the interfaces the type implements and using the first whose own field list carries the name.
-- **A NON-NULL back-edge is a ownership declaration, and the build enforces it.** *(Added 2026-10-04.)* `Child.parent: Parent!` says the child has no existence without that parent, so `Parent`'s view MUST carry it as an editable member — otherwise deleting the parent leaves it on a tombstone, and DGraph propagates the missing non-null field to the ROOT of any query selecting it. `TestViews_NonNullBackEdgeMustBeAnEditableMember` fails the build rather than leaving that to review. **Relaxing an edge to nullable is how you opt a child OUT of a parent's unit** — that is why `ServerConfigurationProfile.server` became nullable in v13.
+- **`!` means non-null, never ownership.** *(2026-10-07.)* What a page deletes is its `subgraph:` (UI.md). Every non-null relationship needs an `@hasInverse` partner so the delete preview can spot orphans (`TestEveryNonNullEdge_HasAnInverse`).
 - Schema changes must be **backwards compatible** — orbs may lag orbital by versions. Safe: new types, new nullable fields. Breaking: removing/renaming types or fields, adding non-null fields to existing types.
 - `id: ID` must be declared on the `ConfigItem` interface — DGraph does not auto-expose internal UIDs via GraphQL without it. Without it, `getDataCenter(id: $id)` queries fail. Always keep it.
 - **`@id` on `orbId` is the API-immutability mechanism — load-bearing for external consumers.** DGraph's schema generator excludes `@id` fields from the auto-generated `XPatch` input type, so `updateServer(filter:{...}, set:{orbId:"..."})` is rejected at schema-validation time. ConfigBundle (cb-controller) uses this property as the basis for SSA list-map identity across the cloud → edge boundary — see `~/armada/configbundle/docs/plans/server-identity-orbid.md`. Do NOT remove `@id` from `orbId` and do NOT add custom mutations that bypass DGraph's auto-generated Patch by allowing `orbId` to be set on existing nodes. orbId format (`<namespace>:<entity>`) is also part of this contract — changing the separator or format forces a coordinated migration in every downstream CR.
@@ -136,62 +136,11 @@ for k,v in list(dups.items())[:10]: print('  COLLISION', k, v)
 
 A clean graph reports equal node and orbId counts and zero collisions. **A collision found here cannot be fixed by the constraint** — it is already stored, and it breaks reads today: `getConfigItem` on a duplicated orbId returns *"A list was returned, but GraphQL was expecting just one item"*, and `internal/graphdiff` keys its `Snapshot` by orbId (`graphdiff.go:203`), so one of the two nodes silently disappears from every diff, export preview and change-request base capture.
 
-## ConfigItem ownership — declared in the views config
+## A page's subgraph — declared in the views config
 
-**Ownership is a VIEW decision, and it is declared in `config/views.yaml` as a
-member with `editable: true`.** Not in Go, not in a schema annotation, not in
-Postgres. The full model is in [UI.md](./UI.md) § Settled Decisions; this section
-is the graph-side half.
-
-**Two layers, two homes — unchanged:**
-- **Ownership *instances*** ("this maintenance belongs to *that* server") live
-  in the CMDB — they ARE the child→owner **edge** in DGraph
-  (`ServerMaintenance.server`), read live wherever needed.
-- **Ownership *type-policy*** ("which edge types are a page's edit unit") is
-  VIEW configuration: it decides what the editor groups into one tree, what the
-  audit tab rolls up, and — via `baseScope` — what a reviewer is deemed to have
-  looked at. **None of it reaches the data.**
-
-**What it drives today:** the JSON editor's subtree paths, the audit roll-up
-(`collectRelatedOrbIDs` → `ViewSet.EditableOrbIDSelection`), the change-request
-base scope, and inline-vs-link rendering. It drives **neither the export diff
-preview** (removed 2026-08-24) **nor the delete cascade** — see below.
-
-**Inline-vs-link is DERIVED, never declared.** `ViewSet.ExclusivelyOwned` counts
-how many pages claim a type as an editable member: one page renders it inline,
-several means it is a record in its own right and gets a link. A ClusterBackup is
-only ever a cluster's; an IPAddress is claimed by a server, a node and two cluster
-fields, so inlining it anywhere would assert an ownership no single page has. An
-interface and its implementations count ONCE — both the `KubernetesCluster` view
-and the `EksaKubernetesCluster` view declare `backup`, because the interface backs
-the list page and the concrete type backs the detail page.
-
-**Canonical parent stays ordered and explicit.** `canonicalParent` in the views
-config answers the INVERSE question to a view — a view is indexed by root ("what
-does the Server page show?"), this is indexed by child ("this IPAddress turned up
-in a diff, whose page is its home?"). The candidate list falls out of membership;
-**the ORDER does not**, and order is the only hard part. `StorageVolume` is the
-case that forbids deriving it: its canonical parent is its `StorageController`,
-which is **not** the path it is reached by (`StorageDevice.storageVolumes`).
-⚠️ Precedence is an ordered list, never a map — Go map iteration is randomised, so
-a map yields a non-deterministic presentation parent.
-
-**The delete cascade is DERIVED from the same membership** *(2026-10-04)*. One
-sentence governs it: an editable member is part of this page's unit — edited with
-it, audited with it, and deleted with it. There is no second declaration, because
-there was never a second question. It replaced three hand-written traversals
-(`dcDeleteGQL`, `srvDeleteGQL`, `clusterDeleteGQL`) and a three-way switch that
-consulted no model at all and had drifted into four silent defects — see UI.md.
-
-⚠️ **What is DELETED comes from the view; what is CLEARED comes from the SCHEMA.**
-The cascade query walks every relationship with a declared `@hasInverse`, not
-just the members, because a node pointing at something being deleted is left on a
-tombstone whether or not any page chose to show that edge.
-`ServerConfigurationProfile` is the worked example: no view lists it, and a
-server delete still has to clear its back-edge. Only true SURVIVORS are cleared —
-when both ends die the stale edge is unreachable, and clearing it anyway puts one
-node in both halves of the upsert, which the version guard reads as a concurrent
-edit and refuses the whole delete.
+- What a page claims is view config (`config/views.yaml`); the edges themselves live in DGraph. Export never reads views.
+- A page delete removes its declared paths and clears every survivor's `@hasInverse` edge in the same transaction. Survivors with a broken non-null edge are flagged as orphaned.
+- A `/graphql` delete removes only what it names — standard GraphQL, by design. The client owns what it deletes and what it orphans: `deleteServer` leaves its `IdracSettings` with no `server`, and reads selecting that field error. `!` constrains the node that HAS the field, not deletes of the node it points at.
 
 **The structural boundary is unchanged and is not policy-driven:** export is
 everything reachable from the Namespace node (DQL `expand(_all_)`), one DataCenter
@@ -259,7 +208,7 @@ A nested object in `set` **links by `@id`**; the field values it carries are dro
 
 **Update an existing child with its own `update{Kind}(orbId, set)` mutation.** This is why `configitem-editor.js` dispatches one mutation per affected concrete type rather than one nested mutation — it is a constraint, not a style choice.
 
-**The one nesting that DOES work is a CREATE.** `addServer(input: [{…, idracSettings: {…}}])` creates parent and child together, in one mutation, atomically. So nesting is correct for a new subtree and wrong for editing an existing one.
+**The one nesting that DOES work is a CREATE.** `addServer(input: [{…, idracSettings: {…}}])` creates parent and child together, in one mutation, atomically. So nesting is correct for a new subgraph and wrong for editing an existing one.
 
 ### One mutation is one transaction — so N mutations are N transactions, never one
 

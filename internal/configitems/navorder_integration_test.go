@@ -23,7 +23,7 @@ func TestNavOrder_IsPageMembership(t *testing.T) {
 		t.Fatal(err)
 	}
 	validated, _ := cfg.Validate(types, "")
-	views, err := ResolveViewsFromConfig(types, iface, validated)
+	views, err := ResolveViewsFromConfig(types, iface, validated, nil)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}

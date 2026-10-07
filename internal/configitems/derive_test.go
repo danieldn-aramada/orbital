@@ -82,7 +82,7 @@ func sampleViews(t *testing.T) string {
 	if err := os.WriteFile(p, []byte(`
 pages:
   Server:
-    tabs:
+    subgraph:
       - { path: idracSettings, editable: true }
 types:
   DataCenter:
@@ -130,7 +130,7 @@ func TestBeforeSelection_GeneratedFromTheSameDerivedSet(t *testing.T) {
 	}
 }
 
-// A before-fetch that reaches into an owned child buys nothing: `changes` is
+// A before-fetch that reaches into a subgraph member buys nothing: `changes` is
 // keys(before) ∩ keys(set), and no single mutation writes both a type's scalars
 // and its child's. Re-adding the sub-selection puts fields in the stored
 // snapshot that no diff can ever reach.

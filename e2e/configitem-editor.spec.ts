@@ -9,7 +9,7 @@
 // drifts, this fails.
 
 import { test, expect, Page } from '@playwright/test'
-import { openEditor as openGenericEditor, openAllDetailPanels } from './helpers/generic';
+import { openEditor as openGenericEditor, openAllDetailPanels, openAuditPanel } from './helpers/generic';
 
 const SERVER_ORB_ID  = '2f-uae:server-5HSC3D4'  // seeded R750 with iDRAC in 2f-uae namespace
 const DC_ORB_ID      = 'seattle:seattle-galleon'
@@ -37,7 +37,7 @@ test.describe('configitem-editor module — browser validation', () => {
   // The two cluster cases moved to e2e/clusters-generic.spec.ts on 2026-09-25,
   // when /clusters became the interface-backed generic page. They assert the
   // same two guarantees — a per-kind audit row with a rendered diff, and an
-  // owned-child edit attributed to the CHILD rather than blobbed into its
+  // subgraph-member edit attributed to the CHILD rather than blobbed into its
   // parent — against the generic editor and its audit box.
 
   test('server edit: model change → updateServer audit row with diff', async ({ page }) => {
@@ -60,9 +60,8 @@ test.describe('configitem-editor module — browser validation', () => {
     await expect(page.locator('text=' + newModel).first()).toBeVisible({ timeout: 10_000 })
 
     // Audit log tab on the server page.
-    // A box now, not a tab: the generic renderer stacks panels rather than
-    // tabbing them, so there is nothing to click and it loads with the page.
     await page.reload()
+    await openAuditPanel(page)
     const auditPanel = page.getByTestId('generic-audit')
     await expect(auditPanel).toContainText('updateServer', { timeout: 10_000 })
     await expect(auditPanel.locator('strong:has-text("model")').first()).toBeVisible()
@@ -89,9 +88,8 @@ test.describe('configitem-editor module — browser validation', () => {
 
     // Wait for fragment reload, then go to audit tab.
     await page.waitForTimeout(500)
-    // A box now, not a tab: the generic renderer stacks panels rather than
-    // tabbing them, so there is nothing to click and it loads with the page.
     await page.reload()
+    await openAuditPanel(page)
     const auditPanel = page.getByTestId('generic-audit')
 
     // The critical assertion: changing iDRAC alone produces updateIdracSettings,

@@ -23,11 +23,11 @@ pages:
   Server:
     menuWeight: 20
     summary:
-      refs: [rack]
-    tabs:
+      ignoreFields: [sku]
+    subgraph:
       - { path: idracSettings, editable: true }
   Rack:
-    tabs:
+    subgraph:
       - servers
 `
 
@@ -43,7 +43,7 @@ func TestLoadViews_PartialOverlayLeavesUnnamedViewsAtDefault(t *testing.T) {
 	overlay := writeYAML(t, "overlay.yaml", `
 pages:
   Server:
-    tabs:
+    subgraph:
       - dataCenter
 `)
 
@@ -57,23 +57,50 @@ pages:
 
 	// The named page is replaced wholesale — the point of declaring it.
 	server := cfg.Pages["Server"]
-	if len(server.Tabs) != 1 || server.Tabs[0].Path != "dataCenter" {
-		t.Errorf("Server tabs = %+v, want only dataCenter", server.Tabs)
+	if len(server.Subgraph) != 1 || server.Subgraph[0].Path != "dataCenter" {
+		t.Errorf("Server subgraph = %+v, want only dataCenter", server.Subgraph)
 	}
 	if server.MenuWeight != 0 {
 		t.Errorf("the overlay's Server declaration replaces the default's, menuWeight included; got %v", server.MenuWeight)
 	}
-	if len(server.Summary.Refs) != 0 {
-		t.Errorf("…and its summary refs too; got %v", server.Summary.Refs)
-	}
 
 	// The unnamed page is untouched, which is the half that keeps shipping.
 	rack := cfg.Pages["Rack"]
-	if len(rack.Tabs) != 1 || rack.Tabs[0].Path != "servers" {
-		t.Errorf("Rack must still come from the shipped default; got %+v", rack.Tabs)
+	if len(rack.Subgraph) != 1 || rack.Subgraph[0].Path != "servers" {
+		t.Errorf("Rack must still come from the shipped default; got %+v", rack.Subgraph)
 	}
 	if cfg.SchemaVersion != "v12" {
 		t.Errorf("an overlay that declares no schemaVersion keeps the default's; got %q", cfg.SchemaVersion)
+	}
+}
+
+// A views document still carrying the retired derived-ownership keys is SAID,
+// key by key. The YAML decoder drops an unknown key in silence, so without this
+// an overlay written against the old shape renders pages with no tabs and an
+// empty delete, and nothing anywhere says why.
+func TestLoadViews_RetiredKeysAreNamedNotSilentlyDropped(t *testing.T) {
+	base := writeYAML(t, "views.yaml", twoViewDefault)
+	overlay := writeYAML(t, "overlay.yaml", `
+ownerReferences:
+  NetworkInterface: [server]
+pages:
+  Server:
+    summary:
+      refs: [rack]
+    tabs:
+      - idracSettings
+`)
+	_, _, warnings, err := LoadViewConfig(base, overlay)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	for _, want := range []string{"`ownerReferences:` is retired", "Server: `tabs:` is retired", "Server: `summary.refs:` is retired"} {
+		if !anyContains(warnings, want) {
+			t.Errorf("warnings %v must name %q", warnings, want)
+		}
+	}
+	if _, _, clean, _ := LoadViewConfig(base, ""); len(clean) != 0 {
+		t.Errorf("a document in the current shape must warn about nothing; got %v", clean)
 	}
 }
 
@@ -156,7 +183,10 @@ func validationFixture() map[string]TypeInfo {
 		"Rack":              {Fields: []DerivedField{{Name: "servers", Kind: "OBJECT", TypeName: "Server", IsList: true}}},
 		"StorageController": {Fields: []DerivedField{{Name: "storageDevices", Kind: "OBJECT", TypeName: "StorageDevice", IsList: true}}},
 		"StorageDevice":     {Fields: []DerivedField{{Name: "wwn", Editable: true, Kind: "SCALAR"}}},
-		"IPAddress":         {Fields: []DerivedField{{Name: "address", Editable: true, Kind: "SCALAR"}}},
+		"IPAddress": {Fields: []DerivedField{
+			{Name: "address", Editable: true, Kind: "SCALAR"},
+			{Name: "assignedTo", Kind: "OBJECT", TypeName: "Server"},
+		}},
 	}
 }
 
@@ -178,7 +208,7 @@ func TestValidateViews_UnsupportableDeclarationsDroppedAndLogged(t *testing.T) {
 	}{
 		{
 			name: "tab names a field the deployed schema lacks",
-			cfg: ViewConfig{Pages: map[string]PageDecl{"Server": {Tabs: []MemberDecl{
+			cfg: ViewConfig{Pages: map[string]PageDecl{"Server": {Subgraph: []MemberDecl{
 				{Path: "rack"}, {Path: "tinkerbellIP"},
 			}}}},
 			wantWarn: "Server has no field tinkerbellIP",
@@ -188,7 +218,7 @@ func TestValidateViews_UnsupportableDeclarationsDroppedAndLogged(t *testing.T) {
 		},
 		{
 			name: "tab path names a scalar",
-			cfg: ViewConfig{Pages: map[string]PageDecl{"Server": {Tabs: []MemberDecl{
+			cfg: ViewConfig{Pages: map[string]PageDecl{"Server": {Subgraph: []MemberDecl{
 				{Path: "rack"}, {Path: "hostname"},
 			}}}},
 			wantWarn: "hostname is a scalar, not a relationship",
@@ -197,18 +227,8 @@ func TestValidateViews_UnsupportableDeclarationsDroppedAndLogged(t *testing.T) {
 			},
 		},
 		{
-			name: "tab path is deeper than two segments",
-			cfg: ViewConfig{Pages: map[string]PageDecl{"Server": {Tabs: []MemberDecl{
-				{Path: "rack"}, {Path: "storageControllers.storageDevices.wwn"},
-			}}}},
-			wantWarn: "at most two segments",
-			check: func(t *testing.T, got ViewConfig) {
-				assertMembers(t, got, "Server", "rack")
-			},
-		},
-		{
 			name: "member points at something that is not a ConfigItem",
-			cfg: ViewConfig{Pages: map[string]PageDecl{"Server": {Tabs: []MemberDecl{
+			cfg: ViewConfig{Pages: map[string]PageDecl{"Server": {Subgraph: []MemberDecl{
 				{Path: "rack"}, {Path: "auditTrail"},
 			}}}},
 			wantWarn: "NotAConfigItem is not a ConfigItem type",
@@ -219,8 +239,8 @@ func TestValidateViews_UnsupportableDeclarationsDroppedAndLogged(t *testing.T) {
 		{
 			name: "view root type is not in the schema",
 			cfg: ViewConfig{Pages: map[string]PageDecl{
-				"Server":     {Tabs: []MemberDecl{{Path: "rack"}}},
-				"Decomposed": {Tabs: []MemberDecl{{Path: "anything"}}},
+				"Server":     {Subgraph: []MemberDecl{{Path: "rack"}}},
+				"Decomposed": {Subgraph: []MemberDecl{{Path: "anything"}}},
 			}},
 			wantWarn: "Decomposed: no such type in the deployed schema",
 			check: func(t *testing.T, got ViewConfig) {
@@ -233,7 +253,7 @@ func TestValidateViews_UnsupportableDeclarationsDroppedAndLogged(t *testing.T) {
 		{
 			name: "canonicalParent edge does not exist",
 			cfg: ViewConfig{
-				Pages: map[string]PageDecl{"Server": {Tabs: []MemberDecl{{Path: "oobIP"}}}},
+				Pages: map[string]PageDecl{"Server": {Subgraph: []MemberDecl{{Path: "oobIP"}}}},
 				CanonicalParent: map[string][]CanonicalParentDecl{"IPAddress": {
 					{Type: "Server", Field: "serverOobIP", Down: "oobIP"},
 					{Type: "Server", Field: "address", Down: "oobIP"},
@@ -250,7 +270,7 @@ func TestValidateViews_UnsupportableDeclarationsDroppedAndLogged(t *testing.T) {
 		{
 			name: "canonicalParent down-edge does not exist",
 			cfg: ViewConfig{
-				Pages: map[string]PageDecl{"Server": {Tabs: []MemberDecl{{Path: "oobIP"}}}},
+				Pages: map[string]PageDecl{"Server": {Subgraph: []MemberDecl{{Path: "oobIP"}}}},
 				CanonicalParent: map[string][]CanonicalParentDecl{"StorageController": {
 					{Type: "Server", Field: "storageDevices", Down: "noSuchField"},
 				}},
@@ -271,13 +291,13 @@ func TestValidateViews_UnsupportableDeclarationsDroppedAndLogged(t *testing.T) {
 	}
 }
 
-// A tab path that walks a LIST mid-way is the headline case, not an error:
+// A subgraph path that walks a LIST mid-way is the headline case, not an error:
 // a server's disks hang off its storage controllers, and rendering them is why
 // paths exist. The limit that applies to a `columns:` path — every hop a single
 // relationship — guards a different hazard (one cell, not many rows) and the
 // two must not be harmonised.
 func TestValidateViews_ListHopInAMemberPathIsLegal(t *testing.T) {
-	cfg := ViewConfig{Pages: map[string]PageDecl{"Server": {Tabs: []MemberDecl{
+	cfg := ViewConfig{Pages: map[string]PageDecl{"Server": {Subgraph: []MemberDecl{
 		{Path: "storageControllers.storageDevices"},
 	}}}}
 	got, warn := cfg.Validate(validationFixture(), "")
@@ -287,36 +307,38 @@ func TestValidateViews_ListHopInAMemberPathIsLegal(t *testing.T) {
 	assertMembers(t, got, "Server", "storageControllers.storageDevices")
 }
 
-// `editable:` on a LIST tab is refused, SAID, and the tab still renders.
+// `editable:` the editor cannot honour — on a LIST, or more than two hops
+// deep — is refused, SAID, and the member still renders.
 //
 // The regression class is a silent drop: an editable list has never been
-// writable — a target is addressed by path and a path cannot name one row —
-// and quietly clearing the flag leaves a page that reads as configured for an
-// edit that will never arrive. "Nothing happened" is the one outcome nobody can
-// debug from the outside.
-func TestValidateViews_EditableOnAListTabIsRefusedAndSaid(t *testing.T) {
-	cfg := ViewConfig{Pages: map[string]PageDecl{"Server": {Tabs: []MemberDecl{
+// writable — a target is addressed by path and a path cannot name one row — and
+// the editor creates at most one missing intermediate. Quietly clearing the
+// flag leaves a page that reads as configured for an edit that will never
+// arrive. "Nothing happened" is the one outcome nobody can debug from outside.
+func TestValidateViews_EditableTheEditorCannotHonourIsRefusedAndSaid(t *testing.T) {
+	cfg := ViewConfig{Pages: map[string]PageDecl{"Server": {Subgraph: []MemberDecl{
 		{Path: "storageControllers", Editable: true},
 		{Path: "storageControllers.storageDevices", Editable: true},
+		{Path: "oobIP.assignedTo.rack", Editable: true},
 		{Path: "oobIP", Editable: true},
 	}}}}
 	got, warn := cfg.Validate(validationFixture(), "")
 
-	for _, want := range []string{"storageControllers", "storageControllers.storageDevices"} {
+	for _, want := range []string{"storageControllers is a LIST", "storageControllers.storageDevices is a LIST", "oobIP.assignedTo.rack is more than two hops"} {
 		if !anyContains(warn, want) {
-			t.Errorf("an editable LIST tab (%s) must be reported; got %v", want, warn)
+			t.Errorf("a refused editable flag (%s) must be reported; got %v", want, warn)
 		}
 	}
-	// The tabs SURVIVE — read-only, not dropped. Dropping them would take the
-	// page's storage tables with them, which is a far larger blast radius than
-	// the flag that was wrong.
-	assertMembers(t, got, "Server", "storageControllers", "storageControllers.storageDevices", "oobIP")
+	// The members SURVIVE — read-only, not dropped. Dropping them would take
+	// the page's storage tables with them, and out of the delete — a far larger
+	// blast radius than the flag that was wrong.
+	assertMembers(t, got, "Server", "storageControllers", "storageControllers.storageDevices", "oobIP.assignedTo.rack", "oobIP")
 
 	byPath := map[string]bool{}
-	for _, m := range got.Pages["Server"].Tabs {
+	for _, m := range got.Pages["Server"].Subgraph {
 		byPath[m.Path] = m.Editable
 	}
-	if byPath["storageControllers"] || byPath["storageControllers.storageDevices"] {
+	if byPath["storageControllers"] || byPath["storageControllers.storageDevices"] || byPath["oobIP.assignedTo.rack"] {
 		t.Error("a refused flag must be CLEARED, or the editor would still try to honour it")
 	}
 	// A single-cardinality tab keeps the flag — this is the flag working, and
@@ -333,7 +355,7 @@ func TestValidateViews_EditableOnAListTabIsRefusedAndSaid(t *testing.T) {
 func TestValidateViews_SchemaVersionMismatchIsReportedNotFatal(t *testing.T) {
 	cfg := ViewConfig{
 		SchemaVersion: "v11",
-		Pages:         map[string]PageDecl{"Server": {Tabs: []MemberDecl{{Path: "rack"}}}},
+		Pages:         map[string]PageDecl{"Server": {Subgraph: []MemberDecl{{Path: "rack"}}}},
 	}
 	got, warn := cfg.Validate(validationFixture(), "v12")
 	if !anyContains(warn, "v11") || !anyContains(warn, "v12") {
@@ -419,7 +441,7 @@ func TestCanonicalParent_FirstMatchingEdgeInDeclaredOrder(t *testing.T) {
 
 func assertMembers(t *testing.T, cfg ViewConfig, typeName string, want ...string) {
 	t.Helper()
-	got := cfg.TabsOf(typeName)
+	got := cfg.SubgraphOf(typeName)
 	if len(got) != len(want) {
 		t.Fatalf("%s members = %+v, want %v", typeName, got, want)
 	}
@@ -488,54 +510,67 @@ func TestTypeOf_InheritsAlongInterfacesAndTheTypeWins(t *testing.T) {
 	}
 }
 
-// Scalars are SUBTRACTIVE: everything renders unless something removes it.
+// Scalars and link rows are SUBTRACTIVE: everything renders unless something
+// removes it. The SUBGRAPH is the opposite — listed, never derived.
 //
-// This is the single most load-bearing asymmetry in the format, and inverting it
-// is a one-line change that nothing else would catch: with relationships the
-// rule is the opposite, so "make them consistent" is a plausible edit. Inverted,
-// the shipped file would need ~200 field names and every scalar added to the
-// schema would silently never appear.
-func TestResolveViews_ScalarsAreSubtractiveAndRelationshipsAreNot(t *testing.T) {
+// The regression this catches is the two crossing: a derived link row is
+// navigation, and if it ever entered the subgraph, deleting a server would
+// delete its rack. Inverting the scalar rule is the other plausible edit — the
+// shipped file would need ~200 field names and every scalar added to the schema
+// would silently never appear.
+func TestResolveViews_ScalarsAndLinkRowsAreSubtractiveAndNeverSubgraph(t *testing.T) {
 	types := map[string]TypeInfo{
 		"Server": {Fields: []DerivedField{
 			{Name: "hostname", Editable: true, Kind: "SCALAR"},
 			// Nobody declares this anywhere. That is the point.
 			{Name: "newlyAddedByTheSchema", Editable: true, Kind: "SCALAR"},
 			{Name: "sku", Editable: true, Kind: "SCALAR"},
-			// Likewise undeclared — and a relationship, so the opposite applies.
+			// Undeclared SINGLE relationships: a link row each, never subgraph.
 			{Name: "rack", Kind: "OBJECT", TypeName: "Rack"},
+			{Name: "dataCenter", Kind: "OBJECT", TypeName: "DataCenter"},
+			// Declared in the subgraph: a member, so not also a link row.
+			{Name: "idracSettings", Kind: "OBJECT", TypeName: "IdracSettings"},
+			// An undeclared LIST is neither: a list cannot be one row.
+			{Name: "networkAdapters", Kind: "OBJECT", TypeName: "NetworkAdapter", IsList: true},
 		}},
-		"Rack": {Fields: []DerivedField{{Name: "name", Editable: true, Kind: "SCALAR"}}},
+		"Rack":           {Fields: []DerivedField{{Name: "name", Editable: true, Kind: "SCALAR"}}},
+		"DataCenter":     {Fields: []DerivedField{{Name: "name", Editable: true, Kind: "SCALAR"}}},
+		"IdracSettings":  {Fields: []DerivedField{{Name: "sshEnabled", Editable: true, Kind: "SCALAR"}}},
+		"NetworkAdapter": {Fields: []DerivedField{{Name: "model", Editable: true, Kind: "SCALAR"}}},
 	}
 	cfg := ViewConfig{Pages: map[string]PageDecl{"Server": {
-		Summary: SummaryDecl{IgnoreFields: []string{"sku"}},
+		Summary:  SummaryDecl{IgnoreFields: []string{"sku", "dataCenter"}},
+		Subgraph: []MemberDecl{{Path: "idracSettings"}},
 	}}}
-	views, err := ResolveViewsFromConfig(types, nil, cfg)
+	views, err := ResolveViewsFromConfig(types, nil, cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var server View
-	for _, v := range views {
-		if v.Type == "Server" {
-			server = v
-		}
-	}
+	server := ViewSet(views).Of("Server")
 
 	display := strings.Join(server.Display, ",")
 	if !strings.Contains(display, "newlyAddedByTheSchema") {
 		t.Errorf("display = %q — an undeclared scalar must appear on its own", display)
 	}
-	if !strings.Contains(display, "hostname") {
-		t.Errorf("display = %q — the declared scalar is still there", display)
-	}
 	if strings.Contains(display, "sku") {
-		t.Error("ignoreFields is the ONLY way a scalar leaves the page, and it must work")
+		t.Error("ignoreFields must remove a scalar")
 	}
-	for _, tab := range server.Tabs {
-		t.Errorf("an undeclared relationship must render NOWHERE; got tab %q", tab.Field)
+
+	var refs []string
+	for _, r := range server.SummaryRefs {
+		refs = append(refs, r.Field)
 	}
-	for _, ref := range server.SummaryRefs {
-		t.Errorf("an undeclared relationship must not be a summary row either; got %q", ref.Field)
+	if strings.Join(refs, ",") != "rack" {
+		t.Errorf("link rows = %v, want [rack] — derived for an undeclared single, "+
+			"removed by ignoreFields, absent for a subgraph member and for a list", refs)
+	}
+	var members []string
+	for _, m := range server.Subgraph {
+		members = append(members, m.Field)
+	}
+	if strings.Join(members, ",") != "idracSettings" {
+		t.Errorf("subgraph = %v, want [idracSettings] — a derived link row must NEVER enter the "+
+			"subgraph, or deleting a server deletes its rack", members)
 	}
 }
 
@@ -555,11 +590,11 @@ func TestPages_PromotingATypeGivesItAURLAMenuEntryAndLinks(t *testing.T) {
 		"StorageDevice": {Fields: []DerivedField{{Name: "wwn", Editable: true, Kind: "SCALAR"}}},
 	}
 	base := ViewConfig{Pages: map[string]PageDecl{
-		"Server": {MenuWeight: 20, Tabs: []MemberDecl{{Path: "storageDevices"}}},
+		"Server": {MenuWeight: 20, Subgraph: []MemberDecl{{Path: "storageDevices"}}},
 	}}
 
 	before := resolveOne(t, types, base, "Server")
-	if before.Tabs[0].Slug != "" {
+	if before.Subgraph[0].Slug != "" {
 		t.Fatal("precondition: StorageDevice has no page, so its tab carries no slug")
 	}
 
@@ -567,8 +602,8 @@ func TestPages_PromotingATypeGivesItAURLAMenuEntryAndLinks(t *testing.T) {
 	base.Pages["StorageDevice"] = PageDecl{MenuWeight: 90}
 
 	after := resolveOne(t, types, base, "Server")
-	if after.Tabs[0].Slug != "storage-devices" {
-		t.Errorf("the tab's rows must link once the type has a page; slug = %q", after.Tabs[0].Slug)
+	if after.Subgraph[0].Slug != "storage-devices" {
+		t.Errorf("the tab's rows must link once the type has a page; slug = %q", after.Subgraph[0].Slug)
 	}
 	sd := resolveOne(t, types, base, "StorageDevice")
 	if sd.Slug != "storage-devices" {
@@ -578,14 +613,14 @@ func TestPages_PromotingATypeGivesItAURLAMenuEntryAndLinks(t *testing.T) {
 		t.Errorf("menu weight = %d, want 90 — a page IS a menu entry", sd.MenuWeight)
 	}
 	// Nothing else moved: the Server page is unchanged apart from the link.
-	if len(after.Tabs) != len(before.Tabs) || after.Tabs[0].Field != before.Tabs[0].Field {
+	if len(after.Subgraph) != len(before.Subgraph) || after.Subgraph[0].Field != before.Subgraph[0].Field {
 		t.Error("promoting a type must change nothing about the pages that list it, except the link")
 	}
 }
 
 func resolveOne(t *testing.T, types map[string]TypeInfo, cfg ViewConfig, typeName string) View {
 	t.Helper()
-	views, err := ResolveViewsFromConfig(types, nil, cfg)
+	views, err := ResolveViewsFromConfig(types, nil, cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

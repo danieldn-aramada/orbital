@@ -1,4 +1,4 @@
-import { openAllDetailPanels, listRows } from './helpers/generic';
+import { openAllDetailPanels, openAuditPanel, listRows } from './helpers/generic';
 import { test, expect } from '@playwright/test';
 
 // The Clusters page after the bespoke handler was deleted.
@@ -95,7 +95,7 @@ test('nodes and workload clusters render as tables with populated columns', asyn
   const nodes = page.getByTestId('generic-tab').filter({ hasText: 'Nodes' }).first();
   await expect(nodes).toBeVisible();
 
-  // The Server column is a reference on an OWNED child. Its selection comes
+  // The Server column is a reference on an SUBGRAPH member. Its selection comes
   // from a different code path than an unowned relationship's, and the two
   // disagreeing rendered a header row above a column of dashes.
   const headers = await nodes.locator('thead th').allInnerTexts();
@@ -110,7 +110,7 @@ test('a cluster detail page shows metadata and its audit log', async ({ page }) 
   const meta = page.getByTestId('generic-meta');
   await expect(meta).toContainText('Namespace');
   await expect(meta).toContainText('Version');
-  await expect(page.getByTestId('generic-audit')).toBeVisible();
+  await openAuditPanel(page);
 });
 
 test('a cluster can be edited through the generic editor, backup subtree included', async ({ page }) => {
@@ -209,13 +209,14 @@ test('a cluster edit produces an audit row for the cluster, with a rendered diff
   await expect(page.getByTestId('generic-fields')).toContainText(newVersion, { timeout: 15_000 });
 
   await page.reload();
+  await openAuditPanel(page);
   const audit = page.getByTestId('generic-audit');
   await expect(audit).toContainText('updateEksaKubernetesCluster', { timeout: 10_000 });
   // The diff renderer ran — the row names the FIELD, not just the operation.
   await expect(audit.locator('strong:has-text("kubernetesVersion")').first()).toBeVisible();
 });
 
-test('an owned-child edit is attributed to the child, not blobbed into the parent', async ({ page }) => {
+test('an subgraph-member edit is attributed to the child, not blobbed into the parent', async ({ page }) => {
   // The critical one. A backup schedule lives on EtcdBackup, and editing it
   // through the parent's JSON tree must still record updateEtcdBackup —
   // otherwise the audit log says "the cluster changed" and loses which of its
@@ -241,6 +242,7 @@ test('an owned-child edit is attributed to the child, not blobbed into the paren
     .toContainText(newSchedule, { timeout: 15_000 });
 
   await page.reload();
+  await openAuditPanel(page);
   const audit = page.getByTestId('generic-audit');
   await expect(audit).toContainText('updateEtcdBackup', { timeout: 10_000 });
   await expect(audit.locator('strong:has-text("schedule")').first()).toBeVisible();

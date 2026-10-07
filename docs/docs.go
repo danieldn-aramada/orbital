@@ -203,7 +203,7 @@ const docTemplate = `{
         },
         "/api/v1/audit-log": {
             "get": {
-                "description": "Read-only, immutable audit trail of intent mutations, newest first.\n\n**Scope a query** by combining filters: ` + "`" + `orbId` + "`" + ` (repeatable, **max 128** — over that the request is refused with ` + "`" + `400 BAD_USER_INPUT` + "`" + `, never silently truncated) for a specific resource; ` + "`" + `namespace` + "`" + ` for a whole data center; ` + "`" + `resource_type` + "`" + `/` + "`" + `operation_name` + "`" + ` to narrow. To see everything under a server/cluster, fetch its subtree orbIds from the GraphQL Topology API and pass them as repeatable ` + "`" + `orbId` + "`" + ` params (there is no single \"cluster\" scope — a child mutation records the child's orbId, not the parent's).\n\n**Render a diff:** when an event is a clean single-entity update it carries a ` + "`" + `changes` + "`" + ` array (` + "`" + `[{field, before, after}]` + "`" + `) with metadata and DGraph UIDs already excluded — render it directly. When ` + "`" + `changes` + "`" + ` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing ` + "`" + `operations` + "`" + ` + ` + "`" + `resourceIds` + "`" + `. The raw ` + "`" + `details` + "`" + ` (with ` + "`" + `before` + "`" + `/` + "`" + `variables` + "`" + `) is always included for callers that want it.\n\nReturns JSON by default; returns an HTML table fragment when the ` + "`" + `HX-Request` + "`" + ` header is present (used by orbital's own UI). See docs/api-cheatsheet.md § \"Audit log\".",
+                "description": "Read-only, immutable audit trail of intent mutations, newest first.\n\n**Scope a query** by combining filters: ` + "`" + `orbId` + "`" + ` (repeatable, **max 128** — over that the request is refused with ` + "`" + `400 BAD_USER_INPUT` + "`" + `, never silently truncated) for a specific resource; ` + "`" + `namespace` + "`" + ` for a whole data center; ` + "`" + `resource_type` + "`" + `/` + "`" + `operation_name` + "`" + ` to narrow. To see everything under a server/cluster, fetch its subgraph orbIds from the GraphQL Topology API and pass them as repeatable ` + "`" + `orbId` + "`" + ` params (there is no single \"cluster\" scope — a child mutation records the child's orbId, not the parent's).\n\n**Render a diff:** when an event is a clean single-entity update it carries a ` + "`" + `changes` + "`" + ` array (` + "`" + `[{field, before, after}]` + "`" + `) with metadata and DGraph UIDs already excluded — render it directly. When ` + "`" + `changes` + "`" + ` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing ` + "`" + `operations` + "`" + ` + ` + "`" + `resourceIds` + "`" + `. The raw ` + "`" + `details` + "`" + ` (with ` + "`" + `before` + "`" + `/` + "`" + `variables` + "`" + `) is always included for callers that want it.\n\nReturns JSON by default; returns an HTML table fragment when the ` + "`" + `HX-Request` + "`" + ` header is present (used by orbital's own UI). See docs/api-cheatsheet.md § \"Audit log\".",
                 "produces": [
                     "application/json"
                 ],
@@ -902,61 +902,6 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/handler.errorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/config-items/{type}/{id}": {
-            "delete": {
-                "description": "Deletes a DataCenter or Server together with its dependent\nchildren. Bound to the UI delete modal's confirm action.\nSingle-entity (non-cascading) deletes go through GraphQL.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "config-items"
-                ],
-                "summary": "Cascade-delete a config item (UI flow)",
-                "parameters": [
-                    {
-                        "enum": [
-                            "DataCenter",
-                            "Server"
-                        ],
-                        "type": "string",
-                        "description": "Config item type",
-                        "name": "type",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "DGraph node id",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "{ \\\"deleted\\\": N }",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "integer"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handler.errorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handler.errorResponse"
                         }
@@ -3320,9 +3265,6 @@ const docTemplate = `{
         },
         {
             "name": "backup"
-        },
-        {
-            "name": "config-items"
         },
         {
             "name": "divergence"

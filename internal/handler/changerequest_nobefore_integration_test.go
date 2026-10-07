@@ -24,9 +24,9 @@ import (
 // These three pin what must NOT have changed with it. Each names something that
 // would keep passing its own tests while quietly losing a guarantee.
 
-// ── 15. the subtree anchor survives ────────────────────────────────────────
+// ── 15. the subgraph anchor survives ────────────────────────────────────────
 
-// `base_hash` covers each declared orbId's OWNED SUBTREE, not just the entity.
+// `base_hash` covers each declared orbId's SUBGRAPH, not just the entity.
 // A reviewer approving a Server approved its IdracSettings too, so a third party
 // editing the child has to invalidate that review. Nothing about `version`
 // covers this — it is per declared item — so removing `before` must not have
@@ -53,7 +53,7 @@ func TestNoBefore_ThirdPartyChildEditStillStalesTheParent(t *testing.T) {
 
 	st := f.state(t, cr.ID)
 	if !st.SubtreeChanged {
-		t.Error("editing an owned child no longer flags the parent's request — a reviewer's approval now covers a subtree they did not see")
+		t.Error("editing a subgraph member no longer flags the parent's request — a reviewer's approval now covers a subgraph they did not see")
 	}
 	if st.Valid != 0 {
 		t.Errorf("valid approvals = %d, want 0", st.Valid)

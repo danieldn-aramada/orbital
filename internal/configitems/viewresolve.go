@@ -24,11 +24,17 @@ import (
 // path resolves, and silently skipping one here would be the silent failure the
 // validator exists to prevent.
 //
+// `inverse` is the schema's `@hasInverse` lookup (InverseEdges): it names the
+// edge a subgraph member links back through on create. Nil means none known.
+//
 // It returns an error rather than a partial list when two views claim the same
 // slug, for the same reason the annotation-driven resolver did: a duplicate
 // shadows one type's pages, and which one wins would depend on map iteration
 // order.
-func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg ViewConfig) ([]View, error) {
+func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg ViewConfig, inverse func(typeName, field string) string) ([]View, error) {
+	if inverse == nil {
+		inverse = func(string, string) string { return "" }
+	}
 	names := make([]string, 0, len(types))
 	for n := range types {
 		names = append(names, n)
@@ -56,32 +62,62 @@ func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg
 			bySlug[slug] = name
 		}
 
-		// THE TAB STRIP, in declared order. A type with no page has none.
-		tabs := make([]ViewTab, 0, len(page.Tabs))
-		for _, m := range page.Tabs {
+		// THE SUBGRAPH, in declared order. A type with no page has none.
+		subgraph := make([]ViewTab, 0, len(page.Subgraph))
+		inSubgraph := map[string]bool{}
+		for _, m := range page.Subgraph {
 			target, isList, ok := walkMemberPath(types, info, m.Path)
 			if !ok {
 				continue
 			}
-			tabs = append(tabs, ViewTab{
-				Field:    m.Path,
-				Type:     target,
-				Slug:     pageSlug(cfg, target),
-				IsList:   isList,
-				Editable: m.Editable,
+			inSubgraph[m.Path] = true
+			subgraph = append(subgraph, ViewTab{
+				Field:      m.Path,
+				Type:       target,
+				Slug:       pageSlug(cfg, target),
+				IsList:     isList,
+				Editable:   m.Editable,
+				ParentEdge: parentEdgeOf(types, info, name, m.Path, inverse),
 			})
 		}
 
-		// THE SUMMARY LINK ROWS, in declared order. Listed rather than derived,
-		// which is what retired `viewIgnored`: a relationship you did not want
-		// shown previously had no way out but a flag.
-		summaryRefs := []ViewRefColumn{}
-		for _, r := range page.Summary.Refs {
-			f, found := fieldNamed(info, r)
-			if !found || f.IsList {
-				continue
+		// THE SUMMARY LINK ROWS. Derived: every single relationship to a
+		// ConfigItem that the subgraph does not already render and the page
+		// does not ignore. Navigation only — a link row is never edited,
+		// audited or deleted from here, which is what keeps a server's data
+		// centre out of its delete.
+		//
+		// A concrete type with no page of its own renders on its INTERFACE's
+		// page (an EksaKubernetesCluster on /clusters), and its own single
+		// relationships — tinkerbellIP, managementCluster — are rows there too,
+		// so it derives them against that page's declaration.
+		layout, hasLayout := page, isPage
+		if !hasLayout {
+			for _, in := range info.Implements {
+				if p, ok := cfg.Pages[in]; ok {
+					layout, hasLayout = p, true
+					for _, m := range p.Subgraph {
+						inSubgraph[m.Path] = true
+					}
+					break
+				}
 			}
-			summaryRefs = append(summaryRefs, ViewRefColumn{Field: r, Type: f.TypeName, Slug: pageSlug(cfg, f.TypeName)})
+		}
+		summaryRefs := []ViewRefColumn{}
+		ignored := map[string]bool{}
+		for _, f := range layout.Summary.IgnoreFields {
+			ignored[f] = true
+		}
+		if hasLayout {
+			for _, f := range info.Fields {
+				if f.Kind == "SCALAR" || f.Kind == "ENUM" || f.IsList || inSubgraph[f.Name] || ignored[f.Name] {
+					continue
+				}
+				if _, isConfigItem := types[f.TypeName]; !isConfigItem {
+					continue
+				}
+				summaryRefs = append(summaryRefs, ViewRefColumn{Field: f.Name, Type: f.TypeName, Slug: pageSlug(cfg, f.TypeName)})
+			}
 		}
 
 		// REFERENCE COLUMNS, for when this type renders as a ROW somewhere else.
@@ -126,8 +162,8 @@ func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg
 			Defaults:        defaultsFor(info, td, orbIDPaths(info.OrbIDPattern)),
 			NoCreate:        noCreateFor(info, td),
 			Fields:          editableFields(info, td, ifaceFields),
-			Tabs:            tabs,
-			Dependents:      dependentsOf(types, cfg, name),
+			Subgraph:        subgraph,
+			Relations:       relationsOf(info),
 		}
 		if !isPage {
 			// A pageless type still renders — as rows on somebody else's page —
@@ -344,252 +380,147 @@ func (s ViewSet) BySlug(slug string) (View, bool) {
 	return View{}, false
 }
 
-// OwnedMember is one member a page writes through its own editor — the
-// ownership relation, read off the view instead of a Go registry.
-type OwnedMember struct {
-	ChildType  string
-	ChildField string
-
-	// ParentEdge is the field on the CHILD pointing back at this parent — the
-	// edge a first-time CREATE links through.
-	//
-	// Resolved here because for a multi-parent type the answer depends on which
-	// parent you are creating from — no single non-null edge can say it, which
-	// is what the ordered `ownerReferences:` declaration is for.
-	ParentEdge string
-
-	// IsList distinguishes a table of children from a single related entity.
-	// It decides whether the member can be ADDRESSED: a path like
-	// ["storageControllers", "storageDevices"] names one entity, and for a list
-	// it cannot say WHICH storage controller.
-	IsList bool
-}
-
-// EditorMembers returns what THIS PAGE's editor may write: a owned child
-// the page declares `editable: true` on, that is single-cardinality.
-//
-// Three conditions, and each removes a different mistake. OWNED, or the
-// editor would write an entity this page does not own. DECLARED, because a rack
-// page may show its servers and choose not to edit them from there. SINGLE,
-// because an edit target is addressed by PATH and a path cannot say which row.
-//
-// It can only ever SHRINK the owned set — never grow it. That is the §11
-// hazard: the editor must not load what the page does not show, or dropping
-// something from the page reads as "the user cleared it".
-func (v View) EditorMembers() []OwnedMember {
-	declared := map[string]bool{}
-	for _, t := range v.Tabs {
-		if t.Editable && !strings.Contains(t.Field, ".") {
-			declared[t.Field] = true
-		}
-	}
-	var out []OwnedMember
-	for _, c := range v.Dependents {
-		if declared[c.ChildField] && !c.IsList {
-			out = append(out, c)
+// EditorMembers returns what THIS PAGE's editor may write: the subgraph
+// members declared `editable: true`. Validate has already refused the flag on a
+// list and beyond two hops, so every one is addressable by path.
+func (v View) EditorMembers() []ViewTab {
+	var out []ViewTab
+	for _, m := range v.Subgraph {
+		if m.Editable && !m.IsList {
+			out = append(out, m)
 		}
 	}
 	return out
 }
 
-// DependentSingles returns what this type contains at single cardinality —
-// the rule that governs the editor BELOW the page's top level.
-//
-// The page declares which of its own children its editor may write; it says
-// nothing about a wrapper two hops down, because a wrapper has no page. Once a
-// child is in the unit, the whole owned subtree below it is in the unit —
-// which is the same statement the delete cascade makes, and the reason a
-// cluster's etcd schedule is editable from the cluster page while ClusterBackup
-// has no page of its own.
-//
-// Single-cardinality for the same reason EditorMembers is: a target is
-// addressed by PATH, and a path cannot say which row of a list it means.
-func (v View) DependentSingles() []OwnedMember {
-	var out []OwnedMember
-	for _, c := range v.Dependents {
-		if !c.IsList {
-			out = append(out, c)
-		}
-	}
-	return out
-}
-
-// dependentsOf returns the children a type cannot be deleted without
-// taking with it.
-//
-// A child whose back-edge to this type is NON-NULL has no existence without it:
-// that is the schema's own statement, and 13 of orbital's 14 ownership
-// relations derive from it. The exception is declared, because its ownership is
-// an XOR that nullability cannot express.
-func dependentsOf(types map[string]TypeInfo, cfg ViewConfig, typeName string) []OwnedMember {
-	info, known := types[typeName]
-	if !known {
-		return nil
-	}
-	// The names this type answers to, so a child pointing at an INTERFACE this
-	// type implements still counts — KubernetesNode.cluster is typed by the
-	// KubernetesCluster interface, and an EksaKubernetesCluster contains it.
-	is := map[string]bool{typeName: true}
-	for _, in := range info.Implements {
-		is[in] = true
-	}
-
-	var out []OwnedMember
+// relationsOf maps each relationship field to the type at its far end.
+func relationsOf(info TypeInfo) map[string]string {
+	out := map[string]string{}
 	for _, f := range info.Fields {
-		if f.Kind == "SCALAR" || f.Kind == "ENUM" || f.TypeName == "" {
-			continue
-		}
-		child, childKnown := types[f.TypeName]
-		if !childKnown {
-			continue
-		}
-		if edge := ownerEdge(cfg, child, f.TypeName, is); edge != "" {
-			out = append(out, OwnedMember{
-				ChildType: f.TypeName, ChildField: f.Name, IsList: f.IsList, ParentEdge: edge,
-			})
+		if f.Kind != "SCALAR" && f.Kind != "ENUM" && f.TypeName != "" {
+			out[f.Name] = f.TypeName
 		}
 	}
 	return out
 }
 
-// ownerEdge returns the child's edge back to one of `is`, or "" when the
-// child is not owned by it.
+// parentEdgeOf returns the field on the entity at the end of `path` pointing
+// back one hop — the `@hasInverse` partner of the last hop.
 //
-// The edge and the ownership are one answer: if a child points back at this
-// parent with a non-null edge it is owned by it, and that same edge is what
-// a create links through.
-func ownerEdge(cfg ViewConfig, child TypeInfo, childType string, is map[string]bool) string {
-	// DECLARED first: an XOR owner, ordered most-specific-first, which no single
-	// non-null edge can express. Order matters — a NIC nests under its adapter
-	// before its server.
-	for _, edge := range cfg.OwnerReferences[childType] {
-		if f, ok := fieldNamed(child, edge); ok && is[f.TypeName] {
-			return edge
+// Tries the declaring type, then every interface it implements: DGraph forbids
+// redeclaring an interface field on an implementor, so `backup` is declared on
+// the KubernetesCluster INTERFACE and the inverse is keyed there, not on
+// EksaKubernetesCluster.
+func parentEdgeOf(types map[string]TypeInfo, info TypeInfo, typeName, path string, inverse func(string, string) string) string {
+	segs := strings.Split(path, ".")
+	cur, curName := info, typeName
+	for i, seg := range segs {
+		f, found := fieldNamed(cur, seg)
+		if !found {
+			return ""
 		}
-	}
-	// DERIVED: a non-null back-edge IS the ownership statement.
-	for _, cf := range child.Fields {
-		if cf.NonNull && is[cf.TypeName] {
-			return cf.Name
+		if i == len(segs)-1 {
+			if back := inverse(curName, seg); back != "" {
+				return back
+			}
+			for _, in := range cur.Implements {
+				if back := inverse(in, seg); back != "" {
+					return back
+				}
+			}
+			return ""
 		}
+		cur, curName = types[f.TypeName], f.TypeName
 	}
 	return ""
 }
 
-// OwnerEdge returns the field on `childType` pointing back at `parentType`
-// — the edge a first-time CREATE links through.
-//
-// For a single-parent type this is the non-null back-edge. For a multi-parent
-// type the answer depends on which page you are creating from, which no single
-// non-null edge can express — hence the ordered `ownerReferences:` declaration.
-//
-// ⚠️ Distinct from IDENTITY, which is `orbIdPattern` in the schema. A
-// NetworkInterface is owned by its networkAdapter and named after its
-// server or its device: the two lists are not the same set.
-func (s ViewSet) OwnerEdge(types map[string]TypeInfo, cfg ViewConfig, childType, parentType string) string {
-	child, ok := types[childType]
-	if !ok {
-		return ""
+// SubgraphFor returns the declared subgraph a type's page carries — its own,
+// or for a concrete type with no page, its INTERFACE's. An
+// EksaKubernetesCluster renders on /clusters, so the cluster page's subgraph is
+// what it shows, audits and deletes.
+func (s ViewSet) SubgraphFor(typeName string) []ViewTab {
+	v := s.Of(typeName)
+	if v.Slug != "" || len(v.Subgraph) > 0 {
+		return v.Subgraph
 	}
-	is := map[string]bool{parentType: true}
-	if p, ok := types[parentType]; ok {
-		for _, in := range p.Implements {
-			is[in] = true
+	for _, in := range s.Implements(typeName) {
+		if iv := s.Of(in); iv.Slug != "" {
+			return iv.Subgraph
 		}
 	}
-	for _, edge := range cfg.OwnerReferences[childType] {
-		if f, ok := fieldNamed(child, edge); ok && is[f.TypeName] {
-			return edge
-		}
-	}
-	for _, cf := range child.Fields {
-		if cf.NonNull && is[cf.TypeName] {
-			return cf.Name
-		}
-	}
-	return ""
+	return nil
 }
 
-// ExclusivelyOwned reports whether exactly one page claims typeName as an
-// editable member — the test that decides whether it renders INLINE on that
-// page or as a link to its own.
+// SubgraphSelection returns a GraphQL sub-selection fetching the orbId of
+// every entity a page's declared subgraph reaches — the set the audit tab and
+// the change-request scope pin both cover.
 //
-// Derived, never declared, and that is deliberate: making it a config key would
-// be a second axis for a question the first axis already answers. A
-// ClusterBackup is only ever a cluster's, so a cluster page shows it inline; an
-// IPAddress is claimed by a server, a node and two cluster fields, so inlining
-// it anywhere would assert an ownership no single page has.
+// Built from the declared paths and nothing else, so it terminates by
+// construction: a finite list of finite paths. Paths sharing a prefix share one
+// selection, because GraphQL selects a field once per level.
 //
-// An interface and its implementations count ONCE. Both the KubernetesCluster
-// view and the EksaKubernetesCluster view declare `backup`, because the
-// interface backs the list page and the concrete type backs the detail page —
-// counting them as two parents would make every backup sub-kind render as a
-// link on the only page that can edit it.
-func (s ViewSet) ExclusivelyOwned(typeName string) bool {
-	claims := map[string]bool{}
-	for _, v := range s {
-		for _, c := range v.Dependents {
-			if c.ChildType == typeName {
-				claims[s.collapseToInterface(v.Type)+"."+c.ChildField] = true
-			}
-		}
-	}
-	return len(claims) == 1
-}
-
-// collapseToInterface maps a concrete type to the interface a view covers it
-// with, so an implementation and its interface are not counted as two parents.
-func (s ViewSet) collapseToInterface(typeName string) string {
-	for _, v := range s {
-		if !v.IsInterface {
-			continue
-		}
-		for _, impl := range v.Implementations {
-			if impl == typeName {
-				return v.Type
-			}
-		}
-	}
-	return typeName
-}
-
-// OwnedOrbIDSelection returns a GraphQL sub-selection fetching the orbId of
-// everything a type OWNS, to any declared depth — the subtree the audit
-// roll-up and the change-request scope pin both cover.
-//
-// Depth- and path-guarded: the ownership graph is operator-editable through
-// `ownerReferences:` and nothing stops someone declaring a cycle, which a naive
-// walk would follow forever.
-//
-// An INTERFACE-typed member takes an inline fragment. `orbId` is declared on
+// An INTERFACE-typed hop takes an inline fragment. `orbId` is declared on
 // ConfigItem rather than on a sub-interface, so selecting it bare off
 // DataCenter.kubernetesClusters is rejected at VALIDATION — and that failure is
 // not local: the batch expander puts every root in one aliased query, so one
-// interface member anywhere killed the whole thing and every root's subtree
-// came back empty. Silently, because the expander treats a query failure as
-// "owns nothing".
-func (s ViewSet) OwnedOrbIDSelection(rootType string) string {
+// interface hop anywhere would empty every root's subgraph.
+func (s ViewSet) SubgraphSelection(rootType string) string {
+	root := PathTree(s.SubgraphFor(rootType))
 	var b strings.Builder
-	var rec func(typeName string, path map[string]bool, depth int)
-	rec = func(typeName string, path map[string]bool, depth int) {
-		if depth > 8 || path[typeName] {
-			return
-		}
-		path[typeName] = true
-		for _, m := range s.Of(typeName).Dependents {
-			b.WriteString(m.ChildField)
-			if s.Of(m.ChildType).IsInterface {
+	var rec func(n *PathNode, typeName string)
+	rec = func(n *PathNode, typeName string) {
+		for _, c := range n.Children {
+			childType := s.hopType(typeName, c.Field)
+			b.WriteString(c.Field)
+			if s.Of(childType).IsInterface {
 				b.WriteString(" { __typename ... on ConfigItem { orbId } ")
 			} else {
 				b.WriteString(" { orbId ")
 			}
-			rec(m.ChildType, path, depth+1)
+			rec(c, childType)
 			b.WriteString("} ")
 		}
-		delete(path, typeName)
 	}
-	rec(rootType, map[string]bool{}, 0)
+	rec(root, rootType)
 	return strings.TrimSpace(b.String())
+}
+
+// hopType is the type at the far end of one relationship field.
+func (s ViewSet) hopType(typeName, field string) string {
+	return s.Of(typeName).Relations[field]
+}
+
+// PathNode is one hop in a subgraph's path tree: paths sharing a prefix share
+// the node, so a field is visited and selected once per level.
+type PathNode struct {
+	Field    string
+	Member   *ViewTab // the declared member ending here, or nil for an intermediate hop
+	Children []*PathNode
+}
+
+// PathTree folds a declared subgraph into a tree of hops.
+func PathTree(members []ViewTab) *PathNode {
+	root := &PathNode{}
+	for i := range members {
+		n := root
+		for _, seg := range strings.Split(members[i].Field, ".") {
+			var next *PathNode
+			for _, c := range n.Children {
+				if c.Field == seg {
+					next = c
+					break
+				}
+			}
+			if next == nil {
+				next = &PathNode{Field: seg}
+				n.Children = append(n.Children, next)
+			}
+			n = next
+		}
+		n.Member = &members[i]
+	}
+	return root
 }
 
 // Labeller returns the display-label function for a type: the declared label

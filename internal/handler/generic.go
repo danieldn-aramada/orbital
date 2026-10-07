@@ -96,11 +96,14 @@ func containsString(haystack []string, needle string) bool {
 	return false
 }
 
-// genericDetailQuery selects the entity's own fields plus, for every
-// relationship, just enough to render a link (orbId and name). Deliberately
-// shallow: a detail page shows what an entity relates to, not the whole graph
-// beneath it, and a deep selection on a cyclic schema does not terminate.
-func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View, display func(string) []string, refColumns func(string) []configitems.ViewRefColumn, ownedIDSel func(string) string, orbID string) string {
+// genericDetailQuery selects the entity's own fields, a link's worth of every
+// summary link row, and the page's declared SUBGRAPH.
+//
+// The subgraph is selected as a tree of its declared paths and nothing else —
+// finite by construction, so it terminates on a cyclic schema without a depth
+// guard. A hop that ENDS a declared member carries what that member renders and
+// edits; an intermediate hop carries only enough to identify it.
+func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View, display func(string) []string, refColumns func(string) []configitems.ViewRefColumn, orbID string) string {
 	// The interface fields are selected alongside the type's own: `version`
 	// because the editor must send it or a concurrent edit overwrites silently
 	// instead of being refused, and the rest because the metadata box shows
@@ -120,140 +123,40 @@ func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View
 	for _, f := range v.Display {
 		add(f)
 	}
-
-	// SUMMARY REF ROWS. They are no longer tabs, so they are no longer selected
-	// by the tab walk below — and a ref that is not fetched renders as nothing
-	// at all, silently, which is how the Data Center row vanished off every
-	// Server page the moment the two surfaces were split.
+	// SUMMARY LINK ROWS. Never in the subgraph by construction, so never
+	// selected twice.
 	for _, rc := range v.SummaryRefs {
-		if seen[rc.Field] {
-			continue
-		}
-		seen[rc.Field] = true
 		sel += " " + rc.Field + " { " + idNameSel(viewOf(rc.Type)) + " }"
 	}
-
-	// Each relationship is selected EXACTLY once, with the union of what the
-	// page needs from it. Contained children are edited inline, so they carry
-	// their own fields; everything else only needs enough to render a link.
-	owned := ownedChildFields(v.Type, viewOf, display, refColumns, ownedIDSel)
-	for _, tab := range v.Tabs {
-		// A PATH tab selects nothing of its own: its rows are read out of the
-		// owned-child subtree this query already fetches for the editor. Its
-		// field name contains a dot, which is not a legal selection name — an
-		// earlier version emitted it verbatim and DGraph refused the whole
-		// query with "Expected Name, found <Invalid>", taking out the page.
-		if strings.Contains(tab.Field, ".") {
-			continue
-		}
-		seen[tab.Field] = true
-		if childSel, isOwned := owned[tab.Field]; isOwned {
-			// An OWNED child is rendered as a row too, so it needs its computed
-			// columns as much as a non-owned one. Missing this is why a data
-			// centre's Racks tab had a Servers header over empty cells: Rack is
-			// owned by DataCenter, so it took this branch and never selected
-			// the aggregate.
-			sel += " " + tab.Field + " { " + childSel + columnSelection(viewOf(tab.Type)) + " }"
-			continue
-		}
-		// A related entity is rendered as a ROW, so fetch the columns that row
-		// shows — the target type's display fields. Selecting only orbId+name
-		// made every relationship tab a bare list of names, where the
-		// hand-written pages show the child's own data (a DataCenter's servers
-		// table carries model, service tag, OOB IP...).
-		childSel := idNameSel(viewOf(tab.Type))
-		for _, f := range display(tab.Type) {
-			if f != "name" {
-				childSel += " " + f
-			}
-		}
-		for _, rc := range refColumns(tab.Type) {
-			childSel += " " + rc.Field + " { " + idNameSel(viewOf(rc.Type)) + " }"
-		}
-		// ...and its computed columns, so a Server inside a network device's
-		// tab shows the same cluster and role it shows on /servers.
-		childSel += columnSelection(viewOf(tab.Type))
-		sel += " " + tab.Field + " { " + childSel + " }"
-	}
-
-	// OWNED CHILDREN THE PAGE DOES NOT TAB — ids only, nothing renders them.
-	//
-	// The audit roll-up covers everything the root OWNS and reads it out of
-	// this result (ownedSubtreeOrbIDs), so an owned child nobody listed under
-	// `tabs:` must still appear or the roll-up silently narrows to whatever the
-	// page happens to show. That coupling used to be asserted in a comment here
-	// and enforced by nothing.
-	for _, oc := range v.Dependents {
-		if seen[oc.ChildField] {
-			continue
-		}
-		seen[oc.ChildField] = true
-		childSel := "orbId"
-		if nested := ownedIDSel(oc.ChildType); nested != "" {
-			childSel += " " + nested
-		}
-		sel += " " + oc.ChildField + " { " + childSel + " }"
-	}
+	sel += subgraphTreeSelection(configitems.PathTree(v.Subgraph), v, viewOf, display, refColumns)
 	return fmt.Sprintf("{ get%s(orbId: %q) { %s } }", v.Type, orbID, sel)
 }
 
-// ownedChildFields returns, per owned child field, the selection to fetch for
-// it — enough to render AND edit it inline.
-//
-// Recurses one level through wrappers. A wrapper is a type with owned children
-// and no scalars of its own (ClusterBackup wraps etcd/velero/s3Sync), and
-// BuildEditTargets emits its GRANDchildren as the edit targets, so the tree has
-// to nest the same way or those targets have no data behind them.
-func ownedChildFields(rootType string, viewOf func(string) configitems.View, display func(string) []string, refColumns func(string) []configitems.ViewRefColumn, ownedIDSel func(string) string) map[string]string {
-	out := map[string]string{}
-	for _, oc := range viewOf(rootType).Dependents {
-		// idNameSel, not a bare `orbId name`: an editable member may be typed by
-		// an INTERFACE (DataCenter.kubernetesClusters), and `orbId` is declared
-		// on ConfigItem rather than on a sub-interface, so selecting it bare is
-		// rejected at validation — which fails the WHOLE query and takes the page
-		// with it. The non-owned branch below always used idNameSel; this one did
-		// not, and no member had been both editable and interface-typed before.
-		sel := idNameVersionSel(viewOf(oc.ChildType))
-		for _, f := range display(oc.ChildType) {
-			if f != "name" {
-				sel += " " + f
-			}
-		}
-		// Reference columns too. An owned child that is a LIST still renders as
-		// a TABLE, with the same columns any other relationship table has — and
-		// the table's headers come from the same RefColumns this selection
-		// feeds. Omitting them here printed a header row of "cluster / server /
-		// ipv4" above a column of dashes, because the relationship is selected
-		// exactly once and this was that once.
-		for _, rc := range refColumns(oc.ChildType) {
-			sel += " " + rc.Field + " { " + idNameSel(viewOf(rc.Type)) + " }"
-		}
-		for _, gc := range viewOf(oc.ChildType).Dependents {
-			gsel := idNameVersionSel(viewOf(gc.ChildType))
-			for _, f := range display(gc.ChildType) {
+// subgraphTreeSelection selects one level of the declared path tree.
+func subgraphTreeSelection(n *configitems.PathNode, parent configitems.View, viewOf func(string) configitems.View, display func(string) []string, refColumns func(string) []configitems.ViewRefColumn) string {
+	out := ""
+	for _, c := range n.Children {
+		cv := viewOf(parent.Relations[c.Field])
+		inner := idNameVersionSel(cv)
+		if c.Member != nil {
+			// Rendered as a row or an inline panel, and edited where declared:
+			// its own fields, its reference columns and its computed columns.
+			// idNameVersionSel rather than a bare `orbId name`, because a
+			// member may be typed by an INTERFACE (DataCenter.kubernetesClusters)
+			// and selecting `orbId` bare off one is rejected at validation —
+			// which fails the WHOLE query and takes the page with it.
+			for _, f := range display(cv.Type) {
 				if f != "name" {
-					gsel += " " + f
+					inner += " " + f
 				}
 			}
-			// Reference columns on a GRANDCHILD too. An `include:` path renders
-			// grandchildren as a table, and the column naming their parent is
-			// one of these — without it the Controller column is blank on every
-			// row. Same omission as at the child level, one layer down.
-			for _, rc := range refColumns(gc.ChildType) {
-				gsel += " " + rc.Field + " { " + idNameSel(viewOf(rc.Type)) + " }"
+			for _, rc := range refColumns(cv.Type) {
+				inner += " " + rc.Field + " { " + idNameSel(viewOf(rc.Type)) + " }"
 			}
-			// ...and the ids of anything the GRANDCHILD in turn owns. The page
-			// renders nothing below this depth, but the audit roll-up covers
-			// the whole owned subtree and reads it out of this result — so a
-			// three-deep ownership chain would otherwise roll up on the change
-			// request's scope pin and not on the audit tab, which is the exact
-			// disagreement these two were just unified to end.
-			if deeper := ownedIDSel(gc.ChildType); deeper != "" {
-				gsel += " " + deeper
-			}
-			sel += " " + gc.ChildField + " { " + gsel + " }"
+			inner += columnSelection(cv)
 		}
-		out[oc.ChildField] = sel
+		inner += subgraphTreeSelection(c, cv, viewOf, display, refColumns)
+		out += " " + c.Field + " { " + inner + " }"
 	}
 	return out
 }
@@ -411,20 +314,16 @@ func stringifyRow(row map[string]any) map[string]any {
 // needs no special handling: the grandchild declares the inverse edge
 // (`StorageDevice.storageController`), so it is already one of its reference
 // columns.
-//
-// Nothing is fetched for this. An owned child's grandchildren are already in
-// the detail query — the editor needs the subtree — so a path tab is a second
-// reading of data the page has, not a second trip.
 func rowsForTab(entity map[string]any, field string) []map[string]any {
-	mid, leaf, isPath := strings.Cut(field, ".")
-	if !isPath {
-		return relatedRows(entity[field])
+	rows := []map[string]any{entity}
+	for _, seg := range strings.Split(field, ".") {
+		var next []map[string]any
+		for _, r := range rows {
+			next = append(next, relatedRows(r[seg])...)
+		}
+		rows = next
 	}
-	var out []map[string]any
-	for _, parent := range relatedRows(entity[mid]) {
-		out = append(out, relatedRows(parent[leaf])...)
-	}
-	return out
+	return rows
 }
 
 func relatedRows(raw any) []map[string]any {

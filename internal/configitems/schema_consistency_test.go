@@ -84,7 +84,7 @@ func TestSchemaMatchesViews(t *testing.T) {
 		t.Fatalf("load views config: %v", err)
 	}
 
-	// (c) Every tab path and ref names real fields. At runtime a stale one is
+	// (c) Every subgraph path names real fields. At runtime a stale one is
 	// dropped and logged, which is right for a deployment and wrong for a commit:
 	// the fix is free here and invisible there.
 	for _, typeName := range sortedKeys(cfg.Pages) {
@@ -92,12 +92,7 @@ func TestSchemaMatchesViews(t *testing.T) {
 			t.Errorf("views config declares a page for %q, which schema.graphql does not declare", typeName)
 			continue
 		}
-		for _, r := range cfg.Pages[typeName].Summary.Refs {
-			if !hasField(typeName, r) {
-				t.Errorf("views: %s ref %q is not a field on %s", typeName, r, typeName)
-			}
-		}
-		for _, m := range cfg.Pages[typeName].Tabs {
+		for _, m := range cfg.Pages[typeName].Subgraph {
 			cur := typeName
 			for _, seg := range strings.Split(m.Path, ".") {
 				if !hasField(cur, seg) {
@@ -183,52 +178,34 @@ func parseSchemaTypes(src string) (map[string]map[string]bool, map[string]bool) 
 	return fields, implCI
 }
 
-// Ownership DERIVES from the schema: every non-null back-edge must produce a
-// Contains entry on its parent, and the one type that cannot must be declared.
+// Every NON-NULL relationship must have an `@hasInverse` partner.
 //
-// This replaced a gate that forced the CONFIG to declare what the schema already
-// required. Derivation makes that unnecessary — a non-null back-edge is now the
-// ownership statement itself — so what is left to check is that the derivation
-// actually covers them. A gap here is an orphan behind a dangling non-null edge:
-// DGraph propagates the missing field to the ROOT of any query selecting it, and
-// DGRAPH.md records one such delete breaking export for a whole data centre.
-func TestOwnership_CoversEveryNonNullBackEdge(t *testing.T) {
+// The delete preview names an ORPHAN — an entity left holding a non-null edge
+// into what a delete removes — by reading that edge from the far side, and the
+// cascade only selects edges it can walk back along. A non-null edge with no
+// inverse is invisible to it: the delete would orphan through it and the
+// preview would say nothing.
+func TestEveryNonNullEdge_HasAnInverse(t *testing.T) {
 	src, err := os.ReadFile("../../schema/schema.graphql")
 	if err != nil {
 		t.Fatalf("read schema: %v", err)
 	}
-	cfg, _, _, err := LoadViewConfig("../../config/views.yaml", "")
-	if err != nil {
-		t.Fatalf("load views config: %v", err)
-	}
 	types := typesFromSDL(string(src))
-
+	inverse := InverseEdges(string(src))
 	for _, e := range NonNullBackEdges(string(src)) {
 		if _, known := types[e.Parent]; !known {
 			continue
 		}
-		found := false
-		for _, c := range dependentsOf(types, cfg, e.Parent) {
-			if c.ChildType == e.Child {
-				found = true
-			}
+		if inverse[e.Child+"."+e.Field] == "" {
+			t.Errorf("%s.%s is %s! with no @hasInverse partner — a delete of the %s would orphan it "+
+				"and the delete preview could not see it", e.Child, e.Field, e.Parent, e.Parent)
 		}
-		if !found {
-			t.Errorf("%s.%s is %s! but %s does not contain %s — deleting one would orphan it "+
-				"behind a dangling non-null edge", e.Child, e.Field, e.Parent, e.Parent, e.Child)
-		}
-	}
-
-	// The declared exception, which nullability cannot express.
-	if len(cfg.OwnerReferences["NetworkInterface"]) == 0 {
-		t.Error("NetworkInterface's owner is an XOR across three nullable edges; without a " +
-			"ownerReferences: entry a server delete leaves its NICs behind")
 	}
 }
 
-// typesFromSDL builds the minimal TypeInfo ownership needs — field names,
-// their targets and their nullability — without a running DGraph, so this stays
-// in `make test-unit`.
+// typesFromSDL builds a minimal TypeInfo — field names, their targets and
+// their nullability — without a running DGraph, so this stays in
+// `make test-unit`.
 func typesFromSDL(src string) map[string]TypeInfo {
 	fields, _ := parseSchemaTypes(src)
 	out := make(map[string]TypeInfo, len(fields))

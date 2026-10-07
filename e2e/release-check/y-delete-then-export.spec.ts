@@ -94,7 +94,7 @@ test('a cluster delete leaves its data centre exportable', async ({ page }) => {
   ).toBe(1);
 
   const del = await page.request.delete(
-    `/api/v1/config-items/KubernetesCluster/${encodeURIComponent(CLUSTER)}`);
+    `/clusters/${encodeURIComponent(CLUSTER)}`);
   expect(del.status(), `delete cluster: expect 200 (got ${del.status()}: ${await del.text()})`).toBe(200);
 
   // The failure mode, stated directly: the parent's edge now points at a
@@ -133,7 +133,7 @@ test('a cluster delete leaves its data centre exportable', async ({ page }) => {
     + `(got "${job?.status}"${job?.error ? ': ' + job.error : ''})`,
   ).toBe('completed');
 
-  await page.request.delete(`/api/v1/config-items/DataCenter/${encodeURIComponent(DC)}`);
+  await page.request.delete(`/data-centers/${encodeURIComponent(DC)}`);
   await page.request.post(ORBITAL_DGRAPH, { data: { query: `mutation($n:String!){
     deleteNamespace(filter:{name:{eq:$n}}){ numUids } }`, variables: { n: NS } } });
 });

@@ -88,17 +88,17 @@ func statusWanted(wanted []string, derived string) bool {
 
 // maxOrbIDFilter caps the repeatable ?orbId= filter. Same number as the
 // audit-log API's cap, for the same reason and against the same caller: a
-// detail page hands over the orbIds of a ConfigItem and everything it owns, and
-// a subtree is not an unbounded list. It defends the URL length and the OR-ed
+// detail page hands over the orbIds of a ConfigItem and its declared subgraph, and
+// a subgraph is not an unbounded list. It defends the URL length and the OR-ed
 // containment scan behind it.
 // maxOrbIDFilter caps the repeatable ?orbId= filter on the endpoints that take
-// a subtree: /api/v1/change-requests and /api/v1/audit-log.
+// a subgraph: /api/v1/change-requests and /api/v1/audit-log.
 //
 // It is a guardrail against query-string bloat and an unbounded OR, not a
 // design limit. 128 orbIds is roughly 4.5KB of query string — under nginx's 8KB
 // header buffer — and 128 GIN index probes is nothing.
 //
-// Sized from measurement, not taste: the largest real owned subtree in the
+// Sized from measurement, not taste: the largest real subgraph in the
 // seeded colo namespace is 35 (a populated server, dominated by storage devices
 // and network interfaces), so this is ~3.5x headroom. The previous value of 32
 // sat BELOW that, which meant a real page hit it on ordinary data.
@@ -110,19 +110,19 @@ func statusWanted(wanted []string, derived string) bool {
 // If a legitimate caller ever needs more, the exit is a POST-with-body read
 // (the shape Prometheus /api/v1/query and Elasticsearch _search use for queries
 // too long for a URL) — NOT client-side chunking, which pushes an overlap-aware
-// union into every consumer, and NOT server-side subtree expansion, which
+// union into every consumer, and NOT server-side subgraph expansion, which
 // AUDIT.md rules out.
 const maxOrbIDFilter = 128
 
 // payloadTouchesAnyOrbID matches change requests whose changeset names ANY of
 // these orbIds.
 //
-// Repeatable rather than single-valued because a change to an owned child
+// Repeatable rather than single-valued because a change to a subgraph member
 // records the CHILD's orbId and never the parent's — a server-maintenance edit
 // lands as `<ns>:server-maintenance-<serial>`. Asking about the server alone
 // therefore answers "nothing in flight" while a change to that server sits open,
 // which is exactly what the caller wanted to know. The parent→child knowledge
-// stays in the page composer that already pulled the subtree (see AUDIT.md's
+// stays in the page composer that already pulled the subgraph (see AUDIT.md's
 // "REST audit-log API is node-specific" decision); this endpoint only ORs the
 // list it is given.
 func payloadTouchesAnyOrbID(orbIDs []string) predicate.ApprovalRequest {

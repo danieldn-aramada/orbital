@@ -15,72 +15,52 @@ import (
 // roll-up is asserting something about what orbital actually ships, and a
 // fixture that drifted from it would pass while production was wrong.
 
-// fixtureViewSet is a miniature of config/views.yaml — the members the handler
-// unit tests reach for, and nothing else.
+// fixtureViewSet is a miniature of config/views.yaml — the subgraphs the
+// handler unit tests reach for, and nothing else.
 func fixtureViewSet() configitems.ViewSet {
 	m := func(field, typeName string, isList, editable bool) configitems.ViewTab {
 		return configitems.ViewTab{Field: field, Type: typeName, IsList: isList, Editable: editable}
 	}
-	// Contains is CONTAINMENT — derived from the schema in production, spelled
-	// out here. Tabs is what the page shows. They are different questions now:
-	// a page may show something it does not contain, and contains things no page
-	// shows.
-	c := func(field, typeName string, isList bool) configitems.OwnedMember {
-		return configitems.OwnedMember{ChildType: typeName, ChildField: field, IsList: isList, ParentEdge: "server"}
+	clusterSubgraph := []configitems.ViewTab{
+		m("backup", "ClusterBackup", false, false),
+		m("backup.etcd", "EtcdBackup", false, true),
+		m("backup.velero", "VeleroBackup", false, true),
+		m("backup.s3Sync", "S3Sync", false, true),
+		m("nodes", "KubernetesNode", true, false),
 	}
+	clusterRelations := map[string]string{"backup": "ClusterBackup", "nodes": "KubernetesNode", "dataCenter": "DataCenter"}
 	return configitems.ViewSet{
-		{Type: "Server", Slug: "servers", Dependents: []configitems.OwnedMember{
-			c("idracSettings", "IdracSettings", false),
-			c("serverMaintenance", "ServerMaintenance", false),
-			c("storageControllers", "StorageController", true),
-		}, Tabs: []configitems.ViewTab{
-			m("dataCenter", "DataCenter", false, false),
+		{Type: "Server", Slug: "servers", Relations: map[string]string{
+			"dataCenter": "DataCenter", "idracSettings": "IdracSettings",
+			"serverMaintenance": "ServerMaintenance", "storageControllers": "StorageController",
+		}, Subgraph: []configitems.ViewTab{
 			m("idracSettings", "IdracSettings", false, true),
 			m("serverMaintenance", "ServerMaintenance", false, true),
-			m("storageControllers", "StorageController", true, true),
+			m("storageControllers", "StorageController", true, false),
+			m("storageControllers.storageDevices", "StorageDevice", true, false),
 		}},
-		{Type: "DataCenter", Slug: "data-centers", Dependents: []configitems.OwnedMember{
-			c("servers", "Server", true), c("racks", "Rack", true),
-		}, Tabs: []configitems.ViewTab{
+		{Type: "DataCenter", Slug: "data-centers", Relations: map[string]string{
+			"servers": "Server", "racks": "Rack",
+		}, Subgraph: []configitems.ViewTab{
 			m("servers", "Server", true, false),
-			m("racks", "Rack", true, true),
+			m("racks", "Rack", true, false),
 		}},
-		{Type: "StorageController", Slug: "storage-controllers", Dependents: []configitems.OwnedMember{
-			c("storageDevices", "StorageDevice", true),
-		}, Tabs: []configitems.ViewTab{
-			m("storageDevices", "StorageDevice", true, true),
-		}},
-		{Type: "IdracSettings", Slug: "idrac-settings"},
-		{Type: "ServerMaintenance", Slug: "server-maintenances"},
-		{Type: "StorageDevice", Slug: "storage-devices"},
-		{Type: "Rack", Slug: "racks"},
-		// The interface view, so Implements() can answer — it is what tells a
-		// concrete EksaKubernetesCluster it is deletable AS a KubernetesCluster,
-		// and what stops a cluster's back-reference column being kept.
+		{Type: "StorageController", Relations: map[string]string{"storageDevices": "StorageDevice", "server": "Server"}},
+		{Type: "IdracSettings"},
+		{Type: "ServerMaintenance"},
+		{Type: "StorageDevice", Relations: map[string]string{"storageController": "StorageController"}},
+		{Type: "Rack"},
+		// The interface view, so Implements() can answer — it is what gives a
+		// concrete EksaKubernetesCluster its page's subgraph, and what stops a
+		// cluster's back-reference column being kept.
 		{Type: "KubernetesCluster", Slug: "clusters", IsInterface: true,
 			Implementations: []string{"EksaKubernetesCluster"},
-			Dependents: []configitems.OwnedMember{
-				c("nodes", "KubernetesNode", true), c("backup", "ClusterBackup", false),
-			}, Tabs: []configitems.ViewTab{
-				m("nodes", "KubernetesNode", true, true),
-				m("backup", "ClusterBackup", false, true),
-			}},
-		{Type: "EksaKubernetesCluster", Slug: "eksa-kubernetes-clusters", Dependents: []configitems.OwnedMember{
-			c("nodes", "KubernetesNode", true), c("backup", "ClusterBackup", false),
-		}, Tabs: []configitems.ViewTab{
-			m("nodes", "KubernetesNode", true, true),
-			m("backup", "ClusterBackup", false, true),
-		}},
-		{Type: "ClusterBackup", Slug: "cluster-backups", Dependents: []configitems.OwnedMember{
-			c("etcd", "EtcdBackup", false), c("velero", "VeleroBackup", false), c("s3Sync", "S3Sync", false),
-		}, Tabs: []configitems.ViewTab{
-			m("etcd", "EtcdBackup", false, true),
-			m("velero", "VeleroBackup", false, true),
-			m("s3Sync", "S3Sync", false, true),
-		}},
-		{Type: "KubernetesNode", Slug: "kubernetes-nodes"},
-		{Type: "EtcdBackup", Slug: "etcd-backups"},
-		{Type: "VeleroBackup", Slug: "velero-backups"},
-		{Type: "S3Sync", Slug: "s3-syncs"},
+			Relations:       clusterRelations, Subgraph: clusterSubgraph},
+		{Type: "EksaKubernetesCluster", Relations: clusterRelations},
+		{Type: "ClusterBackup", Relations: map[string]string{"etcd": "EtcdBackup", "velero": "VeleroBackup", "s3Sync": "S3Sync"}},
+		{Type: "KubernetesNode"},
+		{Type: "EtcdBackup"},
+		{Type: "VeleroBackup"},
+		{Type: "S3Sync"},
 	}
 }

@@ -49,6 +49,7 @@ where the tab's own label is the heading and the strip is the way back.
           {{if .CanDelete}}
           <button class="button is-rounded is-small is-danger"
             data-cfg-delete-id="{{.OrbID}}"
+            data-cfg-delete-slug="{{.ListSlug}}"
             data-cfg-delete-type="{{.View.Type}}"
             data-cfg-delete-name="{{with .Entity}}{{index . "name"}}{{else}}{{$.OrbID}}{{end}}">
             <span class="icon"><i class="fa-solid fa-trash"></i></span>
@@ -59,11 +60,11 @@ where the tab's own label is the heading and the strip is the way back.
 
         {{/*
           Filled by loadPendingChangeBanners (orbital.js) when this item, or
-          anything it owns, has a change request in flight. Directly under the
+          anything in its subgraph, has a change request in flight. Directly under the
           action row and above the fields, because it changes what Edit will do
           — a reader who does not know a change is pending retypes it.
 
-          The subtree lookup reads data-related-orb-ids off the audit box, which
+          The subgraph lookup reads data-subgraph-orb-ids off the audit box, which
           is already on the page; only this placeholder was missing.
         */}}
         <div data-pending-changes-for="{{.OrbID}}"></div>
@@ -163,7 +164,7 @@ where the tab's own label is the heading and the strip is the way back.
         </div>
 
         {{/*
-          Everything below the fold is ONE tabbed box: owned children, then
+          Everything below the fold is ONE tabbed box: subgraph members, then
           relationship tables, then the audit log.
 
           Ten stacked boxes made a Server page 2,854px — 3.2 screens — and you
@@ -182,33 +183,33 @@ where the tab's own label is the heading and the strip is the way back.
           something in it. Without it, tabbing would re-hide exactly what the
           field marks exist to surface.
         */}}
-        {{if or .Owned .Tabs .Actions.ShowAuditTab}}
+        {{if or .Inline .Tabs .Actions.ShowAuditTab}}
         <article class="box pb-2" data-testid="generic-detail-tabs">
           <div class="tabs is-boxed has-text-weight-medium" style="font-size:14px"
                id="generic-detail-tabs-{{.DomID}}">
             <ul>
-              {{range $i, $o := .Owned}}
+              {{range $i, $o := .Inline}}
               <li {{if eq $i 0}}class="is-active"{{end}} data-panel="gpanel-{{$.DomID}}-owned-{{$i}}">
                 <a><span>{{$o.Label}}</span><span class="js-tab-dot"></span></a>
               </li>
               {{end}}
               {{range $i, $t := .Tabs}}
-              <li {{if and (not $.Owned) (eq $i 0)}}class="is-active"{{end}} data-panel="gpanel-{{$.DomID}}-tab-{{$i}}">
+              <li {{if and (not $.Inline) (eq $i 0)}}class="is-active"{{end}} data-panel="gpanel-{{$.DomID}}-tab-{{$i}}">
                 <a><span>{{$t.Label}}</span><span class="js-tab-dot"></span></a>
               </li>
               {{end}}
               {{if .Actions.ShowAuditTab}}
-              <li {{if and (not .Owned) (not .Tabs)}}class="is-active"{{end}}
+              <li {{if and (not .Inline) (not .Tabs)}}class="is-active"{{end}}
                   data-panel="{{.AuditPanelID}}"
                   data-orb-id="{{.OrbID}}"
-                  data-related-orb-ids="{{.RelatedOrbIDsCSV}}">
+                  data-subgraph-orb-ids="{{.SubgraphOrbIDsCSV}}">
                 <a><span>Audit Log</span></a>
               </li>
               {{end}}
             </ul>
           </div>
 
-        {{range $i, $o := .Owned}}
+        {{range $i, $o := .Inline}}
         <div id="gpanel-{{$.DomID}}-owned-{{$i}}" {{if ne $i 0}}style="display:none"{{end}}>
         {{with $o}}
         <article class="pt-3" data-testid="generic-owned" data-field="{{.Label}}">
@@ -256,7 +257,7 @@ where the tab's own label is the heading and the strip is the way back.
         {{end}}
 
         {{range $i, $t := .Tabs}}
-        <div id="gpanel-{{$.DomID}}-tab-{{$i}}" {{if or $.Owned (ne $i 0)}}style="display:none"{{end}}>
+        <div id="gpanel-{{$.DomID}}-tab-{{$i}}" {{if or $.Inline (ne $i 0)}}style="display:none"{{end}}>
         {{with $t}}
         <article class="pt-3" data-testid="generic-tab" data-field="{{.Field}}">
           <p class="is-size-6 has-text-weight-semibold mb-3">{{.Label}}</p>
@@ -330,13 +331,13 @@ where the tab's own label is the heading and the strip is the way back.
           initDetailTabs loads it when the tab is activated — one request
           saved on every detail view nobody opens the audit for.
 
-          data-orb-id and data-related-orb-ids live on the TAB (that is how
+          data-orb-id and data-subgraph-orb-ids live on the TAB (that is how
           initDetailTabs identifies which one is the audit tab); a change to
-          an owned child records the CHILD's orbId, so asking about the parent
+          a subgraph member records the CHILD's orbId, so asking about the parent
           alone would report nothing while its settings were being rewritten.
         */}}
         {{if .Actions.ShowAuditTab}}
-        <div id="{{.AuditPanelID}}" {{if or .Owned .Tabs}}style="display:none"{{end}}
+        <div id="{{.AuditPanelID}}" {{if or .Inline .Tabs}}style="display:none"{{end}}
              data-testid="generic-audit"></div>
         {{end}}
 

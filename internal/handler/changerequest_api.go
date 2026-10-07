@@ -333,7 +333,7 @@ type changeRequestResponse struct {
 	// have since been deleted. A merge will fail with TARGET_MISSING.
 	MissingTargets []string `json:"missingTargets,omitempty"`
 	// SubtreeChanged means the reviewed scope moved without any change object
-	// going out of date — an edit to an owned child. Cleared by approving again;
+	// going out of date — an edit to a subgraph member. Cleared by approving again;
 	// blocks merge on its own. Distinct from Stale, which only the author can
 	// clear by rebasing.
 	SubtreeChanged *bool `json:"subtreeChanged,omitempty" example:"false"`
@@ -661,12 +661,12 @@ func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
 	// orbId is repeatable — ?orbId=server&orbId=idrac&orbId=maintenance — and
 	// the values are OR-ed, matching /api/v1/audit-log. Reading it with
 	// QueryParam took the FIRST value and silently answered about that one
-	// alone, so a page asking about a server and its owned children got an
+	// alone, so a page asking about a server and its subgraph members got an
 	// answer about the server only, and a pending change on a child read as
 	// "nothing in flight".
 	wantOrbIDs := make([]string, 0, len(c.QueryParams()["orbId"]))
 	for _, id := range c.QueryParams()["orbId"] {
-		// Drop empties so an attribute like data-related-orb-ids="" cannot
+		// Drop empties so an attribute like data-subgraph-orb-ids="" cannot
 		// insert "" and match nothing while looking like a filter.
 		if id = strings.TrimSpace(id); id != "" {
 			wantOrbIDs = append(wantOrbIDs, id)
@@ -693,7 +693,7 @@ func (h *ChangeRequest) ListChangeRequests(c echo.Context) error {
 	// is rendered.
 	//
 	// Rendering is the expensive step: it derives staleness, which means a
-	// subtree query and a content hash per request. Filtering afterwards means
+	// subgraph query and a content hash per request. Filtering afterwards means
 	// paying that for rows that were never going to be returned — fine for a
 	// queue page a human opens now and then, ruinous for the pending-change
 	// badge, which fires on every detail view and almost always matches
@@ -1486,8 +1486,8 @@ func renderFrom(cr *ent.ApprovalRequest, st crState, actor string, caller caller
 		ExecutedBy:       cr.ExecutedBy,
 	}
 	if st.StalenessKnown {
-		stale, subtree := st.Stale, st.SubtreeChanged
-		out.Stale, out.SubtreeChanged = &stale, &subtree
+		stale, subgraph := st.Stale, st.SubtreeChanged
+		out.Stale, out.SubtreeChanged = &stale, &subgraph
 		out.StaleEntities = staleEntities(cr, st)
 	}
 	if out.AvailableActions == nil {

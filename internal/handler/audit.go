@@ -121,7 +121,7 @@ var skipVarsSet = map[string]bool{
 // @Summary     List audit events
 // @Description Read-only, immutable audit trail of intent mutations, newest first.
 // @Description
-// @Description **Scope a query** by combining filters: `orbId` (repeatable, **max 128** — over that the request is refused with `400 BAD_USER_INPUT`, never silently truncated) for a specific resource; `namespace` for a whole data center; `resource_type`/`operation_name` to narrow. To see everything under a server/cluster, fetch its subtree orbIds from the GraphQL Topology API and pass them as repeatable `orbId` params (there is no single "cluster" scope — a child mutation records the child's orbId, not the parent's).
+// @Description **Scope a query** by combining filters: `orbId` (repeatable, **max 128** — over that the request is refused with `400 BAD_USER_INPUT`, never silently truncated) for a specific resource; `namespace` for a whole data center; `resource_type`/`operation_name` to narrow. To see everything under a server/cluster, fetch its subgraph orbIds from the GraphQL Topology API and pass them as repeatable `orbId` params (there is no single "cluster" scope — a child mutation records the child's orbId, not the parent's).
 // @Description
 // @Description **Render a diff:** when an event is a clean single-entity update it carries a `changes` array (`[{field, before, after}]`) with metadata and DGraph UIDs already excluded — render it directly. When `changes` is absent (bulk add, create, or a multi-operation event), there is no field diff; fall back to showing `operations` + `resourceIds`. The raw `details` (with `before`/`variables`) is always included for callers that want it.
 // @Description
@@ -161,7 +161,7 @@ func (h *AuditHandler) List(c echo.Context) error {
 	// pulling its IdracSettings / ServerConfigurationProfile / StorageControllers
 	// in one fetch). Capped to defend against URL/query bloat.
 	rawOrbIDs := c.QueryParams()["orbId"]
-	// Drop empties so an attribute like data-related-orb-ids="" doesn't insert "".
+	// Drop empties so an attribute like data-subgraph-orb-ids="" doesn't insert "".
 	orbIDFilter := make([]string, 0, len(rawOrbIDs))
 	for _, id := range rawOrbIDs {
 		if id != "" {
@@ -171,7 +171,7 @@ func (h *AuditHandler) List(c echo.Context) error {
 	if len(orbIDFilter) > maxOrbIDFilter {
 		// Refused, not truncated. Truncating silently answered a narrower
 		// question than the caller asked and looked exactly like a correct
-		// answer: a Server audit tab whose subtree exceeded the cap was
+		// answer: a Server audit tab whose subgraph exceeded the cap was
 		// dropping its overflow children, and "no events for that disk" is
 		// indistinguishable from "that disk was never queried".
 		return writeError(c, http.StatusBadRequest, CodeBadUserInput,

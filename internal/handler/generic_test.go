@@ -24,7 +24,7 @@ func TestGenericDetailQuerySelectsMetaFields(t *testing.T) {
 		Display: []string{"name", "uHeight"},
 		Meta:    []string{"namespace", "orbId", "version", "createdAt"},
 	}
-	q := genericDetailQuery(v, func(string) configitems.View { return configitems.View{} }, func(string) []string { return nil }, func(string) []configitems.ViewRefColumn { return nil }, func(string) string { return "" }, "colo:rack-1")
+	q := genericDetailQuery(v, func(string) configitems.View { return configitems.View{} }, func(string) []string { return nil }, func(string) []configitems.ViewRefColumn { return nil }, "colo:rack-1")
 
 	for _, f := range []string{"namespace", "orbId", "version", "createdAt", "uHeight"} {
 		if !strings.Contains(q, f) {
@@ -128,11 +128,15 @@ func TestListColumns_UnionsImplementationColumns(t *testing.T) {
 }
 
 // Acceptance 7: a relationship to an INTERFACE is selected in a form DGraph
-// accepts, so the link is rendered instead of silently dropped.
+// accepts — as a link row AND as a subgraph member. A bare `orbId` off an
+// interface is rejected at validation, which fails the WHOLE query and takes
+// the page with it.
 func TestGenericDetailQuery_InterfaceTypedRelationship(t *testing.T) {
-	node := configitems.View{
-		Type: "KubernetesNode",
-		Tabs: []configitems.ViewTab{{Field: "cluster", Type: "KubernetesCluster", Slug: "clusters"}},
+	dc := configitems.View{
+		Type:        "DataCenter",
+		Relations:   map[string]string{"kubernetesClusters": "KubernetesCluster"},
+		SummaryRefs: []configitems.ViewRefColumn{{Field: "primaryCluster", Type: "KubernetesCluster", Slug: "clusters"}},
+		Subgraph:    []configitems.ViewTab{{Field: "kubernetesClusters", Type: "KubernetesCluster", IsList: true}},
 	}
 	viewOf := func(name string) configitems.View {
 		if name == "KubernetesCluster" {
@@ -140,11 +144,14 @@ func TestGenericDetailQuery_InterfaceTypedRelationship(t *testing.T) {
 		}
 		return configitems.View{Type: name}
 	}
-	q := genericDetailQuery(node, viewOf, func(string) []string { return nil },
-		func(string) []configitems.ViewRefColumn { return nil }, func(string) string { return "" }, "ns:node-1")
+	q := genericDetailQuery(dc, viewOf, func(string) []string { return nil },
+		func(string) []configitems.ViewRefColumn { return nil }, "ns:dc-1")
 
-	if !strings.Contains(q, "cluster { __typename ... on ConfigItem { orbId name }") {
-		t.Errorf("an interface-typed relationship must select identity through ConfigItem: %s", q)
+	if !strings.Contains(q, "primaryCluster { __typename ... on ConfigItem { orbId name }") {
+		t.Errorf("an interface-typed link row must select identity through ConfigItem: %s", q)
+	}
+	if !strings.Contains(q, "kubernetesClusters { __typename ... on ConfigItem { orbId name version }") {
+		t.Errorf("an interface-typed subgraph member must select identity through ConfigItem: %s", q)
 	}
 }
 

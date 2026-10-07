@@ -8,12 +8,9 @@
 //
 // A hand-maintained Go registry: per-type editable field lists, before-fetch
 // selections, payload fields, interface lists, the set of type names, and
-// ownership — which edges are a page's edit unit and which parent a
-// multi-parent node calls home. All of it has left. Field metadata and the type
-// set are read from the DEPLOYED schema; ownership is declared in the views
-// config, because every consumer of it was a view (what the editor groups into
-// one tree, what the audit tab rolls up, what a reviewer is deemed to have
-// looked at) and none of it ever reached the data.
+// which edges are a page's edit unit. All of it has left. Field metadata and the
+// type set are read from the DEPLOYED schema; a page's SUBGRAPH — what it shows,
+// edits, audits and deletes — is declared in the views config.
 //
 // Nothing in this package is per-type any more.
 package configitems
@@ -97,28 +94,6 @@ type ViewConfig struct {
 	// schema's interfaces, so an implementation declares only what it changes.
 	Types map[string]TypeDecl `yaml:"types,omitempty"`
 
-	// Ownership names the ordered candidate owners of a type whose ownership
-	// the SCHEMA cannot express.
-	//
-	// Ownership is otherwise DERIVED: a child whose back-edge to a parent is
-	// non-null cannot outlive it. One type defeats that — NetworkInterface is
-	// owned by exactly one of {server, networkDevice, networkAdapter}, an XOR
-	// that no single edge can declare non-null.
-	//
-	// ONE job: what dies with the parent (and, falling out of the same answer,
-	// which edge a child links back through).
-	//
-	// ⚠️ NOT identity. That is `orbIdPattern` in the SCHEMA, where it belongs —
-	// a views overlay is per-deployment, and a key declared there would let one
-	// deployment mint ids another cannot derive for the same data. The two lists
-	// differ in content, not just in home: a NetworkInterface is owned by
-	// its networkAdapter and named after its server or its device.
-	//
-	// Ordered, most-specific first; the first edge a node actually has is its
-	// owner. Never a map — Go map iteration is randomised, and this decides a
-	// delete.
-	OwnerReferences map[string][]string `yaml:"ownerReferences,omitempty"`
-
 	// CanonicalParent answers the INVERSE question to a page: a page is indexed
 	// by root ("what does the Server page show?"), this is indexed by child
 	// ("this IPAddress turned up in a diff — whose page is its home?").
@@ -144,33 +119,28 @@ type PageDecl struct {
 	// not, and live on the type.
 	FilterBy string `yaml:"filterBy,omitempty"`
 
-	// Summary is the left panel: scalars, then reference rows.
+	// Summary is the left panel: scalars, then link rows.
 	Summary SummaryDecl `yaml:"summary,omitempty"`
 
-	// Tabs is the tab strip, in the order it renders. The audit tab is always
-	// last and is never declared.
-	Tabs []MemberDecl `yaml:"tabs,omitempty"`
+	// Subgraph is the page's SUBGRAPH: the entities connected to the root that
+	// this page shows, edits, audits and deletes. One declaration, four
+	// consumers — nothing about it is derived from the schema, because GraphQL
+	// has no concept of ownership and `!` means non-null and nothing more.
+	//
+	// Order is display order. A list member renders as a tab, a single one as
+	// an inline panel. The audit tab is always last and is never declared.
+	Subgraph []MemberDecl `yaml:"subgraph,omitempty"`
 }
 
 // SummaryDecl is the left panel of a detail page.
 //
-// The asymmetry is deliberate. A SCALAR is cheap to show and expensive to miss,
-// so a field added to the schema appears on its own and is removed by naming it.
-// A RELATIONSHIP is a row you chose, so it is listed.
-//
-// ⚠️ A single relationship added to the schema will NOT appear until someone
-// lists it here. That will surprise somebody; it is the price of not having a
-// layout change arrive uninvited.
+// SUBTRACTIVE throughout. Every scalar shows, and so does every SINGLE
+// relationship to a ConfigItem that is not in the page's subgraph — as a link
+// row, display-only. A link row is navigation: it is never edited, audited or
+// deleted from this page. Naming a field here removes it, scalar or link.
 type SummaryDecl struct {
-	// IgnoreFields drops scalars. Subtractive.
+	// IgnoreFields drops scalars and link rows.
 	IgnoreFields []string `yaml:"ignoreFields,omitempty"`
-
-	// Refs are the SINGLE relationships rendered as link rows, in row order.
-	// A list here is refused: a list cannot be one row.
-	//
-	// Listing them is what retired the `viewIgnored` annotation — a relationship
-	// you did not want shown previously had no way out other than a flag.
-	Refs []string `yaml:"refs,omitempty"`
 }
 
 // TypeDecl is how a type renders, wherever it renders.
@@ -216,24 +186,18 @@ type TypeDecl struct {
 	Fields map[string]FieldDecl `yaml:"fields,omitempty"`
 }
 
-// MemberDecl is one relationship a page includes, as a tab.
+// MemberDecl is one path in a page's subgraph.
 type MemberDecl struct {
-	// Path is a field name, or a two-segment dotted path whose rows are the far
-	// type (`storageControllers.storageDevices`). A path exists because
-	// StorageController has no scalar fields of its own, so a controllers tab is
-	// a list of bare names and the content is the devices.
+	// Path is a field name, or a dotted path from the root
+	// (`storageControllers.storageDevices`). Every entity the path reaches is in
+	// the subgraph; the entities at intermediate hops are in it only when their
+	// own path is listed too.
 	Path string `yaml:"path"`
 
-	// Editable means THE EDITOR WRITES THIS, and nothing else.
-	//
-	// It used to also carry ownership — what dies with the parent and what the
-	// audit tab rolls up — which put `editable: true` on lists the editor has
-	// never been able to edit. Ownership is derived from the schema now.
-	//
-	// Kept rather than derived because it expresses something underivable: a
-	// rack page shows its servers and may choose not to let you edit them from
-	// there. No page wants that today, so the flag is currently redundant with
-	// "a owned single that has editable fields".
+	// Editable means THE EDITOR WRITES THIS. Single-cardinality at every hop
+	// and at most two hops: an edit target is addressed by path, a path cannot
+	// name one row of a list, and the editor creates at most one missing
+	// intermediate. Anything else is refused out loud at load.
 	Editable bool `yaml:"editable,omitempty"`
 }
 
@@ -242,10 +206,10 @@ type MemberDecl struct {
 //   - networkAdapters                              # the common case
 //   - { path: idracSettings, editable: true }
 //
-// The short form is not a convenience: `editable` is true on three tabs out of
-// eighteen, and requiring a mapping everywhere would bury the exception in
-// noise. A reader scanning a tab list is reading PATHS; the mapping form is what
-// says "something unusual here".
+// The short form is not a convenience: most members are not editable, and
+// requiring a mapping everywhere would bury the exception in noise. A reader
+// scanning a subgraph is reading PATHS; the mapping form is what says
+// "something unusual here".
 func (m *MemberDecl) UnmarshalYAML(node *yaml.Node) error {
 	if node.Kind == yaml.ScalarNode {
 		return node.Decode(&m.Path)
@@ -349,6 +313,7 @@ func LoadViewConfig(defaultPath, overlayPath string) (cfg ViewConfig, hash strin
 	if err := yaml.Unmarshal(base, &cfg); err != nil {
 		return ViewConfig{}, "", nil, fmt.Errorf("parse views config %s: %w", defaultPath, err)
 	}
+	warnings = append(warnings, RetiredKeyWarnings(defaultPath, base)...)
 
 	sum := sha256.New()
 	sum.Write(base)
@@ -372,12 +337,46 @@ func LoadViewConfig(defaultPath, overlayPath string) (cfg ViewConfig, hash strin
 				// has nothing to read.
 				warnings = append(warnings, "views overlay "+overlayPath+" is not valid YAML ("+parseErr.Error()+"); serving the shipped defaults")
 			} else {
+				warnings = append(warnings, RetiredKeyWarnings(overlayPath, raw)...)
 				cfg = MergeViewConfig(cfg, overlay)
 				sum.Write(raw)
 			}
 		}
 	}
 	return cfg, hex.EncodeToString(sum.Sum(nil)), warnings, nil
+}
+
+// RetiredKeyWarnings names every key a views document still carries from the
+// derived-ownership model, which the YAML decoder would otherwise drop in
+// silence. An overlay written against the old shape is the likely carrier: it
+// would render pages with no tabs and nothing would say why.
+func RetiredKeyWarnings(file string, raw []byte) []string {
+	var doc struct {
+		OwnerReferences yaml.Node `yaml:"ownerReferences"`
+		Pages           map[string]struct {
+			Tabs    yaml.Node `yaml:"tabs"`
+			Summary struct {
+				Refs yaml.Node `yaml:"refs"`
+			} `yaml:"summary"`
+		} `yaml:"pages"`
+	}
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return nil
+	}
+	var out []string
+	if !doc.OwnerReferences.IsZero() {
+		out = append(out, file+": `ownerReferences:` is retired and ignored — a page declares what it deletes in `subgraph:`")
+	}
+	for _, name := range sortedKeys(doc.Pages) {
+		p := doc.Pages[name]
+		if !p.Tabs.IsZero() {
+			out = append(out, file+": "+name+": `tabs:` is retired and ignored — list the paths under `subgraph:`")
+		}
+		if !p.Summary.Refs.IsZero() {
+			out = append(out, file+": "+name+": `summary.refs:` is retired and ignored — single relationships outside the subgraph are link rows on their own")
+		}
+	}
+	return out
 }
 
 // MergeViewConfig lays an overlay over a base, replacing PER VIEW.
@@ -388,14 +387,12 @@ func LoadViewConfig(defaultPath, overlayPath string) (cfg ViewConfig, hash strin
 // tombstone syntax. A deployment that declares `Server` owns the Server page and
 // still receives every change shipped to the other eighteen.
 //
-// The same reasoning applies one level up to interfaceFields and canonicalParent,
-// which merge per field and per type respectively.
+// canonicalParent merges per type, for the same reason.
 func MergeViewConfig(base, overlay ViewConfig) ViewConfig {
 	out := ViewConfig{
 		SchemaVersion:   base.SchemaVersion,
 		Pages:           map[string]PageDecl{},
 		Types:           map[string]TypeDecl{},
-		OwnerReferences: map[string][]string{},
 		CanonicalParent: map[string][]CanonicalParentDecl{},
 	}
 	if overlay.SchemaVersion != "" {
@@ -412,12 +409,6 @@ func MergeViewConfig(base, overlay ViewConfig) ViewConfig {
 	}
 	for k, v := range overlay.Types {
 		out.Types[k] = v
-	}
-	for k, v := range base.OwnerReferences {
-		out.OwnerReferences[k] = v
-	}
-	for k, v := range overlay.OwnerReferences {
-		out.OwnerReferences[k] = v
 	}
 	for k, v := range base.CanonicalParent {
 		out.CanonicalParent[k] = v
@@ -454,7 +445,6 @@ func (c ViewConfig) Validate(types map[string]TypeInfo, deployedVersion string) 
 		SchemaVersion:   c.SchemaVersion,
 		Pages:           map[string]PageDecl{},
 		Types:           map[string]TypeDecl{},
-		OwnerReferences: map[string][]string{},
 		CanonicalParent: map[string][]CanonicalParentDecl{},
 	}
 	// An INTERFACE is a legitimate key here even though introspection returns
@@ -558,67 +548,31 @@ func (c ViewConfig) Validate(types map[string]TypeInfo, deployedVersion string) 
 			Slug:       decl.Slug,
 			MenuWeight: decl.MenuWeight,
 			FilterBy:   decl.FilterBy,
-			Summary:    SummaryDecl{IgnoreFields: decl.Summary.IgnoreFields},
+			Summary:    decl.Summary,
 		}
-		// A ref is ONE ROW. A list cannot be one row, and accepting it would
-		// render a link to whichever element DGraph returned first.
-		for _, r := range decl.Summary.Refs {
-			f, found := fieldNamed(info, r)
-			switch {
-			case !found:
-				warn = append(warn, typeName+": ref "+r+" is not a field on "+typeName)
-			case f.Kind == "SCALAR" || f.Kind == "ENUM":
-				warn = append(warn, typeName+": ref "+r+" is a scalar; scalars are rows already")
-			case f.IsList:
-				warn = append(warn, typeName+": ref "+r+" is a LIST, which cannot be a summary row — make it a tab")
-			default:
-				if _, isConfigItem := types[f.TypeName]; !isConfigItem {
-					warn = append(warn, typeName+": ref "+r+" points at "+f.TypeName+", which is not a ConfigItem")
-					continue
-				}
-				kept.Summary.Refs = append(kept.Summary.Refs, r)
-			}
-		}
-		for _, m := range decl.Tabs {
+		for _, m := range decl.Subgraph {
 			if reason := validateMemberPath(types, info, typeName, m.Path); reason != "" {
-				warn = append(warn, typeName+": tab "+m.Path+" — "+reason)
+				warn = append(warn, typeName+": subgraph "+m.Path+" — "+reason)
 				continue
 			}
-			// `editable:` on a LIST is refused and SAID — the tab still renders,
-			// it just cannot be written from here. An edit target is addressed
-			// by path and a path cannot say which row of a list it means, so the
-			// editor has never been able to honour this. Dropping the flag in
-			// silence is the worse failure: the page looks configured for an
-			// edit that will never arrive, and nothing on the page says so.
+			// `editable:` the editor cannot honour is refused and SAID — the
+			// member still renders, audits and deletes; it just cannot be
+			// written from here. Dropping the flag in silence is the worse
+			// failure: the page looks configured for an edit that never arrives.
 			if m.Editable && memberIsList(types, info, m.Path) {
-				warn = append(warn, typeName+": tab "+m.Path+" is a LIST and cannot be editable — "+
+				warn = append(warn, typeName+": subgraph "+m.Path+" is a LIST and cannot be editable — "+
 					"an edit target is addressed by path, and a path cannot name one row; "+
-					"the tab renders read-only")
+					"it renders read-only")
 				m.Editable = false
 			}
-			kept.Tabs = append(kept.Tabs, m)
+			if m.Editable && strings.Count(m.Path, ".") > 1 {
+				warn = append(warn, typeName+": subgraph "+m.Path+" is more than two hops deep and cannot be editable — "+
+					"the editor creates at most one missing intermediate; it renders read-only")
+				m.Editable = false
+			}
+			kept.Subgraph = append(kept.Subgraph, m)
 		}
 		out.Pages[typeName] = kept
-	}
-
-	for _, childType := range sortedKeys(c.OwnerReferences) {
-		info, known := types[childType]
-		if !known {
-			warn = append(warn, childType+": no such type in the deployed schema; its ownership is ignored")
-			continue
-		}
-		var kept []string
-		for _, edge := range c.OwnerReferences[childType] {
-			f, found := fieldNamed(info, edge)
-			if !found || f.Kind == "SCALAR" || f.Kind == "ENUM" {
-				warn = append(warn, childType+": ownership edge "+edge+" is not a relationship on "+childType)
-				continue
-			}
-			kept = append(kept, edge)
-		}
-		if len(kept) > 0 {
-			out.OwnerReferences[childType] = kept
-		}
 	}
 
 	for _, childType := range sortedKeys(c.CanonicalParent) {
@@ -695,11 +649,11 @@ func (c ViewConfig) TypeOf(info TypeInfo, typeName string) TypeDecl {
 	return merged
 }
 
-// BackEdge is one child→parent relationship the schema declares as non-null.
+// BackEdge is one relationship the schema declares as non-null.
 //
-// Read from the SDL rather than introspection, because introspection reports a
-// field's type but orbital's DerivedField flattens the NonNull wrapper away —
-// and nullability is exactly the fact this rule turns on.
+// NOT ownership — `!` means non-null and nothing more. It matters to a delete
+// for exactly that reason: an entity whose non-null edge points at something
+// deleted is left holding nothing, and the preview has to be able to say so.
 type BackEdge struct {
 	Child  string // the type that cannot survive
 	Field  string // the field on the child pointing up
@@ -734,7 +688,7 @@ var (
 	nonNullFieldRe = regexp.MustCompile(`^\s+(\w+):\s*(\w+)!`)
 )
 
-// validateMemberPath returns why a member path cannot be supported, or "".
+// validateMemberPath returns why a subgraph path cannot be supported, or "".
 //
 // A member walks LIST relationships and produces ROWS, so a list hop is the
 // normal case and not an error — `storageControllers.storageDevices` is the
@@ -745,12 +699,8 @@ func validateMemberPath(types map[string]TypeInfo, info TypeInfo, typeName, path
 	if path == "" {
 		return "empty path"
 	}
-	segs := strings.Split(path, ".")
-	if len(segs) > 2 {
-		return "a member path is at most two segments; deeper is a graph browser"
-	}
 	cur, curName := info, typeName
-	for _, seg := range segs {
+	for _, seg := range strings.Split(path, ".") {
 		f, found := fieldNamed(cur, seg)
 		if !found {
 			return curName + " has no field " + seg
@@ -799,11 +749,9 @@ func (c ViewConfig) CanonicalParentOf(childType string, has func(field string) b
 	return CanonicalParentDecl{}, false
 }
 
-// TabsOf returns a page's tab strip. A type with no page declares none.
-func (c ViewConfig) TabsOf(typeName string) []MemberDecl { return c.Pages[typeName].Tabs }
-
-// RefsOf returns a page's summary link rows.
-func (c ViewConfig) RefsOf(typeName string) []string { return c.Pages[typeName].Summary.Refs }
+// SubgraphOf returns a page's declared subgraph. A type with no page declares
+// none, and so has nothing to show, edit, audit or delete beyond itself.
+func (c ViewConfig) SubgraphOf(typeName string) []MemberDecl { return c.Pages[typeName].Subgraph }
 
 // IsPage reports whether a type has a page — a URL, a menu entry, and rows of
 // that type linking to it.

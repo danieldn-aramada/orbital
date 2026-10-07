@@ -143,7 +143,7 @@ test('a relationship table shows the child type\'s computed columns', async ({ p
 
   const racks = page.getByTestId('generic-tab').filter({ hasText: 'Racks' }).first();
   await expect(racks.locator('thead th').filter({ hasText: 'Servers' })).toHaveCount(1);
-  // Owned children take a different branch of the detail query, and that
+  // Subgraph members take a different branch of the detail query, and that
   // branch originally skipped the computed columns — header present, cells
   // empty. This asserts the VALUE, which is what caught it.
   const rackHeaders = await racks.locator('thead th').allInnerTexts();
@@ -179,7 +179,7 @@ test('a network device shows what its connected servers do', async ({ page }) =>
   }
 
   // At least one row has a real cluster — headers over universally empty cells
-  // is exactly how the owned-child branch bug presented.
+  // is exactly how the subgraph-member branch bug presented.
   const idx = headers.indexOf('Cluster');
   const texts = await conns.locator('tbody tr').allInnerTexts();
   expect(texts.length).toBeGreaterThan(0);

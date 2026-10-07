@@ -19,7 +19,7 @@ import (
 //	                 cannot clear it: it is computed from the changeset, not from
 //	                 the base anchor.
 //	subtreeChanged — the reviewed scope moved without any change object going out
-//	                 of date, typically an edit to an owned child. The REVIEWER's
+//	                 of date, typically an edit to a subgraph member. The REVIEWER's
 //	                 to clear, by approving again.
 //
 // Both block merge. Before this split, approving cleared everything, so a
@@ -76,7 +76,7 @@ func TestRebase_ItemWithoutVersionIsNeverStale(t *testing.T) {
 	}
 }
 
-// ── 4,5,6. the subtree signal survives, separately ─────────────────────────
+// ── 4,5,6. the subgraph signal survives, separately ─────────────────────────
 
 func TestRebase_ChildEditIsSubtreeChangedNotStale(t *testing.T) {
 	ctx := context.Background()
