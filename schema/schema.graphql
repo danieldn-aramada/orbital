@@ -132,6 +132,7 @@ type ServerConfigurationProfile implements ConfigItem {
 """orbIdPattern: {kind}-{server.serviceTag}"""
 type ServerMaintenance implements ConfigItem {
     enabled: Boolean
+    approved: Boolean
     windowStart: DateTime
     windowEnd: DateTime
     reason: String
