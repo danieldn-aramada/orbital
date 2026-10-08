@@ -1209,6 +1209,45 @@ function genericTabKey(slug, orbId) {
   return `${slug}|${orbId}`
 }
 
+// syncOpenParams mirrors the OPEN TAB SET into the URL as repeated ?open=<orbId>,
+// so the address bar is something you can copy out and send to someone. Read off
+// the strip, in strip order, so the URL says exactly what is on screen.
+//
+// The whole set rather than the active tab, and that IS the point: the URL then
+// moves only when you open or close something — the two acts that change state —
+// and holds still while you click between tabs. Mirroring the active tab instead
+// moved the address bar on every click, which in a server-rendered app reads as
+// a page load even though switching between already-open tabs fetches nothing.
+//
+// What that gives up is "the exact tab I was looking at": the recipient lands on
+// the last one in the list. Encoding the active tab separately would put the
+// churn straight back, so it is not encoded.
+//
+// replaceState, not pushState: Back would otherwise step backwards through tabs
+// you opened, which is a different feature and not one a tab strip implies.
+//
+// This is also what makes a closed tab stay closed across a reload. The param
+// used to be stripped immediately after being honoured for exactly that reason;
+// keeping it in sync BOTH ways removes the need — closing a tab removes its
+// param, so there is nothing left to resurrect.
+function syncOpenParams() {
+  const url = new URL(window.location.href)
+  url.searchParams.delete('open')
+  for (const a of document.querySelectorAll('#tablist li.tab a[data-orb-id]')) {
+    url.searchParams.append('open', a.dataset.orbId)
+  }
+  // `label` is an inbound hint from whoever linked here; the table already has
+  // the name. Carrying it onward would just make the shared URL longer.
+  url.searchParams.delete('label')
+  history.replaceState(null, '', url.pathname + url.search)
+}
+
+// clearGenericTabsForSlug drops THIS page's saved tabs, leaving other pages'
+// alone. Only the inbound ?open= path uses it — see initGenericTabRestoration.
+function clearGenericTabsForSlug(slug) {
+  localStorage.genericTabs = JSON.stringify(readGenericTabs().filter(t => t.slug !== slug))
+}
+
 function genericTabDomId(slug, orbId) {
   return `${slug}-${safeDomId(orbId)}`
 }
@@ -1332,6 +1371,9 @@ export function loadGenericTab(label, slug, orbId, activate = true) {
 
   const tabLink = document.getElementById(tabId)
   const tabContent = document.getElementById(contentId)
+  // Set as a property, not interpolated into the markup above: an orbId is
+  // caller-supplied and would otherwise need escaping to sit in an attribute.
+  tabLink.dataset.orbId = orbId
 
   // The SAME url the row links to. HX-Request makes the handler return the body
   // alone; there is no second endpoint that could drift from the page. Stashed
@@ -1380,10 +1422,12 @@ export function loadGenericTab(label, slug, orbId, activate = true) {
     replaceCurrentTab(tabId, nextId || 'tab-summary')
     li.remove()
     tabContent.remove()
+    syncOpenParams()
     if (wasActive) document.getElementById(nextId || 'tab-summary')?.click()
   })
 
   saveGenericTab(label, slug, orbId)
+  syncOpenParams()
   if (activate) tabLink.click()
 }
 
@@ -1413,31 +1457,43 @@ export function initGenericTabRestoration() {
   if (!table) return
   clearTabStateOnFresh()
   const slug = table.dataset.slug
-  for (const t of readGenericTabs()) {
-    if (t.slug === slug) loadGenericTab(t.label, t.slug, t.orbId, false)
+
+  // ?open=<orbId>[&open=<orbId>…][&label=<name>] deep-links, the same form every
+  // hand-written list page accepts. It is how another page hands you one of
+  // these — a cluster's node row opening that server — how a bookmark reopens a
+  // tab, and now how a URL copied out of the address bar reopens a whole set.
+  const params = new URLSearchParams(window.location.search)
+  const openIds = params.getAll('open').filter(Boolean)
+  if (openIds.length) {
+    // The URL REPLACES the saved set rather than merging into it. Two reasons: a
+    // link should show the recipient what the sender had open, not that plus
+    // whatever they themselves left open last week; and merging would force the
+    // pasted URL to be rewritten to the merged set the moment it loaded, so a
+    // link someone sent you would mutate in the address bar as you watched it.
+    clearGenericTabsForSlug(slug)
+    for (const openId of openIds) {
+      // The label comes from the TABLE when the link did not carry one — which is
+      // the common case now that /{slug}/{orbId} redirects here, because the
+      // redirect happens before anything is read from DGraph and so has no name to
+      // put in the URL. The row is already on the page; reading it there costs
+      // nothing and cannot disagree with what the list shows.
+      //
+      // `label` is honoured only for a single-tab link, because one hint cannot
+      // name several tabs and silently applying it to the first would be worse
+      // than reading all of them off the table.
+      const hint = openIds.length === 1 ? params.get('label') : ''
+      const label = hint || labelFromTable(slug, openId) || openId
+      loadGenericTab(label, slug, openId, false)
+    }
+    // The LAST one is selected: it is the most recently opened, which is usually
+    // what the sender was on. See syncOpenParams for why the active tab is not
+    // carried in the URL in its own right.
+    document.getElementById(`tab-generic-${genericTabDomId(slug, openIds[openIds.length - 1])}`)?.click()
+    return
   }
 
-  // ?open=<orbId>&label=<name> deep-links, the same form every hand-written
-  // list page accepts. It is how another page hands you one of these — a
-  // cluster's node row opening that server — and how a bookmark reopens a tab.
-  // Takes precedence over the restored tab: an explicit request beats what
-  // happened to be open last time.
-  const params = new URLSearchParams(window.location.search)
-  const openId = params.get('open')
-  if (openId) {
-    // The label comes from the TABLE when the link did not carry one — which is
-    // the common case now that /{slug}/{orbId} redirects here, because the
-    // redirect happens before anything is read from DGraph and so has no name to
-    // put in the URL. The row is already on the page; reading it there costs
-    // nothing and cannot disagree with what the list shows.
-    const label = params.get('label') || labelFromTable(slug, openId) || openId
-    loadGenericTab(label, slug, openId)
-    saveGenericTab(label, slug, openId)
-    document.getElementById(`tab-generic-${genericTabDomId(slug, openId)}`)?.click()
-    // Dropped from the URL once honoured, so a reload does not force the tab
-    // back open after it has been closed.
-    history.replaceState(null, '', BASE + '/' + slug)
-    return
+  for (const t of readGenericTabs()) {
+    if (t.slug === slug) loadGenericTab(t.label, t.slug, t.orbId, false)
   }
 
   // The tab you were on comes back selected — which is what the hand-written

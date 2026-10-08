@@ -43,26 +43,23 @@
               {{else}}
               <div class="buttons has-addons" style="margin-bottom:0; flex-wrap:nowrap;">
                 <button
-                  class="button is-small tooltip js-user-role-set{{if eq .Role "readonly"}} is-primary is-selected{{end}}"
+                  class="button is-small js-user-role-set{{if eq .Role "readonly"}} is-primary is-selected{{end}}"
                   data-user-id="{{.ID}}"
                   data-role="readonly"
                   {{if or $self (eq .Role "readonly")}}disabled{{end}}
-                  style="width:5rem;"
-                 data-text="Readonly — view only">Readonly</button>
+                  style="width:5rem;">Readonly</button>
                 <button
-                  class="button is-small tooltip js-user-role-set{{if eq .Role "dev"}} is-warning is-selected{{end}}"
+                  class="button is-small js-user-role-set{{if eq .Role "dev"}} is-warning is-selected{{end}}"
                   data-user-id="{{.ID}}"
                   data-role="dev"
                   {{if or $self (eq .Role "dev")}}disabled{{end}}
-                  style="width:5rem;"
-                 data-text="Dev — config access">Dev</button>
+                  style="width:5rem;">Dev</button>
                 <button
-                  class="button is-small tooltip js-user-role-set{{if eq .Role "admin"}} is-danger is-selected{{end}}"
+                  class="button is-small js-user-role-set{{if eq .Role "admin"}} is-danger is-selected{{end}}"
                   data-user-id="{{.ID}}"
                   data-role="admin"
                   {{if or $self (eq .Role "admin")}}disabled{{end}}
-                  style="width:5rem;"
-                 data-text="Admin — role management">Admin</button>
+                  style="width:5rem;">Admin</button>
               </div>
               {{end}}
             </td>

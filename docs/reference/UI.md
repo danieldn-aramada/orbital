@@ -4,6 +4,24 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 
 ## Settled Decisions
 
+- **The address bar mirrors the whole OPEN TAB SET as repeated `?open=<orbId>`, so it moves only on
+  open and close — never on switching tabs.** *(2026-10-07.)* `syncOpenParams` in `shared.js` reads
+  the strip (`li.tab a[data-orb-id]`) and rewrites the param list; it is called from exactly two
+  places, the end of `loadGenericTab` and the close handler. **Do NOT mirror the ACTIVE tab instead**
+  — that was built first and rejected: the URL moved on every click, which in a server-rendered app
+  reads as a page load even though switching between already-open tabs issues no request. The active
+  tab is deliberately NOT in the URL for the same reason; a recipient lands on the last id in the
+  list. **Do NOT re-add the strip** that used to run after a deep link was honoured — it existed so a
+  reload could not resurrect a closed tab, and syncing both ways removes that need. **An inbound
+  `?open=` REPLACES this slug's saved tabs** (`clearGenericTabsForSlug`) rather than merging: merging
+  would force the pasted URL to be rewritten to the merged set on load, so a link would mutate in the
+  address bar as you watched it. `replaceState`, never `pushState` — Back stepping backwards through
+  opened tabs is a different feature. Pinned by the seven `?open=` tests in `e2e/generic-tabs.spec.ts`.
+  ⚠️ A test asserting a generic page's URL must allow a query (`/\/slug(\?|$)/`), not anchor on `$`.
+  ⚠️ A deep link SELECTS a detail tab, so `#generic-table` is hidden on arrival — wait on
+  `generic-fields`, not the table.
+
+
 ### Detail tabs (list pages)
 
 - **Closing a tab lands on its LEFT neighbour; closing a background tab moves nothing.** *(2026-10-05.)* The leftmost tab's neighbour is Summary, so no special case. ⚠️ `replaceCurrentTab` must get the same neighbour, or the next arrival restores a removed tab.
@@ -12,7 +30,7 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 - **Five tabs max, evict least-recently-USED, show a toast — never refuse.** *(2026-10-05.)* `MAX_GENERIC_TABS = 5` in `shared.js`, deliberately not configurable. Safe because a tab holds no unsaved state.
 - **The edit modal lives INSIDE `generic-detail-content`**, which is served both as a page and as the tab fragment. *(2026-10-05.)* ⚠️ Any swap must `genericEditors.delete(id)` first, or Edit drives an editor bound to a detached node. ⚠️ Post-save reload is tab-aware, like the Reload button.
 - **`displayTabContent` touches only panels that HAVE an id.** *(2026-10-05.)* `.tab-content` is also the layout wrapper; hiding an id-less one is permanent. ⚠️ Tests must assert the PANEL is visible, not just the strip.
-- **A ConfigItem is shown only as a tab. `/{slug}/{orbId}` is the tab's fetch URL and 404s for a human.** *(2026-10-05.)* Rows link via `/{slug}?open={orbId}`; nothing links to the detail path. Every `Detail` render is a fragment, error paths included. `?open=` is stripped once honoured — no copyable per-entity link, by design.
+- **A ConfigItem is shown only as a tab. `/{slug}/{orbId}` is the tab's fetch URL and 404s for a human.** *(2026-10-05.)* Rows link via `/{slug}?open={orbId}`; nothing links to the detail path. Every `Detail` render is a fragment, error paths included. ⚠️ The "`?open=` is stripped once honoured, no copyable link" half of this was reversed 2026-10-07 — see the open-set rule above.
 - **Double-click opens a row; single click is DataTables row selection** (used by Copy/Excel/CSV export). *(2026-10-05.)* ⚠️ Before binding a gesture on a DataTable, check `select` — the conflict is silent.
 - **A list row's name is plain text; the row carries `data-orb-id`.** *(2026-10-05.)* Blue in a table means "you leave this page". Reference cells still link; references to pageless types are text.
 - **Detail action row sits at the top of the shared body; Edit is `is-rounded is-link`.** *(2026-10-05.)* Order: action row → pending-changes banner → Fields.

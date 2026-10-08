@@ -125,8 +125,11 @@ test('Reload inside a tab refreshes that tab and leaves the others open', async 
 
   // The panel's body came back...
   await expect(panel.getByTestId('generic-fields')).toBeVisible({ timeout: 10_000 });
-  // ...and nothing navigated, so both tabs survive.
-  await expect(page).toHaveURL(/\/network-devices$/);
+  // ...and nothing navigated, so both tabs survive. The PATH is what matters
+  // here; the query may carry ?open= for the active tab, which is not a
+  // navigation. Anchored to `$` until 2026-10-07, when the address bar started
+  // reflecting the open tab so the view could be shared.
+  await expect(page).toHaveURL(/\/network-devices(\?|$)/);
   await expect(page.locator('#tablist li.tab')).toHaveCount(3);
 });
 
@@ -481,7 +484,9 @@ test('Edit inside a tab opens the editor and saves', async ({ page }) => {
   // The save re-renders THIS panel, not the whole window — a blanket reload
   // would throw the reader back to the list and (lazily) unload the tab.
   await expect(panel.getByTestId('generic-fields')).toContainText(String(marker), { timeout: 15_000 });
-  await expect(page).toHaveURL(/\/network-devices$/);
+  // Path, not full URL: the active tab is still open, so ?open= is present and
+  // correct. A real navigation would change the path.
+  await expect(page).toHaveURL(/\/network-devices(\?|$)/);
   await expect(page.locator('#tablist li.tab')).toHaveCount(2);
 });
 
@@ -533,4 +538,174 @@ test('the cap survives a reload — restoration cannot exceed it', async ({ page
   }
   await page.goto('/clusters');
   await expect(page.locator('#tablist li.tab')).toHaveCount(6);   // Summary + 5
+});
+
+// ?open= is the SHAREABLE form of "these are the tabs I have open".
+//
+// The param was always read on arrival — a cluster's node row opens a server
+// that way — but it was stripped from the address bar the moment it was
+// honoured, so you could follow such a link and never produce one. Opening a
+// tab and copying the URL gave you the bare list, and the thing you were
+// looking at was unsendable.
+//
+// It was stripped for a real reason: left in place, a reload after closing the
+// tab reopened it. Syncing BOTH ways removes that reason.
+//
+// The URL carries the whole OPEN SET, not the active tab. That is what keeps it
+// still while you click around: it moves only when the set changes. An earlier
+// cut mirrored the active tab and moved the address bar on every click, which
+// in a server-rendered app reads as a page load even though switching between
+// already-open tabs issues no request at all.
+
+test('opening a row puts ?open= in the address bar, so the view can be shared', async ({ page }) => {
+  await page.goto('/network-devices');
+  await expect(page.locator('#generic-table')).toBeVisible();
+
+  await listRows(page).first().dblclick();
+  await expect(page.locator('[id^="tab-content-generic-network-devices-"]')).toBeVisible();
+
+  // The orbId, not the label: it is the stable identifier the deep-link reader
+  // resolves, and a name can change under it.
+  await expect(page, 'the URL must name the open item').toHaveURL(/\/network-devices\?open=/);
+});
+
+test('a second tab appends a second ?open= — the URL carries the whole set', async ({ page }) => {
+  await page.goto('/network-devices');
+  await expect(page.locator('#generic-table')).toBeVisible();
+  const rows = listRows(page);
+
+  await rows.nth(0).dblclick();
+  // Back to Summary to reach the table again — the first tab hid it.
+  await page.locator('#tab-summary').click();
+  await rows.nth(1).dblclick();
+  await expect(page.locator('#tablist li.tab')).toHaveCount(3);   // Summary + 2
+
+  const open = new URL(page.url()).searchParams.getAll('open');
+  expect(open, 'both open tabs must be in the URL, not just the active one').toHaveLength(2);
+  expect(new Set(open).size, 'two different rows, two different ids').toBe(2);
+});
+
+test('switching between open tabs does not move the URL', async ({ page }) => {
+  await page.goto('/network-devices');
+  await expect(page.locator('#generic-table')).toBeVisible();
+  const rows = listRows(page);
+
+  await rows.nth(0).dblclick();
+  await page.locator('#tab-summary').click();
+  await rows.nth(1).dblclick();
+  const settled = page.url();
+
+  // Back to the first tab, then Summary, then the second. None of these change
+  // what is open, so none of them may change the address bar — a URL that moves
+  // on a click the user reads as "switch view" reads as a page load.
+  await page.locator('#tablist li.tab a[data-orb-id]').first().click();
+  await expect(page, 'clicking another open tab navigated nothing').toHaveURL(settled);
+
+  await page.locator('#tab-summary').click();
+  await expect(page, 'Summary is a tab, not a change to the open set').toHaveURL(settled);
+
+  await page.locator('#tablist li.tab a[data-orb-id]').nth(1).click();
+  await expect(page).toHaveURL(settled);
+});
+
+test('closing one tab drops its ?open= and leaves the others', async ({ page }) => {
+  await page.goto('/network-devices');
+  await expect(page.locator('#generic-table')).toBeVisible();
+  const rows = listRows(page);
+
+  await rows.nth(0).dblclick();
+  const afterFirst = page.url();
+  await page.locator('#tab-summary').click();
+  await rows.nth(1).dblclick();
+
+  // Close the active (second) tab: the URL must fall back to exactly the set
+  // that is still open, not keep advertising a tab that is gone.
+  await page.locator('#tablist li.tab.is-active').locator('[id^="tab-close-generic-"]').click();
+  await expect(page.locator('#tablist li.tab')).toHaveCount(2);
+  await expect(page).toHaveURL(afterFirst);
+});
+
+test('a closed tab stays closed across a reload — the reason the param used to be stripped', async ({ page }) => {
+  await page.goto('/network-devices');
+  await expect(page.locator('#generic-table')).toBeVisible();
+
+  await listRows(page).first().dblclick();
+  await expect(page.locator('#tablist li.tab')).toHaveCount(2);
+
+  await page.locator('#tablist li.tab.is-active').locator('[id^="tab-close-generic-"]').click();
+  await expect(page.locator('#tablist li.tab')).toHaveCount(1);
+  await expect(page, 'closing must clear the param, not leave it pointing at a closed tab').toHaveURL(/\/network-devices$/);
+
+  await page.reload();
+  await expect(page.locator('#generic-table')).toBeVisible();
+  await expect(page.locator('#tablist li.tab'),
+    'the reload must not resurrect it').toHaveCount(1);
+});
+
+test('a copied multi-tab URL reopens every tab, with the last one selected', async ({ page }) => {
+  await page.goto('/network-devices');
+  await expect(page.locator('#generic-table')).toBeVisible();
+  const rows = listRows(page);
+
+  await rows.nth(0).dblclick();
+  await page.locator('#tab-summary').click();
+  await rows.nth(1).dblclick();
+  const shared = page.url();
+  const ids = new URL(shared).searchParams.getAll('open');
+
+  // Arrive as a recipient would: a fresh context with no saved tabs of its own.
+  const ctx = await page.context().browser()!.newContext();
+  const recipient = await ctx.newPage();
+  await recipient.goto(shared);
+  // Not the table: a deep link SELECTS a detail tab, so the list panel is hidden
+  // on arrival. Wait on the panel that was actually asked for.
+  await expect(recipient.getByTestId('generic-fields')).toBeVisible({ timeout: 15_000 });
+
+  await expect(recipient.locator('#tablist li.tab'),
+    'the link must reopen the sender\'s whole set').toHaveCount(3);
+  await expect(recipient.locator('#tablist li.tab.is-active a'),
+    'the last one in the URL is the one you land on').toHaveAttribute('data-orb-id', ids[ids.length - 1]);
+  // And the link itself did not mutate under the recipient.
+  expect(new URL(recipient.url()).searchParams.getAll('open')).toEqual(ids);
+
+  await ctx.close();
+});
+
+test('an inbound ?open= replaces the saved tabs rather than merging into them', async ({ page }) => {
+  await page.goto('/network-devices');
+  await expect(page.locator('#generic-table')).toBeVisible();
+  const rows = listRows(page);
+
+  // Two tabs of my own, left open.
+  await rows.nth(0).dblclick();
+  await page.locator('#tab-summary').click();
+  await rows.nth(1).dblclick();
+  await expect(page.locator('#tablist li.tab')).toHaveCount(3);
+  const mine = new URL(page.url()).searchParams.getAll('open');
+
+  // And back to Summary once more, so the third row is reachable below.
+  await page.locator('#tab-summary').click();
+
+  // Someone sends me a link to a different one. Following it must show me THEIR
+  // view, not theirs stacked on top of mine — and must leave the URL they sent
+  // intact, which merging could not do.
+  const theirs = await rows.nth(2).getAttribute('data-orb-id');
+  await page.goto('/network-devices?open=' + encodeURIComponent(theirs!));
+  await expect(page.getByTestId('generic-fields')).toBeVisible({ timeout: 15_000 });
+
+  await expect(page.locator('#tablist li.tab'), 'my own tabs must not come along').toHaveCount(2);
+  expect(new URL(page.url()).searchParams.getAll('open')).toEqual([theirs]);
+  expect(mine, 'precondition: the link points somewhere I did not already have open').not.toContain(theirs);
+
+  // And the replacement is DURABLE, which is the half that is easy to get wrong:
+  // merging into the saved set looks identical on the linked page — the strip is
+  // built from the URL either way — and only shows up on the next bare visit,
+  // where my two old tabs would come back alongside theirs.
+  await page.goto('/network-devices');
+  // Their tab comes back SELECTED, so again the list panel is hidden and the
+  // detail panel is the thing to wait on.
+  await expect(page.getByTestId('generic-fields')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('#tablist li.tab'),
+    'following a link moves you into that workspace; the old one is not kept underneath').toHaveCount(2);
+  expect(new URL(page.url()).searchParams.getAll('open')).toEqual([theirs]);
 });

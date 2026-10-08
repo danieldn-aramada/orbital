@@ -114,6 +114,22 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   that has moved. Scoped to the editor: a caller that declares nothing proceeds,
   because an API client sending an explicit `remove` is doing it deliberately.
 
+### Fixed
+- **The tabs you have open are now in the address bar, so you can copy the URL
+  and send someone what you are looking at.** `/servers` showed the bare list URL
+  however many tabs were open, so copying it gave the reader the list. The
+  `?open=<orbId>` deep link already existed and already worked — it was stripped
+  from the URL the moment it was honoured, which fixed one problem (a reload
+  resurrecting a tab you had closed) by making the view unshareable. The param is
+  now kept in sync both ways and carries every open tab, so closing one removes
+  only its own entry and a closed tab still stays closed across a reload.
+  Following such a link reopens the whole set, selecting the last one, and
+  replaces whatever you had open on that page.
+
+  The URL therefore changes only when you open or close a tab — switching between
+  tabs that are already open leaves it alone, because nothing about what is open
+  has changed and nothing is fetched.
+
 ### Changed
 - **Audit timestamps are served at sub-second precision.** They were stored at
   PostgreSQL's microsecond precision and serialized with whole seconds, so two
