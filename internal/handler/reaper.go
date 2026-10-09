@@ -11,6 +11,7 @@ import (
 	"github.com/armada/orbital/ent/backup"
 	"github.com/armada/orbital/ent/exportjob"
 	"github.com/armada/orbital/ent/restorejob"
+	"github.com/armada/orbital/internal/metrics"
 )
 
 // The reaper marks jobs failed when the runner that claimed them has died.
@@ -121,6 +122,9 @@ func reapExportJobs(ctx context.Context, db *ent.Client, staleBefore, orphanBefo
 	}
 	for _, j := range jobs {
 		reason := reapReason(j.LockedBy, j.HeartbeatAt == nil)
+		// The runner stopped heartbeating, so nothing else will record this
+		// job's outcome — the reaper is the only place it becomes visible.
+		metrics.RecordJobFailure(metrics.JobExport, metrics.ReasonLeaseLost)
 		n, err := db.ExportJob.Update().
 			Where(exportjob.ID(j.ID), exportjob.StatusIn(exportjob.StatusPending, exportjob.StatusRunning)).
 			SetStatus(exportjob.StatusFailed).
@@ -181,6 +185,9 @@ func reapRestoreJobs(ctx context.Context, db *ent.Client, staleBefore, orphanBef
 	}
 	for _, j := range jobs {
 		reason := reapReason(j.LockedBy, j.HeartbeatAt == nil)
+		// The runner stopped heartbeating, so nothing else will record this
+		// job's outcome — the reaper is the only place it becomes visible.
+		metrics.RecordJobFailure(metrics.JobRestore, metrics.ReasonLeaseLost)
 		n, err := db.RestoreJob.Update().
 			Where(restorejob.ID(j.ID), restorejob.StatusIn(restorejob.StatusPending, restorejob.StatusRunning)).
 			SetStatus(restorejob.StatusFailed).

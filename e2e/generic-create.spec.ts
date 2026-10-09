@@ -11,8 +11,28 @@ const TAG = 'E2ECREATE1';
 const ORB_ID = `colo:server-${TAG}`;
 const IDRAC_ID = `colo:${TAG}-idrac`;
 
+// KubernetesCluster's orbIdPattern is `{name}`, so the id is the namespace and
+// the typed name — nothing else to derive.
+const CLUSTER_NAME = 'e2e-create-cluster';
+const CLUSTER_ID = `colo:${CLUSTER_NAME}`;
+
+// A data centre is a ROOT: nothing above it supplies a namespace, so the form
+// asks for one and the create brings the Namespace node into existence too.
+const DC_NS = 'e2ecreatens';
+const DC_NAME = 'e2e-create-dc';
+const DC_ID = `${DC_NS}:${DC_NAME}`;
+
 // Remove anything a run left behind. Deletes BY THE IDS THIS SPEC CREATES, never
 // a broad filter — the local graph is shared with whoever is developing.
+//
+// Alias `g` is the id the REFUSAL test tries to create. Nothing should ever
+// write it, but if a regression lets one through, leaving it behind would make
+// that test pass for the wrong reason on every later run.
+//
+// ⚠️ Comments do NOT belong inside the query string below. GraphQL comments are
+// `#`, so a `//` there makes the whole mutation a syntax error — and because
+// the response is not checked, cleanup then silently stops deleting anything
+// and later tests fail on stale nodes instead.
 async function cleanup(request: any) {
   await request.post('/graphql', {
     data: {
@@ -20,6 +40,10 @@ async function cleanup(request: any) {
         a: deleteIdracSettings(filter: { orbId: { eq: "${IDRAC_ID}" } }) { numUids }
         b: deleteServerMaintenance(filter: { orbId: { eq: "colo:server-maintenance-${TAG}" } }) { numUids }
         c: deleteServer(filter: { orbId: { eq: "${ORB_ID}" } }) { numUids }
+        d: deleteEksaKubernetesCluster(filter: { orbId: { eq: "${CLUSTER_ID}" } }) { numUids }
+        e: deleteDataCenter(filter: { orbId: { eq: "${DC_ID}" } }) { numUids }
+        f: deleteNamespace(filter: { name: { eq: "${DC_NS}" } }) { numUids }
+        g: deleteDataCenter(filter: { orbId: { eq: "colo:${DC_NAME}" } }) { numUids }
       }`,
     },
   });
@@ -29,16 +53,71 @@ test.beforeEach(async ({ request }) => cleanup(request));
 test.afterEach(async ({ request }) => cleanup(request));
 
 test('a New button appears only where a node can actually be created', async ({ page }) => {
-  // Acceptance 1. Not "every page" — an INTERFACE has no add<Interface> to send,
-  // and a DataCenter would mean minting a namespace, which is its own question.
-  for (const slug of ['servers', 'network-devices']) {
+  // Acceptance 1. Every page that models a creatable type now offers it, each
+  // for a different reason, which is the point — none of them is a special case:
+  //
+  //   servers, network-devices  a plain type with a required parent
+  //   clusters                  an INTERFACE, resolved to its one implementation
+  //   data-centers              a ROOT, so the namespace is typed rather than
+  //                             inherited
+  //
+  // A page would lose the button only by losing one of those properties: no
+  // orbIdPattern, an interface with none or several implementations, or an id
+  // orbital does not mint.
+  for (const slug of ['servers', 'network-devices', 'clusters', 'data-centers']) {
     await page.goto('/' + slug);
     await expect(page.getByTestId('create-open'), `/${slug} should offer create`).toBeVisible();
   }
-  for (const slug of ['clusters', 'data-centers']) {
-    await page.goto('/' + slug);
-    await expect(page.getByTestId('create-open'), `/${slug} must NOT offer create`).toHaveCount(0);
-  }
+});
+
+test('an interface page creates a CONCRETE implementation, never the interface', async ({ page, request }) => {
+  // DGraph generates addEksaKubernetesCluster and no addKubernetesCluster, so an
+  // interface-backed page must resolve to an implementation before it can create.
+  //
+  // Worth a test because NOTHING ON SCREEN shows which type was chosen. The page
+  // heading, the button and every field look identical whether the form resolved
+  // correctly or is about to send a mutation DGraph has no resolver for — the
+  // difference only appears as a failed submit.
+  await page.goto('/clusters');
+  await page.getByTestId('create-open').click();
+  const modal = page.locator('.modal.is-active');
+
+  await expect(modal, 'the modal must name the IMPLEMENTATION; the interface has no add mutation')
+    .toHaveAttribute('data-kind', 'EksaKubernetesCluster');
+
+  await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:colo-galleon' });
+  await modal.locator('[data-create-field="name"]:not([data-create-child])').fill(CLUSTER_NAME);
+  // clusterType exists ONLY on EksaKubernetesCluster. Filling it proves the form
+  // was generated from the implementation's field set rather than the interface's.
+  await modal.locator('[data-create-field="clusterType"]:not([data-create-child])').fill('workload');
+
+  await modal.getByTestId('create-submit').click();
+  await expect(page.locator(`#generic-table tr[data-orb-id="${CLUSTER_ID}"]`),
+    'the new row must appear once the list reloads').toHaveCount(1, { timeout: 15_000 });
+
+  // Read back through ConfigItem and ASK WHAT TYPE IT IS. Querying
+  // getEksaKubernetesCluster would assume the answer; this way a form that
+  // resolved to the wrong implementation shows up as a different __typename.
+  //
+  // Not queryKubernetesCluster: that interface does NOT extend ConfigItem
+  // (EksaKubernetesCluster implements both separately), so it carries no orbId
+  // and KubernetesClusterFilter has no orbId to filter on. The implementation's
+  // own fields need an inline fragment either way — a bare `clusterType` on an
+  // interface selection is refused at validation.
+  const res = await request.post('/graphql', {
+    data: {
+      query: `{ queryConfigItem(filter: { orbId: { eq: "${CLUSTER_ID}" } }) {
+        __typename orbId namespace name
+        ... on EksaKubernetesCluster { clusterType dataCenter { orbId } }
+      } }`,
+    },
+  });
+  const [c] = (await res.json()).data.queryConfigItem;
+  expect(c, 'the cluster must exist').toBeTruthy();
+  expect(c.__typename, 'a concrete implementation, not the interface').toBe('EksaKubernetesCluster');
+  expect(c.namespace, 'namespace comes from the data centre, never typed').toBe('colo');
+  expect(c.clusterType, 'an implementation-only field must survive the create').toBe('workload');
+  expect(c.dataCenter.orbId).toBe('colo:colo-galleon');
 });
 
 test('the form is generated from the view, including the unit', async ({ page }) => {
@@ -306,4 +385,82 @@ test('a field says what it expects, so nothing has to be guessed', async ({ page
   // A String needs no hint — an empty text box already says "text".
   await expect(modal.locator('[data-create-field="hostname"]:not([data-create-child])'))
     .toHaveAttribute('placeholder', '');
+});
+
+
+// ── A root type: the namespace has nowhere to come from ───────────────────────
+
+test('only a ROOT asks for a namespace; anything with a parent inherits one', async ({ page }) => {
+  // Acceptance 1, 2 and 7. The input is driven by "this type has no required
+  // parent", not by the type's name — so the assertion that matters most is the
+  // NEGATIVE one: adding it to a type that inherits a namespace would give two
+  // sources for one value, and two chances to disagree.
+  await page.goto('/data-centers');
+  await page.getByTestId('create-open').click();
+  await expect(page.locator('.modal.is-active').getByTestId('create-namespace'),
+    'a root has nothing to inherit from, so it must ask').toBeVisible();
+
+  for (const slug of ['servers', 'clusters']) {
+    await page.goto('/' + slug);
+    await page.getByTestId('create-open').click();
+    await expect(page.locator('.modal.is-active').getByTestId('create-namespace'),
+      `/${slug} inherits its namespace from a required parent and must NOT ask`).toHaveCount(0);
+  }
+});
+
+test('creating a data centre creates its namespace too', async ({ page, request }) => {
+  // Acceptance 3 and 4. Nothing else creates a Namespace node, so a data centre
+  // whose namespace does not exist would leave every orbId beneath it prefixed
+  // with a namespace the graph has never heard of.
+  await page.goto('/data-centers');
+  await page.getByTestId('create-open').click();
+  const modal = page.locator('.modal.is-active');
+
+  await modal.getByTestId('create-namespace').fill(DC_NS);
+  await modal.locator('[data-create-field="name"]:not([data-create-child])').fill(DC_NAME);
+
+  // Acceptance 4: the id is built from the TYPED namespace, shown before commit.
+  await expect(modal.getByTestId('create-orbid'),
+    'the identity must be visible before it is committed to').toHaveText(DC_ID);
+
+  await modal.getByTestId('create-submit').click();
+  await expect(page.locator(`#generic-table tr[data-orb-id="${DC_ID}"]`)).toHaveCount(1, { timeout: 15_000 });
+
+  const res = await request.post('/graphql', {
+    data: {
+      query: `{
+        getDataCenter(orbId: "${DC_ID}") { orbId namespace name }
+        queryNamespace(filter: { name: { eq: "${DC_NS}" } }) { name }
+      }`,
+    },
+  });
+  const d = (await res.json()).data;
+  expect(d.getDataCenter, 'the data centre must exist').toBeTruthy();
+  expect(d.getDataCenter.namespace).toBe(DC_NS);
+  expect(d.queryNamespace,
+    'the Namespace node must exist too — nothing else would ever create it').toHaveLength(1);
+});
+
+test('a namespace that already holds a data centre is refused', async ({ page, request }) => {
+  // One namespace holds one data centre. Enforced against the DATA CENTRES, not
+  // against the Namespace node: an empty namespace is what a create that failed
+  // halfway leaves behind, and refusing that would make the retry impossible.
+  await page.goto('/data-centers');
+  await page.getByTestId('create-open').click();
+  const modal = page.locator('.modal.is-active');
+
+  await modal.getByTestId('create-namespace').fill('colo'); // already holds colo-galleon
+  await modal.locator('[data-create-field="name"]:not([data-create-child])').fill(DC_NAME);
+  await modal.getByTestId('create-submit').click();
+
+  await expect(modal.getByTestId('create-error'),
+    'the refusal must name the namespace and what already holds it').toContainText('colo');
+
+  // And nothing was written — a refusal that half-applies is worse than one that
+  // explains itself.
+  const res = await request.post('/graphql', {
+    data: { query: `{ getDataCenter(orbId: "colo:${DC_NAME}") { orbId } }` },
+  });
+  expect((await res.json()).data.getDataCenter,
+    'a refused create must leave no node behind').toBeNull();
 });

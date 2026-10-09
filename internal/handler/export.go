@@ -26,6 +26,7 @@ import (
 	"github.com/armada/orbital/ent/restorejob"
 	"github.com/armada/orbital/internal/bundler"
 	"github.com/armada/orbital/internal/graphdiff"
+	"github.com/armada/orbital/internal/metrics"
 	"github.com/armada/orbital/internal/oci"
 	"github.com/armada/orbital/web"
 	"github.com/google/uuid"
@@ -868,15 +869,18 @@ func (h *Export) runExport(jobID uuid.UUID, download bool, actor string, dcOrbID
 
 	if err := h.doExport(ctx, jobID, log, pinned); err != nil {
 		log.Error("export failed", "err", err)
+		metrics.RecordJobFailure(metrics.JobExport, jobFailureReason(err))
 		h.markFailed(ctx, jobID, err.Error())
 		return
 	}
+	metrics.RecordJobSuccess(metrics.JobExport, time.Now())
 
 	// Export phase complete — zip is on disk, ArtifactPath is set, job.status
 	// is Completed. Now branch on mode.
 	if download {
 		// Download flow: emit audit event, retain zip, done.
 		h.emitExportEvent(actor, dcOrbID, jobID, "download", nil)
+		metrics.RecordJobSuccess(metrics.JobDownload, time.Now())
 		retainZip = true
 		return
 	}
@@ -886,12 +890,16 @@ func (h *Export) runExport(jobID uuid.UUID, download bool, actor string, dcOrbID
 	result, err := h.publishFn(ctx, jobID)
 	if err != nil {
 		log.Error("publish failed after export", "err", err)
+		// The export half already succeeded and was counted; this counts the
+		// publish half, which is the one the edge depends on.
+		metrics.RecordJobFailure(metrics.JobPublish, jobFailureReason(err))
 		h.markFailed(ctx, jobID, "publish: "+err.Error())
 		// retainZip stays false → defer removes the zip. No half-states.
 		return
 	}
 
 	h.emitExportEvent(actor, dcOrbID, jobID, "publish", result)
+	metrics.RecordJobSuccess(metrics.JobPublish, time.Now())
 	// retainZip stays false → defer removes the zip. OCI has the bytes.
 }
 

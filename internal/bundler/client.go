@@ -152,7 +152,7 @@ func (c *Client) Enrich(ctx context.Context, req Request) (*Result, error) {
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("call bundler: %w", err)
+		return nil, classify(ErrUnreachable, fmt.Errorf("call bundler: %w", err))
 	}
 	defer resp.Body.Close()
 
@@ -163,9 +163,9 @@ func (c *Client) Enrich(ctx context.Context, req Request) (*Result, error) {
 		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, c.maxResponseBytes))
 		msg := strings.TrimSpace(string(bodyBytes))
 		if msg == "" {
-			return nil, fmt.Errorf("bundler returned HTTP %d (empty response)", resp.StatusCode)
+			return nil, classify(ErrRejected, fmt.Errorf("bundler returned HTTP %d (empty response)", resp.StatusCode))
 		}
-		return nil, fmt.Errorf("bundler returned HTTP %d: %s", resp.StatusCode, msg)
+		return nil, classify(ErrRejected, fmt.Errorf("bundler returned HTTP %d: %s", resp.StatusCode, msg))
 	}
 
 	// Read up to maxResponseBytes+1 so we can detect an oversize response.

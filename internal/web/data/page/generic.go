@@ -298,6 +298,14 @@ type CreateForm struct {
 	// the submit — the schema was unreadable, or this type cannot be created.
 	Unavailable string
 
+	// NamespaceInput asks the reader to TYPE the namespace, because this type
+	// has no required parent to inherit one from. True for roots only — see
+	// NamespaceFrom, which is the ordinary case.
+	//
+	// A root also has to bring its Namespace node into existence, so a form
+	// with this set sends an upsert for it alongside the node itself.
+	NamespaceInput bool
+
 	// NamespaceFrom is the relationship field whose chosen orbId supplies the
 	// namespace. Namespace is never typed: it is the prefix of the parent's id,
 	// and two sources for one value is two chances to disagree.

@@ -66,7 +66,7 @@ test('a single proposal names its value and a way to review it', async ({ page }
   // Author and age are deliberately NOT here. Two facts fit a table row; four
   // crowded it, and neither of those two is why someone scans this table.
   // They are the first thing on the review page the link goes to.
-  await expect(mark).not.toContainText('admin@armada.ai')
+  await expect(mark).not.toContainText('admin@example.com')
   // Info, not danger: one proposal is not a disagreement.
   // The proposed value sits in a tag, in the same register as the current
   // value beside it — not a pale coloured run of text.

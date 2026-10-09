@@ -30,11 +30,12 @@ has one query built from the view, so there is nothing per-type for JS to know.
         {{template "login-gate.gohtml" .}}
       {{else}}
 
-      {{/* The button sits NEXT TO the heading, not at the far right. At the
-           right edge of a wide table it reads as table chrome and is a long way
-           from the thing it acts on; beside the title it reads as "and you can
-           add one". */}}
-      <div class="is-flex is-align-items-center mb-2" style="gap:0.75rem">
+      {{/* The button is RIGHT-ALIGNED, opposite the heading. It sat beside the
+           title for a while on the argument that the far right reads as table
+           chrome; in use the opposite won — a primary action belongs where the
+           eye already goes for one, and the title should not have a button
+           hanging off it. */}}
+      <div class="is-flex is-align-items-center is-justify-content-space-between mb-2" style="gap:0.75rem">
         <p class="is-size-4" data-testid="page-heading">{{.View.Label}}</p>
         {{/* Nil for a type that cannot be created — an interface, or one whose
              orbId orbital does not mint — so no button rather than one that

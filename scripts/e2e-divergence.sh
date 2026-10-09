@@ -22,7 +22,7 @@ curl -s -c "$COOKIE_JAR" "$ORBITAL/" > /tmp/e2e-home.html
 CSRF=$(grep -oE 'name="csrf" value="[^"]+"' /tmp/e2e-home.html | head -1 | sed 's/.*value="//;s/"$//')
 [ -n "$CSRF" ] || fail "could not extract CSRF token"
 LOGIN=$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" -X POST "$ORBITAL/user/login" \
-  --data-urlencode "email=admin@armada.ai" --data-urlencode "password=admin" \
+  --data-urlencode "email=admin@example.com" --data-urlencode "password=admin" \
   --data-urlencode "csrf=$CSRF" -w '%{http_code}' -o /tmp/e2e-login.out)
 [ "$LOGIN" = "200" ] || fail "login HTTP $LOGIN"
 grep -q "Invalid" /tmp/e2e-login.out && fail "login rejected — run 'bash scripts/seed.sh' if PG was reset"

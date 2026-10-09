@@ -234,13 +234,13 @@ What that means operationally:
 
 ### 9. Seed PostgreSQL admin user
 
-Creates `admin@armada.ai` / `admin` and `user@armada.ai` / `user`.
+Creates `admin@example.com` / `admin` and `user@example.com` / `user`.
 
 **For `dev-netbox`** (Azure managed PostgreSQL — no port-forward needed):
 ```bash
 psql "<DATABASE_URL>" -c "
   INSERT INTO users (email, name, preferred_username, password_hash, verified, role, created_at)
-  VALUES ('admin@armada.ai', 'Admin', 'admin@armada.ai',
+  VALUES ('admin@example.com', 'Admin', 'admin@example.com',
     '\$2a\$12\$Wb3DtBrZbW9528J/FKL81ON73s7PEPNkup9FN8JN.jGBtM03.sckG', true, 'admin', NOW())
   ON CONFLICT (email) DO UPDATE SET role = 'admin';
 "

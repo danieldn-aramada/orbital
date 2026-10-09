@@ -22,8 +22,8 @@ import (
 // Returns nil when the type cannot be created, and the caller then renders no
 // button. Two reasons it can be nil, and they are different:
 //
-//   - the view is an INTERFACE — DGraph generates no add<Interface>, so there is
-//     no single mutation to send until something picks an implementation;
+//   - the view is an INTERFACE with no implementations, or with SEVERAL — one
+//     implementation resolves silently, but nothing can pick between two;
 //   - the type's pattern is `external` or needs a path the form cannot collect,
 //     which means orbital does not mint this id and must not pretend to.
 func buildCreateForm(
@@ -34,8 +34,43 @@ func buildCreateForm(
 	labelFor func(typeName string) func(string) string,
 	meta func(typeName string) configitems.TypeInfo,
 ) *page.CreateForm {
-	if v.IsInterface || v.Slug == "" {
+	if v.Slug == "" {
 		return nil
+	}
+
+	// An interface page creates an IMPLEMENTATION. DGraph generates no
+	// add<Interface>, so the form has to name a concrete type; `pageView` keeps
+	// the page's own identity for the button and the DOM, and `v` becomes the
+	// type being created. Every use of `v` below already means exactly that, so
+	// resolving it here and nowhere else keeps the rest of the function honest
+	// for interface-backed and plain pages alike.
+	pageView := v
+	if v.IsInterface {
+		impls := v.Implementations
+		if len(impls) == 0 {
+			// Nothing implements it, so there is no mutation to send.
+			return nil
+		}
+		if len(impls) > 1 {
+			// Which implementation to create is a question the form would have
+			// to ASK, and that is not designed. Say so in the modal rather than
+			// dropping the button: a button that silently disappears the day a
+			// second implementation lands is the failure mode this avoids.
+			return &page.CreateForm{
+				Label: configitems.HumanFieldLabel(pageView.Type),
+				DomID: SafeDomID(pageView.Type),
+				Unavailable: "This page lists more than one kind of " +
+					configitems.HumanFieldLabel(pageView.Type) + ", and creating one means choosing which. " +
+					"Orbital cannot pick for you, so create it from its own type instead.",
+			}
+		}
+		cv, ok := byType[impls[0]]
+		if !ok {
+			// The implementation has no view, so nothing knows how to render
+			// or identify it.
+			return nil
+		}
+		v = cv
 	}
 	info := meta(v.Type)
 	if len(info.Fields) == 0 {
@@ -60,9 +95,12 @@ func buildCreateForm(
 
 	labeller := labelFor(v.Type)
 	form := &page.CreateForm{
+		// Kind is the CONCRETE type — it builds the mutation name. Label and
+		// DomID follow the PAGE, so /clusters reads "New Kubernetes Cluster"
+		// and not the implementation's spelling.
 		Kind:  v.Type,
-		Label: configitems.HumanFieldLabel(v.Type),
-		DomID: SafeDomID(v.Type),
+		Label: configitems.HumanFieldLabel(pageView.Type),
+		DomID: SafeDomID(pageView.Type),
 	}
 
 	// The identity inputs. A path with a dot crosses an edge — `{server.serviceTag}`
@@ -139,15 +177,19 @@ func buildCreateForm(
 		}
 	}
 	if form.NamespaceFrom == "" {
-		// Nothing supplies a namespace. Creating one is its own question —
-		// a new DataCenter means a new namespace — and is out of scope.
-		return nil
+		// Nothing supplies a namespace, because nothing is REQUIRED above this
+		// type — it is a root. So the form collects one instead of refusing.
+		//
+		// Keyed on "has no required parent", never on the type name: a second
+		// root type gets this with no code change, and that is the whole reason
+		// it is not a `v.Type == "DataCenter"` branch.
+		form.NamespaceInput = true
 	}
 
 	// The unit: the page's editable members one hop down — the same set the
 	// editor writes, created in the SAME nested mutation. A deeper member hangs
 	// off an intermediate this form does not create.
-	for _, m := range v.EditorMembers() {
+	for _, m := range pageView.EditorMembers() {
 		if strings.Contains(m.Field, ".") {
 			continue
 		}

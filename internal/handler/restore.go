@@ -25,6 +25,7 @@ import (
 	"github.com/armada/orbital/ent/predicate"
 	"github.com/armada/orbital/ent/restorejob"
 	"github.com/armada/orbital/internal/blobstore"
+	"github.com/armada/orbital/internal/metrics"
 	"github.com/armada/orbital/web"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -391,6 +392,7 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 
 	fail := func(step string, err error) {
 		h.logger.Error("restore failed", "jobId", jobID, "step", step, "err", err)
+		metrics.RecordJobFailure(metrics.JobRestore, jobFailureReason(err))
 		errStr := fmt.Sprintf("%s: %v", step, err)
 		if _, saveErr := h.db.RestoreJob.Update().
 			Where(restorejob.ID(jobID), restorejob.LockedByEQ(runnerID)).
@@ -549,6 +551,12 @@ func (h *RestoreHandler) runRestore(jobID uuid.UUID) {
 		SetLog(logBuf.String()).
 		SetCompletedAt(time.Now()).
 		Save(context.Background())
+	if err == nil && n > 0 {
+		// Counted only when the FENCED write actually landed: a runner that
+		// lost its lease updates nothing, and counting it would report a
+		// success the graph never received.
+		metrics.RecordJobSuccess(metrics.JobRestore, time.Now())
+	}
 	if err != nil {
 		h.logger.Error("failed to mark restore job completed", "jobId", jobID, "err", err)
 	} else if n == 0 {

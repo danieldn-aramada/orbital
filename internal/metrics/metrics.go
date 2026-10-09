@@ -61,10 +61,57 @@ var (
 		Name: "orbital_audit_write_failures_total",
 		Help: "Audit events that could not be persisted, by the stage that failed. ANY non-zero value means provenance was lost for a write that succeeded — alert on increase, not on a threshold.",
 	}, []string{"stage"})
+
+	// Async job outcomes.
+	//
+	// These exist because an async job's failure is INVISIBLE to every HTTP
+	// metric. The trigger returns 202 and the work fails later in a goroutine,
+	// so http_requests_total never records a 5xx and the dashboard stays green
+	// while every publish fails. Observed 2026-10-09: a publish broken by an
+	// expired Keycloak client ran ~40 minutes against a clean dashboard.
+	jobsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "orbital_jobs_total",
+		Help: "Async jobs that reached a terminal state, by operation and outcome. Use with job failures for a success ratio.",
+	}, []string{"operation", "outcome"})
+
+	jobFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "orbital_job_failures_total",
+		Help: "Async jobs that failed, by operation and classified reason. `reason` says WHERE to look — dependency_auth means a credential, not a bug. Alert on increase, not on a threshold.",
+	}, []string{"operation", "reason"})
+
+	jobLastSuccess = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "orbital_job_last_success_timestamp_seconds",
+		Help: "Unix time of the last SUCCESSFUL job per operation. A failure counter only moves when someone tries; this catches an operation that quietly stopped being attempted at all. Alert on time() - this exceeding your republish interval.",
+	}, []string{"operation"})
+)
+
+// Job operations. A closed set: these are the async operations orbital runs,
+// and the label must never be caller-derived.
+const (
+	JobExport   = "export"   // build the artifact zip
+	JobPublish  = "publish"  // export, then push to OCI
+	JobDownload = "download" // export, then hand the zip to the caller
+	JobRestore  = "restore"  // restore a backup into DGraph
+)
+
+// Job failure reasons. A closed set, chosen AT THE CALL SITE — never derived
+// from an error string. Error text drifts, and a reason that silently
+// reclassifies itself is worse than no reason at all: whoever reads the panel
+// cannot tell that the meaning moved underneath them.
+const (
+	ReasonDependencyAuth        = "dependency_auth"        // a credential to another service was refused
+	ReasonDependencyUnreachable = "dependency_unreachable" // could not connect to another service
+	ReasonDependencyRejected    = "dependency_rejected"    // another service answered, with an error
+	ReasonDGraph                = "dgraph"                 // the graph could not be read or written
+	ReasonStorage               = "storage"                // disk, S3 or the OCI registry
+	ReasonSigning               = "signing"                // cosign could not sign the artifact
+	ReasonLeaseLost             = "lease_lost"             // the runner stopped heartbeating; the reaper failed it
+	ReasonInternal              = "internal"               // anything orbital itself got wrong
 )
 
 func init() {
-	prometheus.MustRegister(requestsTotal, requestDuration, graphqlOperationErrors, graphqlOpDuration, dgraphRequestDuration, auditWriteFailures, auditTablesUnprotected)
+	prometheus.MustRegister(requestsTotal, requestDuration, graphqlOperationErrors, graphqlOpDuration, dgraphRequestDuration, auditWriteFailures, auditTablesUnprotected,
+		jobsTotal, jobFailures, jobLastSuccess)
 }
 
 // SetAuditTablesUnprotected records how many audit tables lack the append-only
@@ -78,6 +125,26 @@ func SetAuditTablesUnprotected(n int) { auditTablesUnprotected.Set(float64(n)) }
 // cardinality is unbounded.
 func RecordAuditWriteFailure(stage string) {
 	auditWriteFailures.WithLabelValues(stage).Inc()
+}
+
+// RecordJobSuccess records one job that completed. Advances the freshness gauge
+// for that operation, which is the only signal that survives nobody trying.
+//
+// operation must be one of the Job* constants.
+func RecordJobSuccess(operation string, at time.Time) {
+	jobsTotal.WithLabelValues(operation, "succeeded").Inc()
+	jobLastSuccess.WithLabelValues(operation).Set(float64(at.Unix()))
+}
+
+// RecordJobFailure records one job that failed. Deliberately does NOT touch the
+// freshness gauge: a failure is not a success, and letting it advance the clock
+// would hide exactly the outage this is here to show.
+//
+// operation must be one of the Job* constants and reason one of the Reason*
+// constants — both closed sets, never caller-derived.
+func RecordJobFailure(operation, reason string) {
+	jobsTotal.WithLabelValues(operation, "failed").Inc()
+	jobFailures.WithLabelValues(operation, reason).Inc()
 }
 
 // ObserveDGraphCall records one orbital→DGraph HTTP round-trip. kind must be a

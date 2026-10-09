@@ -132,7 +132,12 @@ func (p *Publisher) Publish(ctx context.Context, artifactID int, job *ent.Export
 										SetBundlerError(errStr).
 										SetCompletedAt(time.Now()).
 										Save(ctx)
-				return nil, fmt.Errorf("%s", errStr)
+				// WRAP the original, do not rebuild from errStr: the message is
+				// identical either way, but %s discards the error chain and with
+				// it the sentinel that tells orbital whether the bundler was
+				// unreachable or answered with an error. That classification is
+				// what the publish failure metric reports.
+				return nil, fmt.Errorf("bundler failed: %w", err)
 			}
 			// Stamp producer on each layer so push-time annotation writes can
 			// attribute it. Wire shape doesn't carry producer; orbital sets

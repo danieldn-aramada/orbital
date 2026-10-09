@@ -3636,7 +3636,15 @@ function initCreateForms() {
 
     // Namespace is the PREFIX of the chosen parent's orbId — never typed. Two
     // inputs for one value is two chances to disagree with each other.
+    // Two sources, never both. A type with a required parent INHERITS the
+    // namespace from that parent's orbId; a root has no parent to inherit from,
+    // so it is typed. The server decides which by setting data-namespace-input,
+    // and it does that from the schema — "has no required parent" — not from the
+    // type's name.
+    const nsTyped = () => modal.querySelector('[data-create-namespace]')
     const namespace = () => {
+      const typedEl = nsTyped()
+      if (typedEl) return (typedEl.value || '').trim()
       const sel = modal.querySelector(`[data-create-rel="${nsFrom}"]`)
       return sel && sel.value ? String(sel.value).split(':')[0] : ''
     }
@@ -3686,6 +3694,19 @@ function initCreateForms() {
       const taken = await orbIdsInUse([id])
       if (taken.length) { showError('An entity with Orb ID ' + taken[0] + ' already exists.'); return }
 
+      // One namespace holds one root. Checked against the ROOTS THEMSELVES, not
+      // against the Namespace node: an empty namespace is a leftover from a
+      // create that failed halfway, and refusing it would make the retry
+      // impossible. Checking the roots refuses only the case the rule is about.
+      if (nsTyped()) {
+        if (!ns) { showError('Type a namespace — every Orb ID beneath this one is prefixed with it.'); return }
+        const occupied = await namespaceOccupiedBy(kind, ns)
+        if (occupied) {
+          showError('Namespace "' + ns + '" already holds ' + occupied + '. One namespace holds one ' + kind + '.')
+          return
+        }
+      }
+
       const input = { orbId: id, namespace: ns, version: 1 }
       for (const el of rootFields()) {
         const v = typed(el)
@@ -3733,10 +3754,7 @@ function initCreateForms() {
         const r = await fetch(BASE + '/graphql', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: `mutation Create($input: [Add${kind}Input!]!) { add${kind}(input: $input) { numUids } }`,
-            variables: { input: [input] },
-          }),
+          body: JSON.stringify(createMutation(kind, input, nsTyped() ? ns : '')),
         })
         const body = await r.json()
         if (body.errors && body.errors.length) { showError(body.errors[0].message); return }
@@ -3759,6 +3777,56 @@ function initCreateForms() {
     modal.classList.add('is-active')
     document.documentElement.style.overflow = 'hidden'
   })
+}
+
+// createMutation builds the create request.
+//
+// With a typed namespace it carries TWO mutations: the Namespace node has to
+// exist, and nothing else is going to create it.
+//
+// ⚠️ DGraph does NOT run these in one transaction — verified 2026-10-09: when
+// the second fails, the first stays committed. So the order and the `upsert`
+// matter and are not decoration. The namespace goes first and is idempotent, so
+// a failure in between leaves an empty namespace that the next attempt REUSES
+// rather than trips over. Reversing them, or dropping `upsert`, turns a
+// retryable failure into a permanent one.
+function createMutation(kind, input, ns) {
+  if (!ns) {
+    return {
+      query: `mutation Create($input: [Add${kind}Input!]!) { add${kind}(input: $input) { numUids } }`,
+      variables: { input: [input] },
+    }
+  }
+  return {
+    query: `mutation Create($ns: [AddNamespaceInput!]!, $input: [Add${kind}Input!]!) {
+      addNamespace(input: $ns, upsert: true) { numUids }
+      add${kind}(input: $input) { numUids }
+    }`,
+    variables: { ns: [{ name: ns }], input: [input] },
+  }
+}
+
+// namespaceOccupiedBy returns the name of the node of this kind already in the
+// namespace, or '' when it is free. Queried through the type being created, so
+// the rule reads as "one namespace, one of these".
+async function namespaceOccupiedBy(kind, ns) {
+  try {
+    const r = await fetch(BASE + '/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `query Occupied($ns: String!) {
+          query${kind}(filter: { namespace: { eq: $ns } }, first: 1) { name orbId }
+        }`,
+        variables: { ns },
+      }),
+    })
+    const body = await r.json()
+    const hit = (body.data && body.data[`query${kind}`] || [])[0]
+    return hit ? (hit.name || hit.orbId) : ''
+  } catch (_) {
+    return '' // a failed check must not block the create; DGraph still refuses a duplicate orbId
+  }
 }
 
 // orbIdsInUse returns which of the given orbIds already exist.

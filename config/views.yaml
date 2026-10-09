@@ -102,8 +102,13 @@ types:
     columns:
       - servers.count
     fields:
-      assetDataV2: { tableHidden: true }
-      name: { editable: true }
+      assetDataV2:
+        tableHidden: true
+        createHidden: true
+      model:
+        createHidden: true
+      name:
+        editable: true
 
   IdracSettings:
     fields:

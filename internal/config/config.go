@@ -171,7 +171,7 @@ type Config struct {
 	OIDCIconURL      string `envconfig:"ORBITAL_OIDC_ICON_URL" default:""`
 	OIDCClientSecret string `envconfig:"ORBITAL_OIDC_CLIENT_SECRET"      default:""`
 	OIDCRedirectURL  string `envconfig:"ORBITAL_OIDC_REDIRECT_URL"       default:"http://localhost:8001/auth/callback"`
-	AdminEmails      string `envconfig:"ORBITAL_ADMIN_EMAILS"            default:"admin@armada.ai"` // comma-separated emails promoted to admin on first OIDC login
+	AdminEmails      string `envconfig:"ORBITAL_ADMIN_EMAILS"            default:"admin@example.com"` // comma-separated emails promoted to admin on first OIDC login
 	// AuthProviders is the multi-provider bearer config. When set it is the SOLE
 	// source of bearer verification, superseding the single-issuer bearer path.
 	// ORBITAL_OIDC_* keeps driving the browser login flow, where orbital is an

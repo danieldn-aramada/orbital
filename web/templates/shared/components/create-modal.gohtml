@@ -13,7 +13,8 @@ memory. Infrahub generates its create form from the schema for the same reason.
 */}}
 {{define "create-modal.gohtml"}}
 <div id="create-modal-{{.DomID}}" class="modal modal-fx-3dRotateFromBottom" data-kind="{{.Kind}}"
-     data-orbid-template="{{.OrbIDTemplate}}" data-namespace-from="{{.NamespaceFrom}}">
+     data-orbid-template="{{.OrbIDTemplate}}" data-namespace-from="{{.NamespaceFrom}}"
+     {{if .NamespaceInput}}data-namespace-input="true"{{end}}>
   <div class="modal-background"></div>
   <div class="modal-content modal-card is-large">
     <header class="modal-card-head">
@@ -37,6 +38,24 @@ memory. Infrahub generates its create form from the schema for the same reason.
         <p class="is-size-7 has-text-grey" id="create-orbid-{{.DomID}}"
            data-testid="create-orbid">—</p>
       </div>
+
+      {{/* Typed, and ONLY for a root — a type with a required parent inherits
+           its namespace from that parent's orbId and must never be asked.
+           Sits above the relations because it is the first thing the identity
+           needs: the Orb ID preview stays blank until it has a value. */}}
+      {{if .NamespaceInput}}
+      <div class="field">
+        <label class="label is-size-7">
+          Namespace <span class="has-text-danger">*</span>
+        </label>
+        <input class="input is-small" type="text" data-create-namespace
+               data-testid="create-namespace" value="" placeholder="e.g. houston">
+        <p class="help is-size-7">
+          One namespace holds one {{.Label}}. It prefixes every Orb ID beneath this
+          one and cannot be changed afterwards.
+        </p>
+      </div>
+      {{end}}
 
       {{range .Relations}}
       <div class="field">

@@ -468,10 +468,10 @@ make seed          # after orbital is up
 
 | Account | Password | Why it exists |
 |---|---|---|
-| `admin@armada.ai` | `admin` | In `bypass_roles` by default — writes through, audited as privileged |
-| `dev@armada.ai` | `dev` | Gated by policies. The proposer. |
-| `dev2@armada.ai` | `dev` | The second reviewer. **Peer review needs two peers** — without this you can only ever test `required_approvals: 1`. |
-| `user@armada.ai` | `user` | readonly |
+| `admin@example.com` | `admin` | In `bypass_roles` by default — writes through, audited as privileged |
+| `dev@example.com` | `dev` | Gated by policies. The proposer. |
+| `dev2@example.com` | `dev` | The second reviewer. **Peer review needs two peers** — without this you can only ever test `required_approvals: 1`. |
+| `user@example.com` | `user` | readonly |
 
 **Never change a role with `psql`.** `PUT /api/v1/users/:id/role` (the *Users* page) is the
 shipped path, it has a last-admin guard, and writing to the table directly means you are

@@ -493,7 +493,7 @@ func (h *GraphQL) writeToDGraph(ctx context.Context, body []byte, actor string, 
 			return res, perr
 		}
 		_, guarded = req.Variables["version"]
-		body = forwardBody(&req, body, stampMutation(&req, current, actor) || guarded)
+		body = forwardBody(&req, body, stampMutation(&req, current, actor, h.isConfigItemType) || guarded)
 	}
 
 	if gate == gateEnforce {
@@ -787,7 +787,33 @@ func checkVersion(variables map[string]any, current map[string]any) *preflightEr
 // non-nil before: without a current version there is no next version, and
 // writing one anyway would reset the counter to 1 and make every open change
 // request against the entity read as unchanged.
-func stampMutation(req *gqlRequest, current map[string]any, actor string) bool {
+// addInputVarRe captures an ADD input variable and the type it targets, from
+// the operation's own declaration: `$ns: [AddNamespaceInput!]!` → ns, Namespace.
+//
+// Read from the DECLARATION rather than guessed from the variable's name,
+// because the name is caller-chosen (`input`, `idracInput`, `ns`) and carries
+// no type information at all.
+var addInputVarRe = regexp.MustCompile(`\$(\w+)\s*:\s*\[\s*Add(\w+)Input!?\s*\]`)
+
+// stampableAddVars reports which array variables may be stamped.
+//
+// Only ConfigItem types carry version/createdBy/createdAt/updatedBy/updatedAt.
+// A mutation may legitimately add something else in the same request — creating
+// a data centre also upserts its Namespace, which has none of those fields —
+// and stamping that is not a harmless extra: DGraph refuses the whole request
+// with "unknown field", so the ConfigItem half never lands either.
+//
+// A variable whose declaration this cannot read is stamped, preserving the old
+// behaviour for every caller that does not declare an Add input this way.
+func stampableAddVars(query string, isConfigItem func(string) bool) map[string]bool {
+	out := map[string]bool{}
+	for _, m := range addInputVarRe.FindAllStringSubmatch(query, -1) {
+		out[m[1]] = isConfigItem(m[2])
+	}
+	return out
+}
+
+func stampMutation(req *gqlRequest, current map[string]any, actor string, isConfigItem func(string) bool) bool {
 	now := time.Now().UTC().Format(time.RFC3339)
 	stamped := false
 
@@ -805,10 +831,14 @@ func stampMutation(req *gqlRequest, current map[string]any, actor string) bool {
 		}
 	}
 
-	for _, v := range req.Variables {
+	stampable := stampableAddVars(req.Query, isConfigItem)
+	for name, v := range req.Variables {
 		arr, ok := v.([]any)
 		if !ok {
 			continue
+		}
+		if ok, declared := stampable[name]; declared && !ok {
+			continue // declared, and not a ConfigItem — see stampableAddVars
 		}
 		for _, item := range arr {
 			m, ok := item.(map[string]any)
@@ -1482,4 +1512,30 @@ func toFloat64(v any) (float64, bool) {
 		return f, err == nil
 	}
 	return 0, false
+}
+
+// isConfigItemType reports whether a GraphQL type name is a ConfigItem.
+//
+// Answered from the view list because a view exists for every ConfigItem type —
+// the same invariant buildCreateForm relies on to test "points at something
+// orbital models". Anything the schema has but orbital does not model as a
+// config item (Namespace, User) is correctly not one.
+//
+// Fails CLOSED: when the views cannot be resolved this returns true, so the
+// stamper keeps its previous behaviour rather than silently dropping provenance
+// from every write while the schema is unreadable.
+func (h *GraphQL) isConfigItemType(name string) bool {
+	if h.views == nil {
+		return true
+	}
+	views, err := h.views(context.Background())
+	if err != nil {
+		return true
+	}
+	for _, v := range views {
+		if v.Type == name {
+			return true
+		}
+	}
+	return false
 }

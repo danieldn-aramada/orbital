@@ -118,7 +118,7 @@ make seed
 make down
 ```
 
-Open both UIs side by side. Log in as `admin@armada.ai` / `admin` (or read-only `user@armada.ai` / `user`).
+Open both UIs side by side. Log in as `admin@example.com` / `admin` (or read-only `user@example.com` / `user`).
 
 | URL | What |
 |---|---|

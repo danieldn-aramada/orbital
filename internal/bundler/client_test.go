@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -186,4 +187,47 @@ func TestClient_Timeout(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected timeout error, got nil")
 	}
+}
+
+// Orbital turns these two cases into DIFFERENT metric labels, and the label is
+// what tells an operator whether to look at the network or at the bundler. The
+// regression guarded here is a wrap that drops the sentinel — every message
+// still reads correctly, so nothing looks wrong until the panel has quietly
+// been reporting "internal" for weeks.
+func TestClient_Enrich_ClassifiesFailures(t *testing.T) {
+	t.Run("no answer at all is unreachable", func(t *testing.T) {
+		// Port 1 on loopback: nothing listens, so Do() fails before any HTTP.
+		c := New("test", "http://127.0.0.1:1/bundle", 2*time.Second)
+		_, err := c.Enrich(context.Background(), Request{OrbID: "ns:dc"})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if !errors.Is(err, ErrUnreachable) {
+			t.Errorf("err = %v; want it to satisfy ErrUnreachable", err)
+		}
+		if errors.Is(err, ErrRejected) {
+			t.Error("an unreachable bundler must not also read as a rejection")
+		}
+	})
+
+	t.Run("a non-2xx answer is a rejection", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, `oauth2: "unauthorized_client"`, http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		c := New("test", srv.URL, 2*time.Second)
+		_, err := c.Enrich(context.Background(), Request{OrbID: "ns:dc"})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if !errors.Is(err, ErrRejected) {
+			t.Errorf("err = %v; want it to satisfy ErrRejected", err)
+		}
+		// The operator-facing text must survive classification — it names the
+		// actual problem, which a category label never can.
+		if !strings.Contains(err.Error(), "unauthorized_client") {
+			t.Errorf("the bundler's own message was lost: %v", err)
+		}
+	})
 }

@@ -10,7 +10,7 @@ export default async function globalSetup() {
   await page.locator('a.js-modal-trigger[data-target="login-modal"]').first().click();
   await page.locator('#login-modal').waitFor({ state: 'visible' });
 
-  await page.locator('#form-login input[name="email"]').fill('admin@armada.ai');
+  await page.locator('#form-login input[name="email"]').fill('admin@example.com');
   await page.locator('#form-login input[name="password"]').fill('admin');
   await page.locator('#form-login button[type="submit"]').click();
 

@@ -34,7 +34,7 @@ echo "==> Creating admin user..."
 HASH='$2a$12$Wb3DtBrZbW9528J/FKL81ON73s7PEPNkup9FN8JN.jGBtM03.sckG'
 ${PSQL} -c "
   INSERT INTO users (email, name, preferred_username, password_hash, verified, role, created_at)
-  VALUES ('admin@armada.ai', 'Admin', 'admin@armada.ai', '${HASH}', true, 'admin', NOW())
+  VALUES ('admin@example.com', 'Admin', 'admin@example.com', '${HASH}', true, 'admin', NOW())
   ON CONFLICT (email) DO UPDATE SET role = 'admin';
 " >/dev/null
 
@@ -44,7 +44,7 @@ echo "==> Creating readonly user..."
 USER_HASH='$2a$12$dwBXGF5dTeZ88g3wz4..xeiyEGdzt/XblXlVi52tp8D1qXVRWV/Sa'
 ${PSQL} -c "
   INSERT INTO users (email, name, preferred_username, password_hash, verified, role, created_at)
-  VALUES ('user@armada.ai', 'User', 'user@armada.ai', '${USER_HASH}', true, 'readonly', NOW())
+  VALUES ('user@example.com', 'User', 'user@example.com', '${USER_HASH}', true, 'readonly', NOW())
   ON CONFLICT (email) DO NOTHING;
 " >/dev/null
 
@@ -59,13 +59,13 @@ echo "==> Creating dev users..."
 DEV_HASH='$2a$12$04ApjnkdNuE1kLbYHdYXAu/vRCZDjhhT4S/H04ytMjQAPr/D901e6'
 ${PSQL} -c "
   INSERT INTO users (email, name, preferred_username, password_hash, verified, role, created_at)
-  VALUES ('dev@armada.ai',  'Dev One', 'dev@armada.ai',  '${DEV_HASH}', true, 'dev', NOW()),
-         ('dev2@armada.ai', 'Dev Two', 'dev2@armada.ai', '${DEV_HASH}', true, 'dev', NOW())
+  VALUES ('dev@example.com',  'Dev One', 'dev@example.com',  '${DEV_HASH}', true, 'dev', NOW()),
+         ('dev2@example.com', 'Dev Two', 'dev2@example.com', '${DEV_HASH}', true, 'dev', NOW())
   ON CONFLICT (email) DO NOTHING;
 " >/dev/null
 
 echo "==> Done."
-echo "    admin@armada.ai / admin   (admin — bypasses approval policies)"
-echo "    dev@armada.ai   / dev     (dev   — gated by approval policies)"
-echo "    dev2@armada.ai  / dev     (dev   — the second reviewer for N-of-M)"
-echo "    user@armada.ai  / user    (readonly)"
+echo "    admin@example.com / admin   (admin — bypasses approval policies)"
+echo "    dev@example.com   / dev     (dev   — gated by approval policies)"
+echo "    dev2@example.com  / dev     (dev   — the second reviewer for N-of-M)"
+echo "    user@example.com  / user    (readonly)"

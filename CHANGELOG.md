@@ -114,7 +114,45 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   that has moved. Scoped to the editor: a caller that declares nothing proceeds,
   because an API client sending an explicit `remove` is doing it deliberately.
 
+### Added
+- **Async job outcomes are now in Prometheus, and on the Grafana dashboard.**
+  An export, publish or restore runs after its trigger has already returned
+  `202`, so a failure never produced an HTTP 5xx and none of the existing panels
+  could see it — a publish broken by an expired credential ran for ~40 minutes
+  against a fully green dashboard. Three metrics close that: `orbital_jobs_total`
+  (operation, outcome), `orbital_job_failures_total` (operation, classified
+  reason) and `orbital_job_last_success_timestamp_seconds`, which catches an
+  operation that quietly stopped being attempted at all. The dashboard gains an
+  "Async jobs" row above HTTP RED.
+
+- **A New button on `/data-centers`.** A data centre is a root — nothing above
+  it supplies a namespace — so the form asks for one instead of refusing, and the
+  create brings the `Namespace` node into existence alongside it. One namespace
+  holds one data centre, enforced against the data centres themselves so a
+  half-finished create can be retried. The namespace input appears because the
+  type has no required parent, not because it is a data centre: a second root
+  type gets it with no code change.
+
+- **A New button on `/clusters`.** `KubernetesCluster` is an interface and DGraph
+  generates no `add<Interface>`, so the page could not create. The form now
+  resolves the interface to its implementation and creates a concrete
+  `EksaKubernetesCluster`. An interface with several implementations says so in
+  the modal rather than dropping the button.
+
 ### Fixed
+- **A mutation that adds a non-ConfigItem alongside a ConfigItem is no longer
+  refused.** Orbital stamps `version`/`createdBy`/`createdAt`/`updatedBy`/
+  `updatedAt` into every add input, but those fields exist only on ConfigItem
+  types. It stamped *any* array-of-maps variable, so a request that also added a
+  `Namespace` was rejected wholesale by DGraph with "unknown field" — and the
+  ConfigItem half never landed either. The stamper now reads each variable's
+  declared type from the operation and skips the ones that are not config items.
+
+- **A failed bundler call is no longer reported as an unclassified error.** The
+  publisher rebuilt the error from its text, which discarded the chain and with
+  it the distinction between "could not reach the bundler" and "the bundler
+  answered with an error". Both now reach the metrics correctly.
+
 - **The tabs you have open are now in the address bar, so you can copy the URL
   and send someone what you are looking at.** `/servers` showed the bare list URL
   however many tabs were open, so copying it gave the reader the list. The
