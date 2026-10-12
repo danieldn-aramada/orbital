@@ -226,6 +226,36 @@ docs: ## Regenerate Swagger docs for orbital + orb (requires swag)
 	swag init -g main.go -o docs --dir cmd/orbital,internal/handler,internal/ocitype,internal/graphdiff,internal/configitems
 	swag init -g doc.go -o docs/orb --dir cmd/orb,internal/orbserver,internal/orb,internal/ocitype,internal/divergence
 
+# ── Documentation site ───────────────────────────────────────────────────────
+# Docusaurus site in website/. `url` and `baseUrl` are read from the environment
+# at build time, so the same source publishes to any host — override these to
+# retarget without touching the config.
+DOCS_ACCOUNT  ?= orbitaldocs
+DOCS_URL      ?= https://orbitaldocs.z1.web.core.windows.net
+DOCS_BASE_URL ?= /
+
+docs-site: ## Build the documentation site into docs/site/build
+	@test -d docs/site || { echo "docs/site not present — the docs site lives on the docs-site branch"; exit 1; }
+	@cd docs/site && npm ci --silent
+	@# Docusaurus does not prune: a deleted page survives in a stale build.
+	@rm -rf docs/site/build
+	cd docs/site && DOCS_URL=$(DOCS_URL) DOCS_BASE_URL=$(DOCS_BASE_URL) npm run build
+
+docs-site-serve: docs-site ## Build and serve the docs site locally on :3210 (search works; npm start does not index)
+	cd docs/site && npx docusaurus serve --port 3210
+
+docs-site-publish: docs-site ## Publish the docs site to Azure Blob static website (requires: az login)
+	@echo "==> Publishing to $(DOCS_URL)"
+	@# Two passes. Assets are content-hashed so they cache forever; HTML must
+	@# revalidate or a deploy is invisible to anyone who has visited before.
+	az storage blob upload-batch -s docs/site/build -d '$$web' \
+		--account-name $(DOCS_ACCOUNT) --auth-mode login --overwrite \
+		--pattern "assets/*" --content-cache "public, max-age=31536000, immutable" --output none
+	az storage blob upload-batch -s docs/site/build -d '$$web' \
+		--account-name $(DOCS_ACCOUNT) --auth-mode login --overwrite \
+		--content-cache "no-cache" --output none
+	@echo "==> Live at $(DOCS_URL)"
+
 build-css: ## Compile web/sass/main.scss → web/shared/static/css/main.css (requires: npm install)
 	npm run build-css
 

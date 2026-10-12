@@ -10,6 +10,7 @@ Run `make help` for the full list. The most-used:
 |---|---|---|
 | `make up` / `make down` | `make test-unit` | `make docs` (regen Swagger for both apps) |
 | `make run-orbital` / `make run-orb` | `make test-integration` (needs `make up`) | `make build-css` (compile SCSS once) |
+| | | `make docs-site-serve` (preview the docs site) |
 | `make seed` | `make test-e2e` (needs orbital + orb running) | `make build-orbctl` (compile the CLI) |
 | | `make test-e2e-ui` (interactive Playwright UI mode) | `make edge-up` / `make edge-down` (test orb against AKS upstream; see below) |
 | | `make release-check` (pre-release; see below) | |
@@ -99,6 +100,52 @@ make docs       # regenerates both orbital and orb swagger
 ```
 
 Never hand-edit files under `docs/swagger.*` or `docs/orb/swagger.*` — they are generated.
+
+## Editing the documentation site
+
+The public docs site is a [Docusaurus](https://docusaurus.io) site in `docs/site/`. Its pages live in `docs/site/content/`, deliberately **not** `docs/site/docs/` — see the config comment. It is not the same thing as the rest of `docs/` — that directory is the maintainer reference tree and does not publish. See `.local/docs-site-design.md` for which content ships and which does not.
+
+```bash
+make docs-site          # build into website/build
+make docs-site-serve    # build + serve on :3210
+make docs-site-publish  # build + upload to Azure Blob (requires: az login)
+```
+
+For writing, `cd docs/site && npm start` gives hot reload on :3000. Use `make docs-site-serve` when you need **search** — the index is built at build time, so `npm start` has none.
+
+### How the build works
+
+`docusaurus build` pre-renders every route to its own HTML file, then bundles the JS that hydrates it in the browser. The output is 100% static — there is no server, which is why publishing is just uploading a folder.
+
+`url` and `baseUrl` are read from the environment at build time, so the same source publishes anywhere:
+
+```bash
+make docs-site DOCS_URL=https://example.com DOCS_BASE_URL=/docs/
+```
+
+Defaults live at the top of the Makefile (`DOCS_ACCOUNT`, `DOCS_URL`, `DOCS_BASE_URL`).
+
+### Publishing
+
+`make docs-site-publish` uploads to the `$web` container of the `orbitaldocs` storage account, which has Azure's **static website** feature enabled. It uploads in two passes, deliberately:
+
+| Pass | Files | `Cache-Control` |
+|---|---|---|
+| 1 | `assets/*` | `public, max-age=31536000, immutable` |
+| 2 | everything else | `no-cache` |
+
+Asset filenames are content-hashed, so they can cache forever — a new build produces new names. **HTML must not cache**, or a deploy is invisible to anyone who has visited before. Getting this backwards is the most common static-hosting complaint.
+
+### Writing standard
+
+Numeric targets measured against Infrahub, Crossplane, Temporal, Backstage and others are in `.local/docs-site-design.md` §5b. The short version: 14–18 words per sentence, paragraphs of 1–3 sentences, a heading every ~125 words, 1–3 admonitions per page, and a table wherever several items share the same attributes.
+
+### Gotchas
+
+- **Delete a page and rebuild** — `make docs-site` removes `build/` first, because Docusaurus does not prune and a deleted page otherwise survives in the output.
+- **`onBrokenLinks` is `throw`** — a broken internal link fails the build. Raw `<a href="/...">` tags are **not** checked and will break under a non-root `baseUrl`; use `<Link to="...">` instead.
+- **MDX is stricter than Markdown** — a bare `<` or `{` in prose fails the build. Keep placeholders like `<namespace>` inside backticks.
+- **Mermaid renders client-side** — the static HTML contains an empty comment where the diagram goes, and it appears after hydration. That is expected, not a fault.
 
 ## Development workflow
 

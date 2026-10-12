@@ -1,0 +1,136 @@
+/* Orbital docs theme.
+ *
+ * Palette is orbital's own, read out of web/shared/static/css/main.css — not
+ * invented. Keeping them identical is what makes the docs and the product read
+ * as one thing.
+ *
+ * ONE deliberate divergence: orbital's turquoise cannot carry text.
+ *   #00d1b2 on white = 1.95:1   — WCAG AA wants 4.5:1
+ *   #00b196 on white = 2.72:1
+ *   #00796a on white = 5.33:1   ✓
+ * So the bright turquoise is a FILL/BORDER colour and the darker step carries
+ * text. This is not a problem the docs site invented: debt is already tracked
+ * for orbital's UI ("semantic text colours fail WCAG AA on light backgrounds").
+ */
+
+/* Self-hosted — a product whose premise is air-gap should not fetch fonts from
+ * a third party on every page load. */
+@import '@fontsource-variable/inter';
+
+:root {
+  /* ══ BRAND SOURCE ═══════════════════════════════════════════════════════════
+   * Change these two when Orbital's brand colour is decided. Everything below
+   * derives from them, and nothing else in this file hardcodes the hue.
+   *
+   * Today they are orbital's CURRENT palette, read out of
+   * web/shared/static/css/main.css — which is Bulma's DEFAULT turquoise,
+   * because main.scss leaves $primary commented out. Orbital has never chosen
+   * a brand colour; it inherited one.
+   *
+   * That is a product decision, not a docs decision, and it should be made
+   * deliberately and applied to both surfaces at once. The docs site is
+   * explicitly NOT forcing it: matching the product is right whatever the
+   * product's colour turns out to be. See .local/docs-site-design.md D10.
+   */
+  --orbital-brand:      #00d1b2;  /* fills, borders, marks — what orbital's UI puts on buttons */
+  --orbital-brand-text: #00796a;  /* same hue darkened to clear 4.5:1 on white (5.33:1) */
+
+  /* ── derived — color-mix, so changing the two above is genuinely enough ──── */
+  --ifm-color-primary:          var(--orbital-brand-text);
+  --ifm-color-primary-dark:     color-mix(in oklab, var(--orbital-brand-text) 92%, black);
+  --ifm-color-primary-darker:   color-mix(in oklab, var(--orbital-brand-text) 86%, black);
+  --ifm-color-primary-darkest:  color-mix(in oklab, var(--orbital-brand-text) 72%, black);
+  --ifm-color-primary-light:    color-mix(in oklab, var(--orbital-brand-text) 90%, white);
+  --ifm-color-primary-lighter:  color-mix(in oklab, var(--orbital-brand-text) 84%, white);
+  --ifm-color-primary-lightest: color-mix(in oklab, var(--orbital-brand-text) 70%, white);
+
+  --ifm-link-color: #4258ff;           /* 5.16:1 on white */
+  --ifm-font-family-base: 'Inter Variable', Inter, 'SF Pro', 'Segoe UI', Roboto,
+    Oxygen, Ubuntu, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --ifm-heading-font-weight: 600;
+  --ifm-code-font-size: 92%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 209, 178, 0.12);
+}
+
+[data-theme='dark'] {
+  /* On dark ground the full-saturation brand clears contrast comfortably, so
+     the text-safe step is not needed and the ramp runs the other way. */
+  --ifm-color-primary:          color-mix(in oklab, var(--orbital-brand) 88%, white);
+  --ifm-color-primary-dark:     var(--orbital-brand);
+  --ifm-color-primary-darker:   color-mix(in oklab, var(--orbital-brand) 92%, black);
+  --ifm-color-primary-darkest:  color-mix(in oklab, var(--orbital-brand) 78%, black);
+  --ifm-color-primary-light:    color-mix(in oklab, var(--orbital-brand) 80%, white);
+  --ifm-color-primary-lighter:  color-mix(in oklab, var(--orbital-brand) 72%, white);
+  --ifm-color-primary-lightest: color-mix(in oklab, var(--orbital-brand) 58%, white);
+  --ifm-link-color: #8a97ff;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 209, 178, 0.2);
+}
+
+/* Brand accent where it is a mark, not text. */
+.navbar__brand:hover { color: var(--orbital-brand); }
+.menu__link--active::before { background: var(--orbital-brand); }
+
+/* Inline code appears about once every 16 words in these docs. At Infima's
+ * default — bordered box, tinted background — a paragraph reads as confetti
+ * rather than prose. This was the single most effective readability change
+ * measured; typography settings were not (see docs-site-design.md 5b). */
+.markdown code:not([class*='language-']) {
+  background: var(--ifm-color-emphasis-100);
+  border: none;
+  padding: 0.12rem 0.34rem;
+  font-size: 88%;
+  color: var(--ifm-color-emphasis-900);
+}
+[data-theme='dark'] .markdown code:not([class*='language-']) {
+  background: var(--ifm-color-emphasis-200);
+}
+
+/* Flat admonitions — border, no shadow. Convention across the sampled sites. */
+.theme-admonition { box-shadow: none; border-width: 1px; }
+
+/* Entry-page category list: title + one-line summary, Crossplane's shape. */
+.doc-index { display: grid; gap: 0.25rem 2rem; margin: 1.25rem 0 0; padding: 0; list-style: none; }
+.doc-index li { padding: 0.7rem 0; border-bottom: 1px solid var(--ifm-toc-border-color); }
+.doc-index li:last-child { border-bottom: none; }
+.doc-index a { font-weight: 600; }
+.doc-index span { display: block; color: var(--ifm-color-emphasis-700); font-size: 0.93rem; margin-top: 0.15rem; }
+
+/* GitHub as an icon rather than the word — the same snippet appears on
+ * Docusaurus's, React Native's and Jest's own sites. */
+.header-github-link:hover { opacity: 0.6; }
+.header-github-link::before {
+  content: ''; width: 24px; height: 24px; display: flex;
+  background: no-repeat center/24px 24px url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/%3E%3C/svg%3E");
+}
+[data-theme='dark'] .header-github-link::before { filter: invert(1); }
+
+/* Footer is chrome, not content. At Infima's default it inherits the body size,
+ * and a lone centred line at content size reads as louder than the prose above
+ * it even though it measures identical (16px / 16px, verified). */
+.footer { --ifm-footer-padding-vertical: 1.5rem; font-size: 0.875rem; }
+.footer__copyright { color: var(--ifm-color-emphasis-600); }
+
+/* ── Card grid ────────────────────────────────────────────────────────────────
+ * Replaces Docusaurus's generated-index cards, whose icon is a TYPE marker
+ * hardcoded in DocCard — 📄️ for every document, 🗃️ for every category — so it
+ * is identical on every card by design and never reflects the title. Summaries
+ * there are also auto-truncated from the first sentence, mid-word.
+ * Hand-written cards give a real icon and a real summary. */
+.cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); margin: 1.5rem 0; padding: 0; list-style: none; }
+.cards > li { margin: 0; }
+.cards a {
+  display: block; height: 100%; padding: 1.1rem 1.2rem;
+  border: 1px solid var(--ifm-color-emphasis-200); border-radius: var(--ifm-card-border-radius, 8px);
+  color: inherit; text-decoration: none; transition: border-color 150ms ease, transform 150ms ease;
+}
+.cards a:hover { border-color: var(--orbital-brand); text-decoration: none; transform: translateY(-1px); }
+.cards .card-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; }
+.cards .card-head svg { flex: none; width: 20px; height: 20px; stroke: var(--ifm-color-primary); fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.cards .card-head strong { font-size: 1.02rem; color: var(--ifm-heading-color); }
+.cards p { margin: 0; font-size: 0.9rem; line-height: 1.55; color: var(--ifm-color-emphasis-700); }
+[data-theme='dark'] .cards a { border-color: var(--ifm-color-emphasis-300); }
+
+/* Mermaid renders at its intrinsic size, which for a wide LR flowchart is a
+ * fraction of the content column. Scale to the available width. */
+.docusaurus-mermaid-container { display: flex; justify-content: center; margin: 1.5rem 0; }
+.docusaurus-mermaid-container svg { width: 100%; max-width: 100%; height: auto; }
