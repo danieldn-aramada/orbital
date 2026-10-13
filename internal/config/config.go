@@ -198,6 +198,24 @@ type Config struct {
 	// neither of which orbital can know. ~1.6 KB of HTML per row measured
 	// 2026-10-02, so 2000 is ≈3 MB.
 	ListMaxRows int `envconfig:"ORBITAL_LIST_MAX_ROWS" default:"2000"`
+	// EditorMaxMembers caps how many members of one EDITABLE LIST the config
+	// editor renders writable.
+	//
+	// A different question from ListMaxRows, which is about bytes on a page:
+	// this is about whether a JSON tree is still navigable. A data centre with
+	// three racks is an editor; one with fifty servers is a data dump nobody
+	// can find a field in, and the member they wanted is the one they scroll
+	// past.
+	//
+	// The cap is REAL and visible: past it the editor says how many it omitted
+	// and names this setting, and the page's read-only tab still shows every
+	// member. Capping the editor never hides data.
+	//
+	// 20 is a judgement, not a measurement — past that a tree stops being
+	// navigable in the vendored JSON editor. It is configurable because the
+	// right number depends on how many fields each member carries, which
+	// orbital cannot know.
+	EditorMaxMembers int `envconfig:"ORBITAL_EDITOR_MAX_MEMBERS" default:"20"`
 	// BundlerURLs is the comma-separated list of bundler `name=url` entries to
 	// invoke when a publish request omits `bundlers` in its body. The friendly
 	// name lands in each layer's OCI annotation `com.armada.orbital.producer`

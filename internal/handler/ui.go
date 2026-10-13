@@ -37,6 +37,7 @@ type UI struct {
 	fields            *SharedFields
 	dgraphURL         string
 	listMaxRows       int
+	editorMaxMembers  int
 	webFS             fs.FS
 	hotReload         bool
 	ratelURL          string
@@ -172,6 +173,12 @@ func (h *UI) SetDGraphAdminURL(url string) {
 // SetListMaxRows sets the generic list page's row cap (ORBITAL_LIST_MAX_ROWS).
 func (h *UI) SetListMaxRows(n int) {
 	h.listMaxRows = n
+}
+
+// SetEditorMaxMembers sets how many members of one editable list the config
+// editor renders writable (ORBITAL_EDITOR_MAX_MEMBERS).
+func (h *UI) SetEditorMaxMembers(n int) {
+	h.editorMaxMembers = n
 }
 
 func (h *UI) SetBackupCronSpec(spec string) {
@@ -953,7 +960,8 @@ func (h *UI) Generic() *GenericRenderer {
 			func(c echo.Context) layout.PageActions {
 				canMutate, _ := c.Get("can_mutate").(bool)
 				return layout.OrbitalActions(canMutate)
-			}, h.render, h.renderFragment).WithRowCap(h.listMaxRows, "ORBITAL_LIST_MAX_ROWS")
+			}, h.render, h.renderFragment).WithRowCap(h.listMaxRows, "ORBITAL_LIST_MAX_ROWS").
+			WithEditorMemberCap(h.editorMaxMembers, "ORBITAL_EDITOR_MAX_MEMBERS")
 	}
 	return h.generic
 }

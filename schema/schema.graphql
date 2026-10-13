@@ -57,7 +57,7 @@ type DataCenter implements ConfigItem {
     networkDevices: [NetworkDevice] @hasInverse(field: dataCenter)
 }
 
-"""orbIdPattern: {name}"""
+"""orbIdPattern: {kind}-{name}"""
 type Rack implements ConfigItem {
     uHeight: Int
     dataCenter: DataCenter!

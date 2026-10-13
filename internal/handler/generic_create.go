@@ -186,6 +186,54 @@ func buildCreateForm(
 		form.NamespaceInput = true
 	}
 
+	// Repeating rows: the page's editable LIST members, created in the SAME
+	// nested mutation as the single ones. A data centre and its racks in one
+	// submit, because two mutations are two transactions and the first stays
+	// committed when the second fails.
+	for _, m := range pageView.EditorListMembers() {
+		if strings.Contains(m.Field, ".") {
+			continue // a list below another hop: the form holds no row to hang it on
+		}
+		cv, ok := byType[m.Type]
+		if !ok || len(cv.Fields) == 0 {
+			continue
+		}
+		tmpl := repeatingChildOrbIDTemplate(cv, m.ParentEdge)
+		if tmpl == "" {
+			continue // identity not derivable from this form; see the single-child rule
+		}
+		rep := page.CreateUnitRepeating{
+			Field: m.Field, Label: labeller(m.Field), Kind: m.Type, OrbIDTemplate: tmpl,
+		}
+		// Which of the row's fields BUILD its identity, so the form can star
+		// them and refuse an empty one — the same treatment the root's `name`
+		// gets, and for the same reason: without it the row has no orbId and
+		// the whole nested mutation fails.
+		//
+		// Read off the row's own template, where a bare `{x}` is the row's
+		// field and `{parent.x}` is the parent's. The parent's are already
+		// required on the root form; starring them again inside every row
+		// would ask for the same value twice.
+		rowIdentity := map[string]bool{}
+		for _, seg := range strings.Split(tmpl, "{")[1:] {
+			if body, _, ok := strings.Cut(seg, "}"); ok && !strings.HasPrefix(body, "parent.") {
+				rowIdentity[body] = true
+			}
+		}
+
+		childLabel := labelFor(m.Type)
+		childInfo := meta(m.Type)
+		for _, f := range cv.Fields {
+			if cv.NoCreate[f] {
+				continue
+			}
+			rep.Fields = append(rep.Fields, createField(childInfo, cv, f, childLabel, rowIdentity[f]))
+		}
+		if len(rep.Fields) > 0 {
+			form.Repeating = append(form.Repeating, rep)
+		}
+	}
+
 	// The unit: the page's editable members one hop down — the same set the
 	// editor writes, created in the SAME nested mutation. A deeper member hangs
 	// off an intermediate this form does not create.
@@ -319,4 +367,38 @@ func scalarHint(scalar string) string {
 	default:
 		return ""
 	}
+}
+
+// repeatingChildOrbIDTemplate is childOrbIDTemplate for a LIST member, where a
+// placeholder's SCOPE has to survive into the form.
+//
+// For a single child the two scopes collapse harmlessly: `{server.serviceTag}`
+// becomes `{serviceTag}` and the form fills it from the parent's inputs, which
+// is correct because there is one child and the parent's value identifies it.
+// For repeating rows that is wrong twice over — `{name}` on Rack means THAT
+// ROW's name, and filling it from the parent would mint one id for every row,
+// colliding with each other and with the parent.
+//
+// So parent-derived placeholders are marked and the rest are left bare:
+//
+//	{dataCenter.name}-rack  →  {parent.name}-rack   (the parent's name)
+//	{name}                  →  {name}               (this row's own name)
+//
+// The form fills `{parent.*}` from its root inputs and everything else from the
+// row, so the two can never be confused.
+func repeatingChildOrbIDTemplate(child configitems.View, parentEdge string) string {
+	if len(child.OrbIDPattern) != 1 || parentEdge == "" {
+		return ""
+	}
+	out := strings.ReplaceAll(child.OrbIDPattern[0].Raw, "{kind}", child.OrbIDKind)
+	out = strings.ReplaceAll(out, "{"+parentEdge+".", "{parent.")
+	// Any dot left is a hop through something else entirely — a sibling, or a
+	// grandparent — and the form holds neither.
+	for _, seg := range strings.Split(out, "{") {
+		body, _, found := strings.Cut(seg, "}")
+		if found && strings.Contains(body, ".") && !strings.HasPrefix(body, "parent.") {
+			return ""
+		}
+	}
+	return out
 }

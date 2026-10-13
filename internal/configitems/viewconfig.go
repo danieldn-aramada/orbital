@@ -559,9 +559,14 @@ func (c ViewConfig) Validate(types map[string]TypeInfo, deployedVersion string) 
 			// member still renders, audits and deletes; it just cannot be
 			// written from here. Dropping the flag in silence is the worse
 			// failure: the page looks configured for an edit that never arrives.
-			if m.Editable && memberIsList(types, info, m.Path) {
-				warn = append(warn, typeName+": subgraph "+m.Path+" is a LIST and cannot be editable — "+
-					"an edit target is addressed by path, and a path cannot name one row; "+
+			// A single-hop list IS editable: its members are addressed by their
+			// own orbId, read from the stored rows, not by the path. A list at a
+			// deeper hop is not — the editor creates at most one missing
+			// intermediate, and it cannot know WHICH row of the hop above to
+			// create the missing member under.
+			if m.Editable && memberIsList(types, info, m.Path) && strings.Contains(m.Path, ".") {
+				warn = append(warn, typeName+": subgraph "+m.Path+" is a LIST below another hop and cannot be editable — "+
+					"the editor cannot know which row of "+m.Path[:strings.Index(m.Path, ".")]+" a member belongs to; "+
 					"it renders read-only")
 				m.Editable = false
 			}

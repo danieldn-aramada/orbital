@@ -65,6 +65,23 @@ function getByPath(obj, path) {
   return cur
 }
 
+// subtreeFor returns the slice of the tree one TARGET owns.
+//
+// A single-cardinality member is the object at its path. A LIST member's path
+// resolves to the whole array, which every one of that list's targets shares —
+// so the element is picked by `orbId`, never by position. Position would send a
+// value to whichever row happened to sort there, and the editor lets a reader
+// reorder an array freely.
+//
+// Returns undefined when the row is gone from the array. That reads as "no
+// change" rather than "delete": membership is not editable here, and a removal
+// has to go through delete, where the preview names what it would orphan.
+function subtreeFor(obj, t) {
+  const at = getByPath(obj, t.path)
+  if (!Array.isArray(at)) return at
+  return at.find(e => e && typeof e === 'object' && e.orbId === t.orbId)
+}
+
 // rootWithoutSubtrees returns a shallow copy of `state` with the top-level
 // keys consumed by any target path removed. Used to compute the root
 // entity's diff (everything that isn't a nested editable child).
@@ -193,7 +210,10 @@ function unknownKeys(t, sub) {
   const declared = new Set(t.fields || [])
   const out = []
   for (const [k, v] of Object.entries(sub)) {
-    if (declared.has(k) || STAMPED_FIELDS.has(k)) continue
+    // `orbId` is how a list entry says WHICH member it is, not a field to
+    // write. It is in the tree deliberately (see the renderer) and must not be
+    // read as a typo, nor sent in `set` — identity is not editable.
+    if (declared.has(k) || STAMPED_FIELDS.has(k) || k === 'orbId') continue
     if (v !== null && typeof v === 'object') continue
     out.push(k)
   }
@@ -865,7 +885,7 @@ export function initConfigItemEditor({
   for (const t of targets) {
     const sub = t.path.length === 0
       ? rootWithoutSubtrees(initialState, targets)
-      : getByPath(initialState, t.path)
+      : subtreeFor(initialState, t)
     snapshots.set(snapshotKey(t), JSON.stringify(sub ?? null))
   }
 
@@ -892,7 +912,7 @@ export function initConfigItemEditor({
     for (const t of targets) {
       const currentSub = t.path.length === 0
         ? rootWithoutSubtrees(current, targets)
-        : getByPath(current, t.path)
+        : subtreeFor(current, t)
       const before = JSON.parse(snapshots.get(snapshotKey(t)))
       const changed = JSON.stringify(currentSub ?? null) !== JSON.stringify(before)
       const existed = before != null
@@ -1205,7 +1225,10 @@ export function initConfigItemEditor({
 }
 
 function snapshotKey(target) {
-  return target.kind + '|' + target.path.join('.')
+  // orbId included: every target of one editable LIST shares a kind AND a path,
+  // so without it they would collide on a single slot and three of four racks
+  // would diff against the wrong snapshot.
+  return target.kind + '|' + target.path.join('.') + '|' + (target.orbId || '')
 }
 
 // deriveName returns a default `name` for a new entity. The orbId convention

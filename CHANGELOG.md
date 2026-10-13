@@ -139,7 +139,37 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   `EksaKubernetesCluster`. An interface with several implementations says so in
   the modal rather than dropping the button.
 
+### Added
+- **A list member can now be edited from its parent's page, and created with it.**
+  Mark a subgraph member `editable: true` and its rows become writable in the
+  parent's editor — a data centre's racks edited from the data centre. Each row
+  is addressed by its own Orb ID and carries its own version, so editing one
+  leaves its neighbours untouched and a concurrent edit of one is refused
+  without blocking the others. The parent's create form can create them too, in
+  one nested mutation: a data centre and its racks in a single submit.
+  Membership stays out of the editor — adding goes through create, removing
+  through delete, where the preview still names what a removal would orphan.
+  `ORBITAL_EDITOR_MAX_MEMBERS` (default 20) caps how many rows are editable at
+  once and says so when it bites; every member is still listed on the page.
+
+### Changed
+- **A rack's Orb ID now says it is a rack.** `Rack` used a bare `{name}`
+  pattern — `colo:A.OF.C.10` — one of the two legacy exceptions CLAUDE.md flags
+  for migration. It is now `{kind}-{name}`, so a new rack reads
+  `colo:rack-A.OF.C.10`. Besides matching every other type, this removes a real
+  collision: `DataCenter` also uses a bare `{name}`, and since schema v8 an Orb
+  ID is unique across *every* ConfigItem type — so a rack named after its data
+  centre was refused with a raw DGraph error. **Existing racks keep their ids**;
+  Orb IDs are immutable, so they migrate when next touched. Schema `v15`.
+
 ### Fixed
+- **An identity field left blank no longer mints a stub Orb ID.** The create
+  form checked that every placeholder had been *substituted*, not that each had
+  a *value* — so `{kind}-{serviceTag}` with an empty service tag became
+  `server-`, which leaves no unresolved brace, is truthy, and would have been
+  offered as a real id for every such node. Only patterns with no prefix were
+  accidentally safe. Both the root form and nested rows now refuse it.
+
 - **An entity with no name now says so, instead of showing a raw Orb ID.** A
   tab or row without a name read `colo:server-GD206G4`, which looked exactly
   like a name that happened to be ugly — so nine unnamed servers went unnoticed

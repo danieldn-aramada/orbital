@@ -39,6 +39,11 @@ Prefix. See docs/playbooks/add-configitem.md.
         <p class="is-size-7">{{.EditorUnavailable}}</p>
       </div>
       {{- else}}
+      {{- if .CapNotice}}
+      <div class="notification is-info is-light py-2 px-3 mb-3" data-testid="editor-cap-notice">
+        <p class="is-size-7">{{.CapNotice}}</p>
+      </div>
+      {{- end}}
       <div id="{{.Prefix}}-json-editor-{{.DomID}}" style="min-height:200px"></div>
       {{- end}}
     </section>

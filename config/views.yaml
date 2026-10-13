@@ -57,7 +57,7 @@ pages:
     menuWeight: 10
     subgraph:
       - servers
-      - racks
+      - { path: racks, editable: true }
       - kubernetesClusters
       - networkDevices
 
@@ -195,10 +195,15 @@ types:
       - servers.count
     fields:
       name: { editable: true }
+      # 42U is the standard full-height rack, and what colo's racks carry.
+      # A SUGGESTION on the create form, not a value written behind anyone's
+      # back — the reader sees it and can change it.
+      uHeight: { createDefault: "42" }
 
   Server:
     refColumns: [dataCenter, oobIP, rack]
     columns:
+      - rack.uHeight
       - kubernetesNode.cluster.name
       - kubernetesNode.role
       - kubernetesNode.gpu

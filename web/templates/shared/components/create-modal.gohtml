@@ -127,6 +127,69 @@ memory. Infrahub generates its create form from the schema for the same reason.
       {{end}}
       {{end}}
 
+      {{/* Repeating rows: a LIST member created alongside its parent, in the
+           SAME nested mutation. The row markup lives in a <template> and is
+           cloned by JS — page structure belongs here, not built in script.
+
+           `{parent.x}` in the orbId template is filled from the form's ROOT
+           inputs; a bare `{x}` from the row's own. For repeating rows that is
+           the difference between distinct ids and one id repeated. */}}
+      {{range .Repeating}}
+      <hr class="my-4">
+      <div class="is-flex is-align-items-center mb-2" style="gap:0.75rem">
+        <p class="is-size-7 has-text-weight-semibold">{{.Label}}</p>
+        <button class="button is-small is-rounded is-link is-outlined"
+                data-create-add-row="{{.Field}}" data-testid="create-add-row">
+          <span class="icon"><i class="fa-solid fa-plus"></i></span>
+          <span>Add</span>
+        </button>
+      </div>
+      <div data-create-rows="{{.Field}}"></div>
+      <template data-create-row-template="{{.Field}}">
+        <div class="box p-3 mb-2" data-create-row="{{.Field}}"
+             data-row-orbid-template="{{.OrbIDTemplate}}">
+          <div class="is-flex is-justify-content-space-between is-align-items-start mb-2">
+            {{/* Labelled like the root form's identity preview. Unlabelled it
+                 reads as a stray placeholder rather than the thing the row is
+                 about to be called. */}}
+            <div class="field mb-0">
+              <label class="label is-size-7 mb-1">Orb ID</label>
+              <p class="is-size-7 has-text-grey" data-create-row-orbid
+                 data-testid="create-row-orbid">—</p>
+            </div>
+            <button class="delete is-small" data-create-remove-row aria-label="remove"></button>
+          </div>
+          {{$rowField := .Field}}
+          {{range .Fields}}
+          <div class="field">
+            {{/* Same weight as the root form's labels. A repeating row is a
+                 node being created, not an annotation on one — greying it
+                 reads as secondary, and the reader types into it just as
+                 much. */}}
+            <label class="label is-size-7">
+              {{.Label}}{{if .Identity}} <span class="has-text-danger">*</span>{{end}}
+            </label>
+            {{if eq .Type "Boolean"}}
+            <div class="select is-small is-fullwidth">
+              <select data-create-row-field="{{.Field}}" data-create-type="Boolean">
+                <option value=""{{if eq .Default ""}} selected{{end}}>—</option>
+                <option value="true"{{if eq .Default "true"}} selected{{end}}>true</option>
+                <option value="false"{{if eq .Default "false"}} selected{{end}}>false</option>
+              </select>
+            </div>
+            {{else}}
+            <input class="input is-small"
+                   type="{{if or (eq .Type "Int") (eq .Type "Int64") (eq .Type "Float")}}number{{else}}text{{end}}"
+                   data-create-row-field="{{.Field}}" data-create-type="{{.Type}}"
+                   value="{{.Default}}" placeholder="{{.Hint}}"
+                   {{if .Identity}}data-create-identity="1" required{{end}}>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+      </template>
+      {{end}}
+
       <div class="notification is-danger is-light is-size-7 mt-4"
            id="create-error-{{.DomID}}" style="display:none"
            data-testid="create-error"></div>

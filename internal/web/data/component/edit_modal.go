@@ -37,6 +37,15 @@ type EditModal struct {
 	// see the schema", and one a user would act on by assuming the data is gone.
 	EditorUnavailable string
 
+	// CapNotice, when non-empty, says how many members of an editable list the
+	// editor left out and which setting decides it.
+	//
+	// STATED, never silent — an editor showing 20 of 50 members and saying
+	// nothing reads as the complete set, and the member someone came to fix is
+	// as likely to be in the 30 as the 20. The omitted members are still SHOWN
+	// by the page's read-only tab; only writing them is capped.
+	CapNotice string
+
 	OrbID       string
 	Version     int
 	CurrentUser string

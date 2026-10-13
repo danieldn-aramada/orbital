@@ -22,6 +22,29 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
   `generic-fields`, not the table.
 
 
+- **A LIST member can be `editable: true`, and its rows are addressed by their own `orbId` — never by
+  position.** *(2026-10-13.)* Single-hop only: a list below another hop is still refused at load, because
+  the editor creates at most one missing intermediate and cannot know which row of the hop above a member
+  belongs under. `EditorListMembers()` is separate from `EditorMembers()` deliberately — one derives ids
+  from the parent, the other reads them from stored rows, and nothing that handles one can handle the
+  other. `BuildEditTargets` must NEVER emit a list target; `ExpandListTargets` does, from fetched rows.
+  ⚠️ `snapshotKey` includes the orbId — without it every target of one list collides on a single slot and
+  all but one row diffs against the wrong snapshot. ⚠️ `orbId` is in the editor tree on purpose (it is how
+  a save matches an entry to its target) and must stay out of `set`.
+- **Membership is NOT editable from the parent.** *(2026-10-13.)* Dropping a row from the array reads as
+  "no change", never as a delete — removing a config item from a form row would route around the delete
+  preview that names what it would orphan. Adding is the create form.
+- **`ORBITAL_EDITOR_MAX_MEMBERS` caps how many members of one list are EDITABLE, and the cap is stated.**
+  *(2026-10-13, default 20.)* The notice names the setting, because a reader who finds their member missing
+  needs to know which knob returns it. Capping the editor never hides data — the read-only tab still shows
+  every member.
+- **A parent's create form may create its list children in the SAME nested mutation.** *(2026-10-13.)*
+  ⚠️ **Never `addParent` then `addChild`** — two mutations are two transactions and the first stays
+  committed when the second fails (proven against DGraph 2026-10-13). ⚠️ A repeating row's orbId template
+  uses `{parent.x}` for a placeholder from the parent's inputs and a bare `{x}` for the row's own; collapsing
+  the two mints ONE id for every row. Row markup is cloned from a server-rendered `<template>`, never built
+  in JS.
+
 ### Detail tabs (list pages)
 
 - **Closing a tab lands on its LEFT neighbour; closing a background tab moves nothing.** *(2026-10-05.)* The leftmost tab's neighbour is Summary, so no special case. ⚠️ `replaceCurrentTab` must get the same neighbour, or the next arrival restores a removed tab.

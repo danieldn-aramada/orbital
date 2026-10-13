@@ -307,14 +307,20 @@ func TestValidateViews_ListHopInAMemberPathIsLegal(t *testing.T) {
 	assertMembers(t, got, "Server", "storageControllers.storageDevices")
 }
 
-// `editable:` the editor cannot honour — on a LIST, or more than two hops
-// deep — is refused, SAID, and the member still renders.
+// `editable:` the editor cannot honour — a LIST below another hop, or more than
+// two hops deep — is refused, SAID, and the member still renders.
 //
-// The regression class is a silent drop: an editable list has never been
-// writable — a target is addressed by path and a path cannot name one row — and
-// the editor creates at most one missing intermediate. Quietly clearing the
-// flag leaves a page that reads as configured for an edit that will never
-// arrive. "Nothing happened" is the one outcome nobody can debug from outside.
+// ⚠️ A SINGLE-HOP list is legal as of 2026-10-13 and this test pins that it
+// survives. It used to be refused on the grounds that "a target is addressed by
+// path and a path cannot name one row" — true, which is why a list member is
+// addressed by its row's own orbId instead (ExpandListTargets). A list below
+// another hop is still refused, and for a reason that did not go away: the
+// editor creates at most one missing intermediate and cannot know which row of
+// the hop above a member belongs under.
+//
+// The regression class is a silent drop: quietly clearing a flag leaves a page
+// that reads as configured for an edit that will never arrive. "Nothing
+// happened" is the one outcome nobody can debug from outside.
 func TestValidateViews_EditableTheEditorCannotHonourIsRefusedAndSaid(t *testing.T) {
 	cfg := ViewConfig{Pages: map[string]PageDecl{"Server": {Subgraph: []MemberDecl{
 		{Path: "storageControllers", Editable: true},
@@ -324,7 +330,7 @@ func TestValidateViews_EditableTheEditorCannotHonourIsRefusedAndSaid(t *testing.
 	}}}}
 	got, warn := cfg.Validate(validationFixture(), "")
 
-	for _, want := range []string{"storageControllers is a LIST", "storageControllers.storageDevices is a LIST", "oobIP.assignedTo.rack is more than two hops"} {
+	for _, want := range []string{"storageControllers.storageDevices is a LIST", "oobIP.assignedTo.rack is more than two hops"} {
 		if !anyContains(warn, want) {
 			t.Errorf("a refused editable flag (%s) must be reported; got %v", want, warn)
 		}
@@ -338,13 +344,16 @@ func TestValidateViews_EditableTheEditorCannotHonourIsRefusedAndSaid(t *testing.
 	for _, m := range got.Pages["Server"].Subgraph {
 		byPath[m.Path] = m.Editable
 	}
-	if byPath["storageControllers"] || byPath["storageControllers.storageDevices"] || byPath["oobIP.assignedTo.rack"] {
+	if byPath["storageControllers.storageDevices"] || byPath["oobIP.assignedTo.rack"] {
 		t.Error("a refused flag must be CLEARED, or the editor would still try to honour it")
 	}
-	// A single-cardinality tab keeps the flag — this is the flag working, and
-	// without it the test would pass for a Validate that cleared everything.
+	// Two that KEEP the flag — without these the test would pass for a Validate
+	// that cleared everything.
 	if !byPath["oobIP"] {
 		t.Error("editable on a SINGLE member is legal and must survive")
+	}
+	if !byPath["storageControllers"] {
+		t.Error("editable on a SINGLE-HOP list is legal as of 2026-10-13 and must survive")
 	}
 }
 
