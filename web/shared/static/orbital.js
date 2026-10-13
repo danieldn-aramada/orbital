@@ -3607,6 +3607,65 @@ function initCreateForms() {
     if (!submitBtn) return
 
     const rels = () => [...modal.querySelectorAll('[data-create-rel]')]
+
+    // Repeating rows: a LIST member created alongside its parent.
+    //
+    // Row markup is CLONED from the <template> the server rendered, never built
+    // here — page structure belongs in the template, and a row assembled in JS
+    // would drift from the one the form declares.
+    const rowGroups = () => [...modal.querySelectorAll('[data-create-rows]')]
+    const rowsOf = (field) =>
+      [...modal.querySelectorAll(`[data-create-row="${field}"]`)]
+
+    // Fill a row's orbId template. `{parent.x}` comes from the form's ROOT
+    // inputs; a bare `{x}` from this row's own. Keeping the two apart is the
+    // whole point: Rack's pattern is `{name}`, and filling that from the parent
+    // would mint ONE id for every row — colliding with each other and with the
+    // data centre being created.
+    const fillRow = (tmpl, row) => {
+      let out = tmpl
+      let blank = false
+      const sub = (token, raw) => {
+        if (!out.includes(token)) return
+        const v = (raw || '').trim()
+        if (v === '') blank = true
+        out = out.replaceAll(token, v)
+      }
+      for (const el of rootFields()) sub(`{parent.${el.dataset.createField}}`, el.value)
+      for (const el of row.querySelectorAll('[data-create-row-field]')) sub(`{${el.dataset.createRowField}}`, el.value)
+      // See fill(): an empty VALUE leaves no brace to notice. Rack's pattern is
+      // `rack-{name}`, so a blank name yields `rack-` — a plausible-looking id
+      // that every nameless row would share.
+      return (blank || out.includes('{')) ? '' : out
+    }
+
+    const refreshRowIds = () => {
+      const ns = namespace()
+      for (const row of modal.querySelectorAll('[data-create-row]')) {
+        const id = fillRow(row.dataset.rowOrbidTemplate || '', row)
+        const out = row.querySelector('[data-create-row-orbid]')
+        if (out) out.textContent = ns && id ? `${ns}:${id}` : '—'
+      }
+    }
+
+    modal.addEventListener('click', (e) => {
+      const add = e.target.closest('[data-create-add-row]')
+      if (add) {
+        e.preventDefault()
+        const field = add.dataset.createAddRow
+        const tpl = modal.querySelector(`[data-create-row-template="${field}"]`)
+        const host = modal.querySelector(`[data-create-rows="${field}"]`)
+        if (tpl && host) host.appendChild(tpl.content.cloneNode(true))
+        refreshRowIds()
+        return
+      }
+      const rm = e.target.closest('[data-create-remove-row]')
+      if (rm) {
+        e.preventDefault()
+        rm.closest('[data-create-row]')?.remove()
+        refreshRowIds()
+      }
+    })
     const rootFields = () => [...modal.querySelectorAll('[data-create-field]:not([data-create-child])')]
     const childFields = () => [...modal.querySelectorAll('[data-create-child]')]
 
@@ -3655,13 +3714,23 @@ function initCreateForms() {
       const ns = namespace()
       if (!ns || !template) return ''
       let out = template
+      let blank = false
       for (const el of rootFields()) {
+        const token = `{${el.dataset.createField}}`
+        if (!out.includes(token)) continue
         const v = (el.value || '').trim()
-        out = out.replaceAll(`{${el.dataset.createField}}`, v)
+        if (v === '') blank = true
+        out = out.replaceAll(token, v)
       }
       // An unfilled placeholder means no id at all: a PARTIAL id would collide
       // with every other node missing the same field.
-      if (out.includes('{')) return ''
+      //
+      // Checked on the VALUES, not just on leftover braces. A pattern with a
+      // prefix — `{kind}-{serviceTag}` — substitutes an empty tag to `server-`,
+      // which has no brace left to notice and is truthy, so every nameless
+      // server would be offered the same stub id. Only bare `{name}` patterns
+      // were ever accidentally safe.
+      if (blank || out.includes('{')) return ''
       return ns + ':' + out
     }
 
@@ -3670,8 +3739,8 @@ function initCreateForms() {
       orbIdEl.textContent = id || '—'
       orbIdEl.className = id ? 'is-size-7 is-family-monospace' : 'is-size-7 has-text-grey'
     }
-    modal.addEventListener('input', refresh)
-    modal.addEventListener('change', refresh)
+    modal.addEventListener('input', () => { refresh(); refreshRowIds() })
+    modal.addEventListener('change', () => { refresh(); refreshRowIds() })
 
     submitBtn.addEventListener('click', async () => {
       clearError()
@@ -3722,10 +3791,20 @@ function initCreateForms() {
       // became `{serviceTag}`, because that server is the node being created.
       const fill = (tmpl) => {
         let out = tmpl
+        let blank = false
         for (const el of rootFields()) {
-          out = out.replaceAll(`{${el.dataset.createField}}`, (el.value || '').trim())
+          const token = `{${el.dataset.createField}}`
+          if (!out.includes(token)) continue
+          const v = (el.value || '').trim()
+          if (v === '') blank = true
+          out = out.replaceAll(token, v)
         }
-        return out.includes('{') ? '' : out
+        // A placeholder left UNRESOLVED is not the only failure — one resolved
+        // to NOTHING is worse, because it leaves no brace behind to notice.
+        // `server-{serviceTag}` with an empty tag becomes `server-`, which is
+        // truthy and would mint `<ns>:server-` for every such node, colliding
+        // on the second one. Checking the VALUES catches both.
+        return (blank || out.includes('{')) ? '' : out
       }
       for (const el of childFields()) {
         const v = typed(el)
@@ -3740,10 +3819,42 @@ function initCreateForms() {
         input[child][el.dataset.createField] = v
       }
 
+      // Repeating rows, nested into the SAME input. One mutation, one
+      // transaction — addParent-then-addChild would leave the parent committed
+      // when a row failed.
+      const rowIds = []
+      for (const group of rowGroups()) {
+        const field = group.dataset.createRows
+        const rows = rowsOf(field)
+        if (rows.length === 0) continue
+        const entries = []
+        for (const row of rows) {
+          const rowId = fillRow(row.dataset.rowOrbidTemplate || '', row)
+          if (!rowId) {
+            showError('Fill the fields each ' + field + ' row needs — its Orb ID is built from them.')
+            return
+          }
+          const full = ns + ':' + rowId
+          if (rowIds.includes(full)) {
+            showError('Two ' + field + ' rows would get the same Orb ID (' + full + '). Give them different values.')
+            return
+          }
+          rowIds.push(full)
+          const entry = { orbId: full, namespace: ns, version: 1 }
+          for (const el of row.querySelectorAll('[data-create-row-field]')) {
+            const v = typed(el)
+            if (v !== undefined) entry[el.dataset.createRowField] = v
+          }
+          entries.push(entry)
+        }
+        input[field] = entries
+      }
+
       // A child whose id already exists would be LINKED, keeping its own values
       // and MOVING off whatever parent it had — silent data loss. Checked here
-      // because DGraph reports nothing.
-      const childTaken = await orbIdsInUse(Object.values(childIds))
+      // because DGraph reports nothing. Repeating rows carry the same hazard,
+      // so they are checked in the same call.
+      const childTaken = await orbIdsInUse([...Object.values(childIds), ...rowIds])
       if (childTaken.length) {
         showError('An entity with Orb ID ' + childTaken[0] + ' already exists and would be re-parented.')
         return

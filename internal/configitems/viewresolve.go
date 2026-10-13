@@ -393,6 +393,24 @@ func (v View) EditorMembers() []ViewTab {
 	return out
 }
 
+// EditorListMembers are the editable members whose path ends on a LIST.
+//
+// Separate from EditorMembers because the two are addressed differently and
+// nothing that handles one can handle the other: a single-cardinality member's
+// orbId is DERIVED from the parent (`<serviceTag>-idrac`), while a list
+// member's is whatever the stored row already has. Callers that walk
+// EditorMembers and derive an id must not see these, or they would mint an id
+// for a row that exists.
+func (v View) EditorListMembers() []ViewTab {
+	var out []ViewTab
+	for _, m := range v.Subgraph {
+		if m.Editable && m.IsList {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
 // relationsOf maps each relationship field to the type at its far end.
 func relationsOf(info TypeInfo) map[string]string {
 	out := map[string]string{}

@@ -321,6 +321,7 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	ui.SetDGraphURL(cfg.DGraphURL)
 	ui.SetDGraphAdminURL(cfg.DGraphAdminURL)
 	ui.SetListMaxRows(cfg.ListMaxRows)
+	ui.SetEditorMaxMembers(cfg.EditorMaxMembers)
 	ui.SetBackupCronSpec(cfg.BackupSchedule)
 	// Aggressive caching for versioned static assets. head.gohtml's import
 	// map (see web/templates/shared/layouts/head.gohtml) rewrites every ES

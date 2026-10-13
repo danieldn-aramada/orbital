@@ -36,6 +36,13 @@ type GenericRenderer struct {
 	listMaxRows    int
 	rowCapSetting  string
 
+	// editorMaxMembers caps how many members of one editable LIST the config
+	// editor renders writable; editorCapSetting names the knob so the notice
+	// can tell the reader which one to turn. Same pair, same reason, as
+	// listMaxRows/rowCapSetting.
+	editorMaxMembers int
+	editorCapSetting string
+
 	// deleteExec and deletePreview are orbital's cascade delete, served on the
 	// page's own URL. Attached by the orbital server only, already wrapped in
 	// its auth chain — orb is read-only and never sets them, so there both
@@ -92,6 +99,22 @@ func (g *GenericRenderer) WithRowCap(max int, setting string) *GenericRenderer {
 			"fix", "lower it, or use the API for bulk reads")
 	}
 	g.listMaxRows = max
+	return g
+}
+
+// DefaultEditorMaxMembers is the fallback when no cap is configured. See
+// config.EditorMaxMembers for why it is a judgement rather than a measurement.
+const DefaultEditorMaxMembers = 20
+
+// WithEditorMemberCap sets how many members of one editable list the editor
+// renders writable. A value <= 0 falls back to the default, so a caller that
+// forgets this never serves an editor with no members in it.
+func (g *GenericRenderer) WithEditorMemberCap(max int, setting string) *GenericRenderer {
+	g.editorCapSetting = setting
+	g.editorMaxMembers = max
+	if max <= 0 {
+		g.editorMaxMembers = DefaultEditorMaxMembers
+	}
 	return g
 }
 
@@ -714,6 +737,71 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 		}
 		at[leaf] = sub
 	}
+
+	// Editable LIST members: one writable entry per STORED row.
+	//
+	// Addressed by each row's own orbId, never by position — a JSON editor lets
+	// a reader reorder an array, and writing by index would then send a value
+	// to whichever row happened to sort there. `orbId` is in the tree for the
+	// same reason: it is the row's identity, it is how the save matches an
+	// entry to its target, and unlike `version` it is something a human needs
+	// to see to know which member they are editing.
+	//
+	// Membership is NOT expressible here. Entries reflect what is stored;
+	// adding one goes through create, removing one through delete.
+	var listTargets []configitems.EditTarget
+	for _, m := range v.EditorListMembers() {
+		mv, known := byType[m.Type]
+		if !known || len(mv.Fields) == 0 {
+			continue
+		}
+		rows, _ := entity[m.Field].([]any)
+		if len(rows) == 0 {
+			continue
+		}
+		cap := g.editorMaxMembers
+		if cap <= 0 {
+			cap = DefaultEditorMaxMembers
+		}
+		shown := rows
+		if len(shown) > cap {
+			shown = shown[:cap]
+			data.EditorOmitted = append(data.EditorOmitted, page.EditorOmission{
+				Label: mv.Label, Omitted: len(rows) - cap, Of: len(rows), Setting: g.editorCapSetting,
+			})
+		}
+
+		members := make([]configitems.ListMember, 0, len(shown))
+		entries := make([]any, 0, len(shown))
+		for _, r := range shown {
+			raw, isMap := r.(map[string]any)
+			if !isMap {
+				continue
+			}
+			orbID, _ := raw["orbId"].(string)
+			if orbID == "" {
+				continue // cannot be addressed; see ExpandListTargets
+			}
+			ver := 0
+			if vv, ok := raw["version"].(float64); ok {
+				ver = int(vv)
+			}
+			members = append(members, configitems.ListMember{OrbID: orbID, Version: ver})
+
+			entry := map[string]any{"orbId": orbID}
+			for k, val := range editableSubtree(mv, raw) {
+				entry[k] = val
+			}
+			entries = append(entries, entry)
+		}
+		if len(entries) == 0 {
+			continue
+		}
+		editData[m.Field] = entries
+		listTargets = append(listTargets, configitems.ExpandListTargets(
+			m, g.fields.Fields, g.fields.Meta, namespaceOf(orbID), orbID, members)...)
+	}
+
 	data.HasEditable = len(editData) > 0
 	if !data.HasEditable {
 		return
@@ -737,6 +825,10 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 	// Each child's orbId and version come from the same fetch that populated the
 	// tree, so a stamped version always describes the data on the page.
 	targets = stampFetchedVersions(targets, entity, orbID)
+	// Appended AFTER stamping: these already carry the version from the row
+	// they were built from, and stampFetchedVersions walks single-cardinality
+	// paths only — it would find a list at `racks` and stop.
+	targets = append(targets, listTargets...)
 	targetsJSON, err := json.Marshal(targets)
 	if err != nil {
 		g.logger.Warn("generic editor: marshal edit targets", "type", v.Type, "err", err)
@@ -749,6 +841,7 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 	}
 	data.EditModal = component.EditModal{
 		EditorUnavailable: editorUnavailableReason(g.fields.State()),
+		CapNotice:         editorCapNotice(data.EditorOmitted),
 		Prefix:            "generic",
 		Title:             "Edit " + v.Type + ": " + name,
 		DomID:             SafeDomID(orbID),
@@ -1198,4 +1291,25 @@ func naturalKeyOf(orbID, kind string) string {
 		return orbID
 	}
 	return key
+}
+
+// editorCapNotice renders the omission notice, or "" when nothing was capped.
+//
+// Names the SETTING, not just the number: a reader who finds the member they
+// wanted is missing needs to know which knob returns it, and searching for a
+// count finds nothing.
+func editorCapNotice(oms []page.EditorOmission) string {
+	if len(oms) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(oms))
+	for _, o := range oms {
+		parts = append(parts, fmt.Sprintf("%d of %d %s", o.Omitted, o.Of, o.Label))
+	}
+	setting := oms[0].Setting
+	if setting == "" {
+		setting = "the editor member cap"
+	}
+	return "Not editable here: " + strings.Join(parts, "; ") +
+		" — raise " + setting + " to edit more. Every member is still listed on the page."
 }

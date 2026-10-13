@@ -235,3 +235,53 @@ func orbIDSuffix(meta MetaFor, typeName string) string {
 	}
 	return strings.ToLower(typeName)
 }
+
+// ListMember is one stored row of an editable list member: the identity and
+// OCC counter the editor needs to write it.
+//
+// Supplied by the caller from rows it already fetched. BuildEditTargets cannot
+// derive these — a list member's orbId is whatever the row has, which is the
+// whole reason list members are addressed differently from derived ones.
+type ListMember struct {
+	OrbID   string
+	Version int
+}
+
+// ExpandListTargets returns one EditTarget per stored member of an editable
+// list, so the editor writes each row to its own node.
+//
+// Membership is NOT expressible here, deliberately: this takes the members that
+// exist and makes them writable. Adding one goes through the create flow, which
+// mints the orbId from the type's pattern; removing one goes through delete,
+// which previews what the removal would orphan. A row appearing or vanishing
+// from this slice is a consequence of those, never a way to cause them.
+//
+// Members with no editable fields yield nothing, matching the single-cardinality
+// rule: a tab of hardware facts is not an editor.
+func ExpandListTargets(m ViewTab, fields FieldsFor, meta MetaFor, namespace, parentOrbID string, members []ListMember) []EditTarget {
+	f := fields(m.Type)
+	if len(f) == 0 {
+		return nil
+	}
+	out := make([]EditTarget, 0, len(members))
+	for _, mem := range members {
+		if mem.OrbID == "" {
+			// A row with no id cannot be addressed, and writing it by position
+			// would send a value to whichever row happened to sort there.
+			continue
+		}
+		out = append(out, EditTarget{
+			Path:               strings.Split(m.Field, "."),
+			Kind:               m.Type,
+			OrbID:              mem.OrbID,
+			Version:            mem.Version,
+			Fields:             f,
+			JSONStringFields:   JSONStringFieldsFor(meta(m.Type)),
+			PayloadField:       meta(m.Type).PayloadField,
+			Namespace:          namespace,
+			ParentInverseField: m.ParentEdge,
+			ParentOrbID:        parentOrbID,
+		})
+	}
+	return out
+}

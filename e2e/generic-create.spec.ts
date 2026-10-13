@@ -464,3 +464,33 @@ test('a namespace that already holds a data centre is refused', async ({ page, r
   expect((await res.json()).data.getDataCenter,
     'a refused create must leave no node behind').toBeNull();
 });
+
+
+test('an identity field left blank is refused, even when the pattern has a prefix', async ({ page, request }) => {
+  // `{kind}-{serviceTag}` with an empty service tag substitutes to `server-`,
+  // which leaves NO unresolved brace — so a check for "are all placeholders
+  // filled?" passes and the form would mint `colo:server-` for every nameless
+  // server, colliding on the second one.
+  //
+  // Found 2026-10-13 when Rack's pattern gained a `{kind}-` prefix and the
+  // blank-row case stopped being refused. The root form had the same hole all
+  // along; only patterns with no prefix (`{name}`) were accidentally safe.
+  await page.goto('/servers');
+  await page.getByTestId('create-open').click();
+  const modal = page.locator('.modal.is-active');
+
+  await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:colo-galleon' });
+  await modal.locator('[data-create-field="name"]:not([data-create-child])').fill('e2e-blank-identity');
+  // serviceTag deliberately left empty — it is what the orbId is built from.
+
+  await expect(modal.getByTestId('create-orbid'),
+    'a half-built id must not be shown as if it were real').toHaveText('—');
+
+  await modal.getByTestId('create-submit').click();
+  await expect(modal.getByTestId('create-error')).toBeVisible();
+
+  const res = await request.post('/graphql', {
+    data: { query: `{ getServer(orbId: "colo:server-") { orbId } }` },
+  });
+  expect((await res.json()).data.getServer, 'nothing may be written under a stub id').toBeNull();
+});

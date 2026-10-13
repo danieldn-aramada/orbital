@@ -93,6 +93,9 @@ type GenericDetail struct {
 	// but whose etcd/velero/s3Sync children are exactly what you edit there.
 	HasEditable bool
 
+	// EditorOmitted lists the editable lists this page capped, if any.
+	EditorOmitted []EditorOmission
+
 	// CanDelete gates the Delete button. Same permission as editing: the delete
 	// machinery itself (button attributes, global handler, modal) is already
 	// generic, so only the markup was missing.
@@ -330,6 +333,11 @@ type CreateForm struct {
 	// the editor already edits. Nested, because a nested create is the one
 	// nesting DGraph performs atomically.
 	Unit []CreateUnitChild
+
+	// Repeating are the LIST members offered as repeating rows, created in the
+	// same nested mutation as Unit. Separate because the two fill their orbId
+	// placeholders from different scopes — see CreateUnitRepeating.
+	Repeating []CreateUnitRepeating
 }
 
 // CreateField is one editable scalar on the form.
@@ -394,4 +402,45 @@ type CreateUnitChild struct {
 	OrbIDTemplate string
 
 	Fields []CreateField
+}
+
+// CreateUnitRepeating is a LIST member offered on the parent's create form as
+// repeating rows — create a data centre AND its racks in one submit.
+//
+// One NESTED mutation, never addParent-then-addChild: a single GraphQL mutation
+// is one transaction, and two are two, with the first staying committed when
+// the second fails. DGraph performs nested creation atomically, which is the
+// only reason this is offerable at all.
+//
+// Membership here is CREATION, not editing. Rows added on this form are nodes
+// that do not exist yet; a row referring to an id that already exists would be
+// LINKED and moved off its current parent, which the form refuses before
+// sending anything.
+type CreateUnitRepeating struct {
+	Field string
+	Label string
+	Kind  string
+
+	// OrbIDTemplate uses `{parent.x}` for a placeholder taken from the PARENT's
+	// inputs and a bare `{x}` for one taken from the row's own. See
+	// repeatingChildOrbIDTemplate — for repeating rows the distinction is the
+	// difference between distinct ids and one id repeated.
+	OrbIDTemplate string
+
+	Fields []CreateField
+}
+
+// EditorOmission says how many members of one editable list the editor left
+// out, and which setting decides that.
+//
+// STATED, never silent — the same rule the list page's truncation notice
+// follows. An editor that renders 20 of 50 members and says nothing reads as
+// the complete set, and the member someone came to fix is as likely to be in
+// the 30 as the 20. The omitted members are still SHOWN by the page's
+// read-only tab; only writing them is capped.
+type EditorOmission struct {
+	Label   string // the member's human label, e.g. "Racks"
+	Omitted int
+	Of      int
+	Setting string // the env var that decides it, so the notice can name it
 }
