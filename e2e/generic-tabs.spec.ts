@@ -709,3 +709,83 @@ test('an inbound ?open= replaces the saved tabs rather than merging into them', 
     'following a link moves you into that workspace; the old one is not kept underneath').toHaveCount(2);
   expect(new URL(page.url()).searchParams.getAll('open')).toEqual([theirs]);
 });
+
+
+// ── The tab label goes stale ──────────────────────────────────────────────────
+
+test('a restored tab re-reads its label, so a stale one heals', async ({ page }) => {
+  // The stored label is a SNAPSHOT of the name when the tab was opened, and
+  // restoration used to trust it forever. Anything that made the lookup miss
+  // once — a row that was not on the page, a name added later — left the raw
+  // orbId showing on that tab permanently. Seen on /servers 2026-10-13.
+  //
+  // The case that is certain rather than incidental is a RENAME: the tab kept
+  // the old name until someone closed and reopened it.
+  await page.goto('/network-devices');
+  await expect(page.locator('#generic-table')).toBeVisible();
+
+  const row = listRows(page).first();
+  const orbId = (await row.getAttribute('data-orb-id'))!;
+  const name = (await row.locator('td').first().innerText()).trim();
+  expect(name, 'precondition: the row has a name to recover').not.toBe('');
+  expect(name).not.toBe(orbId);
+
+  await row.dblclick();
+  await expect(page.locator('[id^="tab-content-generic-network-devices-"]')).toBeVisible();
+
+  // Make the stored label stale, exactly as a missed lookup would have.
+  await page.evaluate((id) => {
+    const tabs = JSON.parse(localStorage.genericTabs || '[]');
+    for (const t of tabs) if (t.orbId === id) t.label = id;
+    localStorage.genericTabs = JSON.stringify(tabs);
+  }, orbId);
+
+  // Arrive at the BARE url, not a reload. Opening a tab puts ?open= in the
+  // address bar, and that branch re-resolves the label and returns early — so a
+  // reload never reaches the localStorage restoration this is about. Coming in
+  // from the nav menu is what exercises it, and is how the bug was seen.
+  await page.goto('/network-devices');
+  const tab = page.locator(`#tablist li.tab a[data-orb-id="${orbId}"]`);
+  await expect(tab).toBeVisible();
+  await expect(tab, 'the restored tab must show the NAME, not the orbId').toContainText(name);
+  await expect(tab, 'and must not still be showing the id').not.toContainText(orbId);
+});
+
+test('a row with NO name says so, instead of standing in a raw Orb ID', async ({ page, request }) => {
+  // `name` is nullable on the ConfigItem interface and DGraph allows no
+  // per-type override, so orbital cannot refuse a nameless Server at the
+  // schema. For a Server an absent name is a MISCONFIGURATION, and the label
+  // has to read that way — a raw orbId looks exactly like a name that happens
+  // to be ugly, which is how nine unnamed servers in `seattle` went unnoticed
+  // for five months.
+  const ORB = 'colo:network-device-E2ENONAME';
+  const clean = () => request.post('/graphql', {
+    data: { query: `mutation { deleteNetworkDevice(filter: { orbId: { eq: "${ORB}" } }) { numUids } }` },
+  });
+  await clean();
+  await request.post('/graphql', {
+    data: {
+      query: `mutation { addNetworkDevice(input: [{ orbId: "${ORB}", namespace: "colo", version: 1,
+        serial: "E2ENONAME", dataCenter: { orbId: "colo:colo-galleon" } }]) { numUids } }`,
+    },
+  });
+
+  try {
+    await page.goto('/network-devices');
+    await expect(page.locator('#generic-table')).toBeVisible();
+
+    const row = page.locator(`#generic-table tbody tr[data-orb-id="${ORB}"]`);
+    await expect(row, 'precondition: the nameless row is on the page').toHaveCount(1);
+    // The natural key is computed SERVER-side, where `{kind}` is known.
+    await expect(row).toHaveAttribute('data-natural-key', 'E2ENONAME');
+
+    await row.dblclick();
+    const tab = page.locator(`#tablist li.tab a[data-orb-id="${ORB}"]`);
+    await expect(tab, 'the tab must state the name is missing').toContainText('(unnamed)');
+    await expect(tab, 'and still say WHICH one, so nine of them are not identical').toContainText('E2ENONAME');
+    await expect(tab, 'the namespace and kind are noise in a narrow strip')
+      .not.toContainText('colo:network-device-');
+  } finally {
+    await clean();
+  }
+});

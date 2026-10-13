@@ -198,6 +198,13 @@ func (g *GenericRenderer) List(c echo.Context) error {
 		for _, c := range v.Columns {
 			row[c.Path] = stringify(columnValue(r, c))
 		}
+		// The natural-key tail of the orbId, for a row with no name to label
+		// itself with. Computed HERE because only the server knows this view's
+		// `{kind}` — JS stripping it by convention would mangle every type
+		// whose pattern puts the kind elsewhere (IdracSettings is
+		// `<serviceTag>-idrac`).
+		orbID, _ := row["orbId"].(string)
+		row["naturalKey"] = naturalKeyOf(orbID, v.OrbIDKind)
 		data.Rows = append(data.Rows, row)
 	}
 	data.FilterBy = buildFilterBy(v, data.Columns, data.RefColumns, data.Rows)
@@ -1165,4 +1172,30 @@ func prettyJSON(v any) any {
 		return v
 	}
 	return string(out)
+}
+
+// naturalKeyOf reduces an orbId to its NATURAL KEY — the term CLAUDE.md and
+// DGRAPH.md already use for this part of the id, so the code says what the docs
+// say. The namespace prefix and this view's kind token are removed.
+//
+//	colo:server-GD206G4 (kind "server")  →  GD206G4
+//
+// Only ever a LABEL for a row that has no name. Never an identifier — orbId is
+// that, and this is lossy on purpose. Returns the orbId unchanged when it does
+// not follow the convention, which is honest: a key that is not derivable
+// should read as the raw id rather than as a confident wrong answer.
+func naturalKeyOf(orbID, kind string) string {
+	key := orbID
+	if _, after, ok := strings.Cut(orbID, ":"); ok {
+		key = after
+	}
+	if kind != "" {
+		if rest, ok := strings.CutPrefix(key, kind+"-"); ok {
+			key = rest
+		}
+	}
+	if key == "" {
+		return orbID
+	}
+	return key
 }

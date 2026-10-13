@@ -140,6 +140,19 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   the modal rather than dropping the button.
 
 ### Fixed
+- **An entity with no name now says so, instead of showing a raw Orb ID.** A
+  tab or row without a name read `colo:server-GD206G4`, which looked exactly
+  like a name that happened to be ugly — so nine unnamed servers went unnoticed
+  for five months. It now reads `(unnamed) GD206G4`: the missing name is stated,
+  and the entity's **natural key** — the identifying tail of its Orb ID — is kept. `name` is nullable on the ConfigItem
+  interface and DGraph allows no per-type override, so orbital cannot refuse a
+  nameless entity at the schema; surfacing it is the next best thing.
+
+- **A tab that lost its name no longer keeps showing a stale label.** The label
+  was captured when the tab was opened and never re-read, so anything that made
+  the name lookup miss once stuck permanently. Restoring a tab now re-reads the
+  name from the list, which also fixes a renamed entity keeping its old label.
+
 - **A mutation that adds a non-ConfigItem alongside a ConfigItem is no longer
   refused.** Orbital stamps `version`/`createdBy`/`createdAt`/`updatedBy`/
   `updatedAt` into every add input, but those fields exist only on ConfigItem

@@ -117,7 +117,7 @@ has one query built from the view, so there is nothing per-type for JS to know.
             {{range .Rows}}
             {{/* data-orb-id, because the name is NOT a link and there is no href
                  to read the entity out of. The row IS the handle. */}}
-            <tr data-orb-id="{{index . "orbId"}}">
+            <tr data-orb-id="{{index . "orbId"}}" data-natural-key="{{index . "naturalKey"}}">
               {{/* PLAIN TEXT, deliberately. This table has DataTables row
                    selection (`select: { style: 'os' }`) and the Copy/Excel/CSV
                    buttons export the selection — so single click is already

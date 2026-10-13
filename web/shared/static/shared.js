@@ -1432,9 +1432,16 @@ export function loadGenericTab(label, slug, orbId, activate = true) {
 }
 
 // labelFromTable finds a row's display name in the list already rendered on the
-// page. Returns '' when the row is not there — a capped list, or an orbId that
-// does not exist — and the caller falls back to the orbId, which is ugly but
-// honest and still opens.
+// page.
+//
+// Returns '' ONLY when the row is not there — a capped list, or an orbId that
+// does not exist — and the caller then falls back to the raw orbId. A row that
+// IS there always yields something, `(unnamed) <key>` included, so the three
+// states stay distinguishable where they used to collapse into one orbId:
+//
+//	a name           → the entity is called that
+//	(unnamed) <key>  → the entity exists and is MISSING a name
+//	the raw orbId    → orbital could not find the row at all
 function labelFromTable(slug, orbId) {
   for (const tr of document.querySelectorAll('#generic-table tbody tr[data-orb-id]')) {
     if (tr.dataset.orbId === orbId) return labelOfRow(tr)
@@ -1444,8 +1451,31 @@ function labelFromTable(slug, orbId) {
 
 // labelOfRow reads a row's display name — the first cell. Plain text, because
 // the name is not a link: see the dblclick handler for why.
-function labelOfRow(tr) {
-  return (tr.querySelector('td')?.textContent || '').trim()
+//
+// A row with NO name gets a label that says so. `name` is nullable on the
+// ConfigItem interface and DGraph allows no per-type override, so orbital
+// cannot refuse one at the schema — but for a Server or a Rack an absent name
+// is a MISCONFIGURATION, not a shape orbital supports, and the label should
+// read that way rather than quietly standing in for a name.
+//
+// The raw orbId used to be that stand-in, which conflated three different
+// things: this entity is called `colo:server-GD206G4`, this entity has no name,
+// and orbital could not find its row. Nothing on screen told them apart — the
+// only way to learn which was to ask.
+//
+// The NATURAL KEY is the identifying tail of the orbId — the term CLAUDE.md
+// and DGRAPH.md use. Computed server-side, where `{kind}` is known (see
+// naturalKeyOf). Falls back to the orbId when the row cannot supply one.
+export function labelOfRow(tr) {
+  const name = (tr.querySelector('td')?.textContent || '').trim()
+  if (name) return name
+  return unnamedLabel(tr.dataset.naturalKey || tr.dataset.orbId || '')
+}
+
+// unnamedLabel is the ONE place the no-name label is spelled, so the tab strip,
+// the list and any picker cannot drift into saying it three ways.
+export function unnamedLabel(naturalKey) {
+  return naturalKey ? `(unnamed) ${naturalKey}` : '(unnamed)'
 }
 
 
@@ -1493,7 +1523,23 @@ export function initGenericTabRestoration() {
   }
 
   for (const t of readGenericTabs()) {
-    if (t.slug === slug) loadGenericTab(t.label, t.slug, t.orbId, false)
+    if (t.slug !== slug) continue
+    // RE-RESOLVE the label from the table rather than trusting the stored one.
+    //
+    // The stored label is a snapshot of whatever the name was when the tab was
+    // opened, and it is never revisited — so anything that made the lookup miss
+    // once left the orbId showing on that tab permanently, even after the row
+    // came back. Seen on /servers 2026-10-13: one tab read `colo:server-GD206G4`
+    // while the row beside it had a name all along.
+    //
+    // It also fixes the case that is certain rather than incidental: a RENAMED
+    // entity kept its old label until the tab was closed and reopened.
+    //
+    // The table is already on the page, so this costs a DOM scan per restored
+    // tab and no request. Falls back to the stored label when the row is not
+    // there — a capped list, or an id that no longer exists — which is still
+    // better than the orbId.
+    loadGenericTab(labelFromTable(slug, t.orbId) || t.label || t.orbId, t.slug, t.orbId, false)
   }
 
   // The tab you were on comes back selected — which is what the hand-written
