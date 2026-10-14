@@ -146,6 +146,25 @@ function buildAddCall({ kind, input, payloadField }) {
   }
 }
 
+
+// relationEdits returns only the edge selects that CHANGED. An edge is set with
+// a reference and cleared with `remove` carrying its current value — `set: null`
+// is a no-op, the same asymmetry scalars have.
+function relationEdits(modal) {
+  const set = {}
+  const remove = {}
+  if (!modal) return { set, remove }
+  for (const el of modal.querySelectorAll('[data-edit-rel]')) {
+    const field = el.dataset.editRel
+    const current = el.dataset.editRelCurrent || ''
+    const chosen = el.value || ''
+    if (chosen === current) continue
+    if (chosen === '') remove[field] = { orbId: current }
+    else set[field] = { orbId: chosen }
+  }
+  return { set, remove }
+}
+
 // valueForMutation stringifies fields declared String in the schema whose VALUE
 // is JSON (DataCenter.assetDataV2). Sending them as structure is rejected —
 // "cannot use as String" from DGraph on the mutation path, and by the changeset
@@ -936,7 +955,14 @@ export function initConfigItemEditor({
       return false
     }
 
-    if (changes.length === 0) {
+    // Re-pointed edges ride on the root update, sharing its version guard.
+    // Computed BEFORE the no-change gate: `changes` comes from the JSON tree,
+    // so a relation-only save is `changes.length === 0` and closed the modal
+    // reporting success without writing.
+    const relEdits = relationEdits(modal)
+    const relChanged = Object.keys(relEdits.set).length > 0 || Object.keys(relEdits.remove).length > 0
+
+    if (changes.length === 0 && !relChanged) {
       // Save closes silently: there is nothing to persist, and reporting that
       // as a problem would be noise.
       //
@@ -1007,6 +1033,8 @@ export function initConfigItemEditor({
     if (rootChange) {
       rootSet = { ...scalarPayload(rootChange.target, rootChange.currentSub || {}) }
     }
+    if (relChanged && rootSet === null) rootSet = {}
+    if (relChanged) Object.assign(rootSet, relEdits.set)
     // Children folded into rootSet — tracked so the per-target loop skips
     // them (otherwise we'd double-emit them as separate add mutations).
     const foldedOrbIds = new Set()
@@ -1056,7 +1084,10 @@ export function initConfigItemEditor({
     if (rootSet !== null) {
       push(buildUpdateCall({
         kind: rootTarget.kind, orbId: reloadOrbId, set: rootSet, payloadField: rootTarget.payloadField,
-        remove: rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {},
+        remove: {
+          ...(rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {}),
+          ...relEdits.remove,
+        },
         version: rootTarget.version,
       }), shortLabel({ kind: rootTarget.kind, orbId: reloadOrbId }), false)
     }
@@ -1107,7 +1138,10 @@ export function initConfigItemEditor({
         namespace: namespaceOf(reloadOrbId),
         rootTarget, rootOrbId: reloadOrbId,
         rootScalars: rootSet, rootBefore: rootChange ? rootChange.before : null,
-        rootRemove: rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {},
+        rootRemove: {
+          ...(rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {}),
+          ...relEdits.remove,
+        },
         changes, wrappersNeeded, foldedOrbIds,
         showError, reloadFn,
       })
@@ -1197,7 +1231,10 @@ export function initConfigItemEditor({
                 namespace: namespaceOf(reloadOrbId),
                 rootTarget, rootOrbId: reloadOrbId,
                 rootScalars: rootSet, rootBefore: rootChange ? rootChange.before : null,
-        rootRemove: rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {},
+        rootRemove: {
+          ...(rootChange ? removePayload(rootTarget, rootChange.before, rootChange.currentSub) : {}),
+          ...relEdits.remove,
+        },
                 changes, wrappersNeeded, foldedOrbIds,
                 showError, reloadFn,
               })

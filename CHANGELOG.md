@@ -23,6 +23,14 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 ## [Unreleased]
 
 ### Added
+
+- **A server can be linked to a rack from the editor.** `rack` is nullable, so
+  the create form skipped it, and the editor's JSON tree holds scalars only —
+  leaving no surface anywhere that could set it. A single relationship declared
+  `editable: true` in `config/views.yaml` now renders as a select above the JSON
+  editor, listing nodes in the entity's own namespace, and writes the edge on
+  save. Clearing it unlinks. Opt-in per field, and refused on list relationships
+  with a startup warning rather than silently ignored.
 - **An audit event says which change request authorized it.** A merge's writes
   went through `DispatchMutation`, which hardcoded an origin carrying nothing —
   so two writes by the same person, one reviewed through `colo-58` and one made

@@ -231,6 +231,9 @@ types:
       # the id encoding the OLD tag, and a scan rebuilding that id mints a
       # SECOND server for the same machine.
       serviceTag: { createOnly: true }
+      # Re-pointable, NOT an owned child — a subgraph member is deleted with
+      # its parent, which would delete the rack with the server.
+      rack: { editable: true }
       oobIP: { label: OOB IP }
       oobMAC: { label: OOB MAC, tableHidden: true }
       manufacturer: { tableHidden: true, createDefault: Dell }

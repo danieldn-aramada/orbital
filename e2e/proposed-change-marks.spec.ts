@@ -148,7 +148,9 @@ test('a proposal on a server field is marked on the Server Summary table', async
 
   // Only the proposed field. A mark on every row would be noise indistinguish-
   // able from a mark that means something.
-  for (const field of ['hostname', 'model', 'oobMAC', 'serviceTag']) {
+  // Not `serviceTag` — it became createOnly, so its row carries no data-field
+  // and toBeEmpty() would fail on a missing element.
+  for (const field of ['hostname', 'model', 'oobMAC', 'serialNumber']) {
     await expect(page.getByTestId('generic-fields').locator(`[data-field="${field}"] .js-field-mark`)).toBeEmpty()
   }
 
@@ -169,7 +171,7 @@ test('a proposal on a server field is marked on the Server Summary table', async
 // mark attributes sit on the row rather than the table, and loadFieldMarks
 // walks it unchanged because the shape is identical one level down.
 test('a proposal on a rack is marked on the data centre that lists it', async ({ page }) => {
-  const RACK = 'colo:A.OF.C.09'
+  const RACK = 'colo:rack-A.OF.C.09'
   const res = await api(page, 'POST', '/api/v1/change-requests', {
     title: 'MARKS rack row',
     namespace: 'colo',

@@ -498,6 +498,9 @@ func (r *Resolver) ensure(ctx context.Context) error {
 		for _, w := range ColumnWarningsFromConfig(types, iface, validated) {
 			r.logger.Warn("column dropped; it will not render", "where", w)
 		}
+		for _, w := range EditableRefWarningsFromConfig(types, validated) {
+			r.logger.Warn("editable relationship dropped; the editor will not offer it", "where", w)
+		}
 		// Annotation typos stay worth reporting: the three that remain in the
 		// schema are identity and data facts, and a misspelled one fails as
 		// silently as any other docstring — more so now that there are only

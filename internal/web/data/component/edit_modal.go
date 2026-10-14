@@ -77,6 +77,26 @@ type EditModal struct {
 	// applied to the SHAPE of the tree rather than its contents.
 	ViewsHash string
 
+	// Relations are re-pointable edges, rendered as selects above the JSON
+	// editor. Deliberately not in EditDataJSON — that tree holds scalars.
+	Relations []EditRelation
+
 	EditDataJSON    template.JS
 	EditTargetsJSON template.JS
+}
+
+// EditRelation is one re-pointable edge. Current is empty when unset.
+type EditRelation struct {
+	Field   string
+	Label   string
+	Type    string
+	Current string
+	Options []EditRelationOption
+}
+
+// EditRelationOption duplicates page.CreateOption because page imports
+// component, not the reverse.
+type EditRelationOption struct {
+	OrbID string
+	Name  string
 }

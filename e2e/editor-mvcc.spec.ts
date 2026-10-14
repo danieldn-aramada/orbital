@@ -32,8 +32,8 @@ test('the page hands the editor an OCC version for every entity it can edit', as
   // nothing to assert — so this asserts only the ones that do.
   const byKind = Object.fromEntries(parsed.map((t: any) => [t.kind, t]))
   for (const kind of ['Server', 'IdracSettings', 'ServerMaintenance']) {
-    expect(byKind[kind], `${type} target missing`).toBeTruthy()
-    expect(byKind[kind].version, `${type} has no version — the editor cannot send version`).toBeGreaterThan(0)
+    expect(byKind[kind], `${kind} target missing`).toBeTruthy()
+    expect(byKind[kind].version, `${kind} has no version — the editor cannot send version`).toBeGreaterThan(0)
   }
 })
 

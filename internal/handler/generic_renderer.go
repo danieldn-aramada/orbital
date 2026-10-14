@@ -802,7 +802,35 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 			m, g.fields.Fields, g.fields.Meta, namespaceOf(orbID), orbID, members)...)
 	}
 
-	data.HasEditable = len(editData) > 0
+	// Re-pointable references, as selects above the JSON editor. Scoped to the
+	// entity's namespace — a cross-namespace edge is not worth offering. A load
+	// failure drops that one relation, never the editor.
+	var relations []component.EditRelation
+	for _, f := range v.EditableRefs {
+		refType := v.Relations[f]
+		if refType == "" {
+			continue
+		}
+		opts, err := createOptions(c.Request().Context(), g.dgraphURL, refType, namespaceOf(orbID))
+		if err != nil {
+			g.logger.Warn("generic editor: load relation options", "type", v.Type, "field", f, "err", err)
+			continue
+		}
+		cur := ""
+		if m, ok := entity[f].(map[string]any); ok {
+			cur, _ = m["orbId"].(string)
+		}
+		eopts := make([]component.EditRelationOption, 0, len(opts))
+		for _, o := range opts {
+			eopts = append(eopts, component.EditRelationOption{OrbID: o.OrbID, Name: o.Name})
+		}
+		relations = append(relations, component.EditRelation{
+			Field: f, Label: g.fieldLabeller(vs, v.Type)(f), Type: refType,
+			Current: cur, Options: eopts,
+		})
+	}
+
+	data.HasEditable = len(editData) > 0 || len(relations) > 0
 	if !data.HasEditable {
 		return
 	}
@@ -850,6 +878,7 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 		CurrentUser:       actorFromContext(c),
 		Typename:          v.Type,
 		ViewsHash:         g.fields.ViewsHash(),
+		Relations:         relations,
 		EditDataJSON:      template.JS(editJSON),
 		EditTargetsJSON:   template.JS(targetsJSON),
 	}
