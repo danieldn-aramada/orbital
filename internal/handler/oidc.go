@@ -40,7 +40,14 @@ type OIDC struct {
 	// defaultRole is the floor applied when roleMapper matches nothing. Empty
 	// means strict: an unmatched login is refused.
 	defaultRole string
+	// idpHint is sent as kc_idp_hint when non-empty.
+	idpHint string
 }
+
+// SetIDPHint sets kc_idp_hint on the authorization request. A setter rather
+// than a constructor argument: NewOIDC already takes four adjacent strings,
+// and the hint is optional.
+func (h *OIDC) SetIDPHint(hint string) { h.idpHint = hint }
 
 // SetRoleMapper wires group-to-role mapping into the browser login flow. Called
 // from server.New when the UI's issuer matches a configured provider.
@@ -101,8 +108,11 @@ func (h *OIDC) Login(c echo.Context) error {
 		return fmt.Errorf("set oidc login: %w", err)
 	}
 
-	return c.Redirect(http.StatusFound, h.oauth2Cfg.AuthCodeURL(state,
-		oauth2.S256ChallengeOption(verifier), gooidc.Nonce(nonce)))
+	opts := []oauth2.AuthCodeOption{oauth2.S256ChallengeOption(verifier), gooidc.Nonce(nonce)}
+	if h.idpHint != "" {
+		opts = append(opts, oauth2.SetAuthURLParam("kc_idp_hint", h.idpHint))
+	}
+	return c.Redirect(http.StatusFound, h.oauth2Cfg.AuthCodeURL(state, opts...))
 }
 
 // Callback handles GET /auth/callback — exchanges the code, verifies the token, creates a session.
