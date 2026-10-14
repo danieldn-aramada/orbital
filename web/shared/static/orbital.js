@@ -2102,6 +2102,22 @@ document.addEventListener('submit', (e) => {
         throw new Error(t || 'Delete failed')
       }
       closeCfgDeleteModal()
+
+      // GENERIC pages first. Every branch below is keyed to a hand-written
+      // page's ids (`tab-close-srv-…`, `btn-reload-servers`), and a generic
+      // page has none of them — so a delete that SUCCEEDED left the tab open
+      // and the row on screen, which reads as nothing having happened.
+      //
+      // Close the tab before reloading: closing is what removes it from
+      // localStorage, and a reload without that restores a tab whose entity no
+      // longer exists, which then renders an error where a tab should be.
+      const genericClose = document.getElementById('tab-close-generic-' + slug + '-' + safeDomId(id))
+      if (genericClose) {
+        genericClose.click()
+        window.location.reload()
+        return
+      }
+
       if (type === 'DataCenter') {
         const dcDomId = safeDomId(id)
         const tabClose = document.getElementById('tab-close-' + dcDomId)
@@ -3598,8 +3614,13 @@ function formatPublishRange(fromISO, toISO) {
 function initCreateForms() {
   document.querySelectorAll('[id^="create-modal-"]').forEach((modal) => {
     const domId = modal.id.replace('create-modal-', '')
-    const kind = modal.dataset.kind
-    const template = modal.dataset.orbidTemplate || ''
+    // An INTERFACE page creates one of several concrete types, so kind and the
+    // orbId pattern follow the Type SELECTION rather than the modal. A second
+    // implementation need not share the first's pattern, so both move together.
+    const typePick = modal.querySelector('[data-create-type-pick]')
+    const sel = () => typePick && typePick.selectedOptions[0]
+    const kindOf = () => (sel() ? sel().value : modal.dataset.kind)
+    const templateOf = () => (sel() ? (sel().dataset.orbidTemplate || '') : (modal.dataset.orbidTemplate || ''))
     const nsFrom = modal.dataset.namespaceFrom || ''
     const errorEl = document.getElementById('create-error-' + domId)
     const orbIdEl = document.getElementById('create-orbid-' + domId)
@@ -3666,7 +3687,16 @@ function initCreateForms() {
         refreshRowIds()
       }
     })
+    // Only the SELECTED implementation's fields count. Every type's block is in
+    // the DOM so switching does not re-fetch, and the hidden ones must not be
+    // collected — a value left in a hidden block would be sent as a field the
+    // chosen type does not have, and DGraph refuses the whole mutation.
+    const inHiddenTypeBlock = (el) => {
+      const block = el.closest('[data-create-type-fields]')
+      return block !== null && block.style.display === 'none'
+    }
     const rootFields = () => [...modal.querySelectorAll('[data-create-field]:not([data-create-child])')]
+      .filter(el => !inHiddenTypeBlock(el))
     const childFields = () => [...modal.querySelectorAll('[data-create-child]')]
 
     // The mutation is JSON, so a value has to arrive as the type the schema
@@ -3712,6 +3742,7 @@ function initCreateForms() {
     // server-side so the kebab/orbIdSuffix rule lives in one place.
     const orbId = () => {
       const ns = namespace()
+      const template = templateOf()
       if (!ns || !template) return ''
       let out = template
       let blank = false
@@ -3739,6 +3770,20 @@ function initCreateForms() {
       orbIdEl.textContent = id || '—'
       orbIdEl.className = id ? 'is-size-7 is-family-monospace' : 'is-size-7 has-text-grey'
     }
+    // Show the selected type's fields. Runs on load too, so the pre-selected
+    // option is visible without the reader touching anything.
+    const showTypeFields = () => {
+      if (!typePick) return
+      for (const b of modal.querySelectorAll('[data-create-type-fields]')) {
+        b.style.display = b.dataset.createTypeFields === typePick.value ? '' : 'none'
+      }
+      modal.dataset.kind = typePick.value
+    }
+    if (typePick) {
+      typePick.addEventListener('change', () => { showTypeFields(); refresh() })
+      showTypeFields()
+    }
+
     modal.addEventListener('input', () => { refresh(); refreshRowIds() })
     modal.addEventListener('change', () => { refresh(); refreshRowIds() })
 
@@ -3769,9 +3814,9 @@ function initCreateForms() {
       // impossible. Checking the roots refuses only the case the rule is about.
       if (nsTyped()) {
         if (!ns) { showError('Type a namespace — every Orb ID beneath this one is prefixed with it.'); return }
-        const occupied = await namespaceOccupiedBy(kind, ns)
+        const occupied = await namespaceOccupiedBy(kindOf(), ns)
         if (occupied) {
-          showError('Namespace "' + ns + '" already holds ' + occupied + '. One namespace holds one ' + kind + '.')
+          showError('Namespace "' + ns + '" already holds ' + occupied + '. One namespace holds one ' + kindOf() + '.')
           return
         }
       }
@@ -3865,7 +3910,7 @@ function initCreateForms() {
         const r = await fetch(BASE + '/graphql', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(createMutation(kind, input, nsTyped() ? ns : '')),
+          body: JSON.stringify(createMutation(kindOf(), input, nsTyped() ? ns : '')),
         })
         const body = await r.json()
         if (body.errors && body.errors.length) { showError(body.errors[0].message); return }

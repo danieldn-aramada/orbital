@@ -39,6 +39,26 @@ memory. Infrahub generates its create form from the schema for the same reason.
            data-testid="create-orbid">—</p>
       </div>
 
+      {{/* The concrete type, on an INTERFACE page. Rendered even when there is
+           one option: it then states what is being created rather than asking,
+           and the form does not change shape the day a second implementation
+           lands. Each option carries its OWN orbId pattern — a second type need
+           not share the first's. */}}
+      {{if .Types}}
+      <div class="field">
+        <label class="label is-size-7">
+          Type <span class="has-text-danger">*</span>
+        </label>
+        <div class="select is-small is-fullwidth">
+          <select data-create-type-pick data-testid="create-type">
+            {{range .Types}}
+            <option value="{{.Kind}}" data-orbid-template="{{.OrbIDTemplate}}">{{.Label}}</option>
+            {{end}}
+          </select>
+        </div>
+      </div>
+      {{end}}
+
       {{/* Typed, and ONLY for a root — a type with a required parent inherits
            its namespace from that parent's orbId and must never be asked.
            Sits above the relations because it is the first thing the identity
@@ -125,6 +145,36 @@ memory. Infrahub generates its create form from the schema for the same reason.
         {{end}}
       </div>
       {{end}}
+      {{end}}
+
+      {{/* Per-implementation fields. Rendered for EVERY type and shown only for
+           the selected one, so switching type does not re-fetch and the shared
+           fields above keep whatever was typed into them. */}}
+      {{range .Types}}
+      <div data-create-type-fields="{{.Kind}}" style="display:none">
+        {{range .Fields}}
+        <div class="field">
+          <label class="label is-size-7">
+            {{.Label}}{{if .Identity}} <span class="has-text-danger">*</span>{{end}}
+          </label>
+          {{if eq .Type "Boolean"}}
+          <div class="select is-small is-fullwidth">
+            <select data-create-field="{{.Field}}" data-create-type="Boolean">
+              <option value=""{{if eq .Default ""}} selected{{end}}>—</option>
+              <option value="true"{{if eq .Default "true"}} selected{{end}}>true</option>
+              <option value="false"{{if eq .Default "false"}} selected{{end}}>false</option>
+            </select>
+          </div>
+          {{else}}
+          <input class="input is-small"
+                 type="{{if or (eq .Type "Int") (eq .Type "Int64") (eq .Type "Float")}}number{{else}}text{{end}}"
+                 data-create-field="{{.Field}}" data-create-type="{{.Type}}"
+                 value="{{.Default}}" placeholder="{{.Hint}}"
+                 {{if .Identity}}data-create-identity="1"{{end}}>
+          {{end}}
+        </div>
+        {{end}}
+      </div>
       {{end}}
 
       {{/* Repeating rows: a LIST member created alongside its parent, in the
