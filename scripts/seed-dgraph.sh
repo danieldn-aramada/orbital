@@ -20,6 +20,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Seed data is gitignored, so a clone has none. Checked HERE rather than at the
+# loops below: those run AFTER the delete block, so a missing-file failure would
+# land with the graph already wiped.
+if ! compgen -G "examples/seed/*.graphql" > /dev/null; then
+  echo "ERROR: no files match examples/seed/*.graphql — nothing to seed." >&2
+  echo "       examples/seed/ is gitignored; obtain the seed set out of band." >&2
+  exit 1
+fi
+
 # apply_schema POSTs the GraphQL schema and VERIFIES it actually installed. DGraph
 # can return {"code":"Success"} while the schema didn't take — notably right after a
 # drop_all, when the cluster is still settling and the OLD schema stays live (this is

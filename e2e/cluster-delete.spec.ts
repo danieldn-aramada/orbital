@@ -56,7 +56,7 @@ test('Cluster delete cascades nodes but preserves servers', async ({ page }) => 
             createdBy: 'e2e@test', createdAt: '2026-06-18T00:00:00Z',
             kubernetesVersion: 'v1.31.0', cni: 'cilium', environment: 'dev',
             clusterType: 'workload',
-            dataCenter: { orbId: 'colo:colo-galleon', version: 1 },
+            dataCenter: { orbId: 'colo:datacenter-colo-galleon', version: 1 },
             nodes: [{
               orbId: nodeOrbId, namespace: 'e2e', version: 1,
               createdBy: 'e2e@test', createdAt: '2026-06-18T00:00:00Z',

@@ -45,6 +45,24 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
   the two mints ONE id for every row. Row markup is cloned from a server-rendered `<template>`, never built
   in JS.
 
+- **`createOnly: true` is the third field axis: settable at CREATE, frozen after.** *(2026-10-13.)* For
+  every orbId-source field — `Server.serviceTag`, `DataCenter.name`, `Rack.name`, `NetworkDevice.serial`,
+  `IPAddress.address`. orbIds are immutable, so editing one later leaves the entity disagreeing with its
+  own id, and a scan rebuilding `server-<serviceTag>` then mints a SECOND node for the same machine.
+  ⚠️ **Do NOT derive it from the orbIdPattern** — that would silently override an `editable: true` someone
+  wrote. ⚠️ `editable: false` is NOT a substitute: it removes the field from the create form too, which is
+  what blocked `oobIP` from ever being creatable. The create form reads `View.CreateFields`; the editor
+  reads `View.Fields`. Two sets, deliberately.
+- **A unit child's orbId template uses `{parent.x}` for the parent's fields and a bare `{x}` for its own** —
+  one rule for single children and repeating rows alike. *(2026-10-13.)* Before this, every placeholder was
+  filled from the parent, so a child whose id comes from its OWN field (`IPAddress` is `{address}`) resolved
+  to nothing and was **silently dropped from the form** — adding it to a subgraph appeared to do nothing.
+- **A reference is settable only where DECLARED; owned vs referenced is already the `subgraph:` line.**
+  *(2026-10-13.)* In the subgraph = owned (created inline, deleted with the parent). Outside it = a link row.
+  ⚠️ Do NOT derive settable-ness from "is it optional" — `views.yaml`'s own rule is that scalars are
+  subtractive and **relationships are declared**, and deriving it would have put a 304-option `IPAddress`
+  picker on the server form.
+
 ### Detail tabs (list pages)
 
 - **Closing a tab lands on its LEFT neighbour; closing a background tab moves nothing.** *(2026-10-05.)* The leftmost tab's neighbour is Summary, so no special case. ⚠️ `replaceCurrentTab` must get the same neighbour, or the next arrival restores a removed tab.

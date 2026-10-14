@@ -3834,15 +3834,25 @@ function initCreateForms() {
       // child without one fails the whole mutation. The template is the child's
       // pattern rewritten against this form's fields — `{server.serviceTag}`
       // became `{serviceTag}`, because that server is the node being created.
-      const fill = (tmpl) => {
+      // `{parent.x}` from the form's ROOT inputs, a bare `{x}` from the CHILD's
+      // own — the same convention repeating rows use. Before this, every
+      // placeholder was filled from the parent, so a child whose id comes from
+      // its own field (IPAddress is `{address}`) resolved to nothing and was
+      // silently dropped from the form.
+      const fill = (tmpl, child) => {
         let out = tmpl
         let blank = false
-        for (const el of rootFields()) {
-          const token = `{${el.dataset.createField}}`
-          if (!out.includes(token)) continue
-          const v = (el.value || '').trim()
+        const sub = (token, raw) => {
+          if (!out.includes(token)) return
+          const v = (raw || '').trim()
           if (v === '') blank = true
           out = out.replaceAll(token, v)
+        }
+        for (const el of rootFields()) sub(`{parent.${el.dataset.createField}}`, el.value)
+        if (child) {
+          for (const el of modal.querySelectorAll(`[data-create-child="${child}"][data-create-field]`)) {
+            sub(`{${el.dataset.createField}}`, el.value)
+          }
         }
         // A placeholder left UNRESOLVED is not the only failure — one resolved
         // to NOTHING is worse, because it leaves no brace behind to notice.
@@ -3856,7 +3866,7 @@ function initCreateForms() {
         if (v === undefined) continue
         const child = el.dataset.createChild
         if (!input[child]) {
-          const childId = fill(el.dataset.childOrbidTemplate || '')
+          const childId = fill(el.dataset.childOrbidTemplate || '', child)
           if (!childId) { showError('Cannot build an Orb ID for ' + child + '.'); return }
           input[child] = { orbId: ns + ':' + childId, namespace: ns, version: 1 }
           childIds[child] = ns + ':' + childId

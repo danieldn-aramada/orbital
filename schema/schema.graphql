@@ -45,7 +45,7 @@ enum DataCenterModel {
     Leviathan
 }
 
-"""orbIdPattern: {name}"""
+"""orbIdPattern: {type}-{name}"""
 type DataCenter implements ConfigItem {
     """jsonString"""
     assetDataV2: String @search(by: [regexp]) # json
@@ -57,7 +57,7 @@ type DataCenter implements ConfigItem {
     networkDevices: [NetworkDevice] @hasInverse(field: dataCenter)
 }
 
-"""orbIdPattern: {kind}-{name}"""
+"""orbIdPattern: {type}-{name}"""
 type Rack implements ConfigItem {
     uHeight: Int
     dataCenter: DataCenter!
@@ -65,7 +65,7 @@ type Rack implements ConfigItem {
     networkDevices: [NetworkDevice] @hasInverse(field: rack)
 }
 
-"""orbIdPattern: {kind}-{serviceTag}"""
+"""orbIdPattern: {type}-{serviceTag}"""
 type Server implements ConfigItem {
     hostname: String @search(by: [term])
     model: String @search(by: [term])
@@ -92,7 +92,7 @@ type Server implements ConfigItem {
 
 """
 orbIdSuffix: idrac
-orbIdPattern: {server.serviceTag}-{kind}
+orbIdPattern: {server.serviceTag}-{type}
 """
 type IdracSettings implements ConfigItem {
     firmwareVersion: String
@@ -109,7 +109,7 @@ type IdracSettings implements ConfigItem {
 
 """
 orbIdSuffix: scp
-orbIdPattern: {server.serviceTag}-{kind}
+orbIdPattern: {server.serviceTag}-{type}
 """
 type ServerConfigurationProfile implements ConfigItem {
     json: String 
@@ -129,7 +129,7 @@ type ServerConfigurationProfile implements ConfigItem {
 #                 gates entry only, never exit.
 # Observed phase (Draining/Active/...) lives at the edge (serverconfig.status +
 # monitoring), NOT here.
-"""orbIdPattern: {kind}-{server.serviceTag}"""
+"""orbIdPattern: {type}-{server.serviceTag}"""
 type ServerMaintenance implements ConfigItem {
     enabled: Boolean
     windowStart: DateTime
@@ -174,7 +174,7 @@ type StorageVolume implements ConfigItem {
     storageDevices: [StorageDevice] @hasInverse(field: storageVolumes)
 }
 
-"""orbIdPattern: {kind}-{server.serviceTag}-{name}"""
+"""orbIdPattern: {type}-{server.serviceTag}-{name}"""
 type NetworkAdapter implements ConfigItem {
     # NIC card (FRU). Redfish-authoritative; OPTIONAL (absent for flat-only sources).
     # name = adapter FQDD, e.g. "NIC.Integrated.1"
@@ -199,8 +199,8 @@ type NetworkAdapter implements ConfigItem {
 # `orbIdPattern:` is how the alternative is expressed; first one whose
 # placeholders all resolve wins.
 """
-orbIdPattern: {kind}-{server.serviceTag}-{name}
-orbIdPattern: {kind}-{networkDevice.serial}-{name}
+orbIdPattern: {type}-{server.serviceTag}-{name}
+orbIdPattern: {type}-{networkDevice.serial}-{name}
 """
 type NetworkInterface implements ConfigItem {
     # Port/interface (physical OR logical LAG). name = source ifname/FQDD.
@@ -224,7 +224,7 @@ type NetworkInterface implements ConfigItem {
     lagMembers: [NetworkInterface] @hasInverse(field: lag)
 }
 
-"""orbIdPattern: {kind}-{serial}"""
+"""orbIdPattern: {type}-{serial}"""
 type NetworkDevice implements ConfigItem {
     # Network gear (switch / router / firewall / sd-wan), role-differentiated. NetBox-sourced identity anchor.
     manufacturer: String @search(by: [hash])
@@ -282,7 +282,7 @@ type KubernetesNode implements ConfigItem {
 
 """
 orbIdSuffix: backup
-orbIdPattern: {cluster.name}-{kind}
+orbIdPattern: {cluster.name}-{type}
 """
 type ClusterBackup implements ConfigItem {
     etcd: EtcdBackup
@@ -296,7 +296,7 @@ type ClusterBackup implements ConfigItem {
 
 """
 orbIdSuffix: etcd-backup
-orbIdPattern: {clusterBackupEtcd.cluster.name}-{kind}
+orbIdPattern: {clusterBackupEtcd.cluster.name}-{type}
 """
 type EtcdBackup implements ConfigItem {
     enabled: Boolean @search   
@@ -309,7 +309,7 @@ type EtcdBackup implements ConfigItem {
 
 """
 orbIdSuffix: velero-backup
-orbIdPattern: {clusterBackupVelero.cluster.name}-{kind}
+orbIdPattern: {clusterBackupVelero.cluster.name}-{type}
 """
 type VeleroBackup implements ConfigItem {
     enabled: Boolean @search
@@ -322,7 +322,7 @@ type VeleroBackup implements ConfigItem {
 
 """
 orbIdSuffix: s3sync
-orbIdPattern: {clusterBackupS3Sync.cluster.name}-{kind}
+orbIdPattern: {clusterBackupS3Sync.cluster.name}-{type}
 """
 type S3Sync implements ConfigItem {
     enabled: Boolean @search

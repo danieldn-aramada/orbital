@@ -9,7 +9,7 @@ import { test, expect } from '@playwright/test';
 // Membership is not editable here: adding goes through create, removing through
 // delete, where the preview names what a removal would orphan.
 
-const DC = 'colo:colo-galleon';
+const DC = 'colo:datacenter-colo-galleon';
 
 // Restore every rack to the height it had before the test touched it.
 //

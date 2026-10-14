@@ -56,9 +56,9 @@ type View struct {
 	// a schema that has not been re-applied since the annotations landed.
 	OrbIDPattern []OrbIDPattern `json:"-"`
 
-	// OrbIDKind is what `{kind}` resolves to for this type, resolved once at
+	// OrbIDType is what `{type}` resolves to for this type, resolved once at
 	// view-build time so the View does not have to carry the whole docstring.
-	OrbIDKind string `json:"-"`
+	OrbIDType string `json:"-"`
 
 	// NoCreate are fields kept off the CREATE form (`create: false`), while
 	// staying editable afterwards. See FieldDecl.Create for why that is a
@@ -72,6 +72,11 @@ type View struct {
 
 	// Fields are the EDITABLE scalars — what the editor may write.
 	Fields []string `json:"fields"`
+
+	// CreateFields is what the CREATE form may collect: Fields plus any
+	// `createOnly` field, which is settable once and then frozen. See
+	// FieldDecl.CreateOnly.
+	CreateFields []string `json:"-"`
 
 	// Display are the scalars a page SHOWS, which is a superset of Fields.
 	//
@@ -508,7 +513,7 @@ func metaFields(ifaceFields []string) []string {
 // time is the whole point, and why changing one later is a breaking change
 // rather than a correction.
 func (v View) NewOrbID(namespace string, values map[string]string) string {
-	id, err := ConstructOrbID(namespace, v.OrbIDKind, v.OrbIDPattern,
+	id, err := ConstructOrbID(namespace, v.OrbIDType, v.OrbIDPattern,
 		func(path string) (string, bool) {
 			val, ok := values[path]
 			val = strings.TrimSpace(val)

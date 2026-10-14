@@ -75,3 +75,9 @@ deploy/local/*-credentials.*
 
 # Local-only artifacts — kept on disk, never committed (reconcile reports, scratch notes, scan output)
 .local/
+
+# Seed data — real site names, Dell service tags and MAC addresses. Kept on disk
+# so `make seed` works locally; never committed. The seed scripts fail loudly
+# when it is absent rather than reporting success after seeding nothing.
+examples/seed/
+examples/seed-backup/

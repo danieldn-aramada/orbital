@@ -273,7 +273,7 @@ test('closing a tab removes it and it stays closed after reload', async ({ page 
 // Asserted while SCROLLED, because that is the only state where it happens.
 test('the tab strip stays put when switching between panels', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/data-centers?open=' + encodeURIComponent('colo:colo-galleon'));
+  await page.goto('/data-centers?open=' + encodeURIComponent('colo:datacenter-colo-galleon'));
   await expect(page.getByTestId('generic-fields')).toBeVisible({ timeout: 15_000 });
 
   const strip = page.locator('[id^="generic-detail-tabs-"]');
@@ -766,7 +766,7 @@ test('a row with NO name says so, instead of standing in a raw Orb ID', async ({
   await request.post('/graphql', {
     data: {
       query: `mutation { addNetworkDevice(input: [{ orbId: "${ORB}", namespace: "colo", version: 1,
-        serial: "E2ENONAME", dataCenter: { orbId: "colo:colo-galleon" } }]) { numUids } }`,
+        serial: "E2ENONAME", dataCenter: { orbId: "colo:datacenter-colo-galleon" } }]) { numUids } }`,
     },
   });
 
@@ -776,7 +776,7 @@ test('a row with NO name says so, instead of standing in a raw Orb ID', async ({
 
     const row = page.locator(`#generic-table tbody tr[data-orb-id="${ORB}"]`);
     await expect(row, 'precondition: the nameless row is on the page').toHaveCount(1);
-    // The natural key is computed SERVER-side, where `{kind}` is known.
+    // The natural key is computed SERVER-side, where `{type}` is known.
     await expect(row).toHaveAttribute('data-natural-key', 'E2ENONAME');
 
     await row.dblclick();

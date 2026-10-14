@@ -72,6 +72,16 @@ that makes its ownership undeclarable from nullability — and the annotation sa
 `networkAdapter`. Nothing read it, so nothing caught it. The derived-orbId path
 uses `<namespace>:<parentName>-<orbIdSuffix>` with the parent the walk arrived
 through, which is the parent the child is being created under by construction.
+
+⚠️ **A derived child orbId is a FALLBACK, not an address.** The detail query selects
+`orbId` on every subgraph member (`idNameVersionSel`), and `stampFetchedVersions`
+overrides each edit target's derived id with the stored one — so a child that
+already exists is edited at the id it actually has, however far that is from the
+convention (`colo:6CVD664-idrac` and a legacy `colo:server-maintenance-…` both
+resolve correctly). Derivation only supplies an id for a child that does **not yet
+exist**, which is why changing a `{type}` token never re-keys stored data and needs
+no migration. Verified 2026-10-14 against blue, both directions.
+
 ⚠️ `debt.md` still carries the Hi-severity orbId-mutability entry: re-keying
 orphans every child id, splits the audit trail across two ids, and breaks
 cb-controller's SSA list-map identity. Nothing here relaxes that.
@@ -97,7 +107,7 @@ cb-controller's SSA list-map identity. Nothing here relaxes that.
 
 ### The shape is DECLARED IN THE SCHEMA, not here *(2026-10-06)*
 
-Every ConfigItem type carries **`"""orbIdPattern: …"""`** naming its orbId shape, and that annotation is the source of truth. `{field}` interpolates a scalar, `{edge.field}` crosses a relationship (any depth), `{kind}` is the type's kind token — `orbIdSuffix:` when annotated, otherwise the kebab type name. **Repeat the line to declare alternatives**, for a type whose identity hangs off whichever of several owners it actually has; the first whose placeholders all resolve wins. `orbIdPattern: external` opts a type out.
+Every ConfigItem type carries **`"""orbIdPattern: …"""`** naming its orbId shape, and that annotation is the source of truth. `{field}` interpolates a scalar, `{edge.field}` crosses a relationship (any depth), `{type}` is the type's identity token — `orbIdSuffix:` when annotated, otherwise the type name lower-cased (`DataCenter` → `datacenter`, `ServerMaintenance` → `servermaintenance`), following Kubernetes, which concatenates (`poddisruptionbudgets`) rather than hyphenating. **Repeat the line to declare alternatives**, for a type whose identity hangs off whichever of several owners it actually has; the first whose placeholders all resolve wins. `orbIdPattern: external` opts a type out.
 
 Two build-time guards in `internal/configitems/schema_consistency_test.go` run in `make test-unit`: every ConfigItem type must declare a pattern, and every pattern must parse and reference fields the schema can resolve. **Adding a type without one fails the build** — there is no default natural key, because there is no safe guess at identity (`Server.name` exists and is not identity), and a wrong one corrupts the graph silently.
 
@@ -105,6 +115,7 @@ This table no longer restates the shapes — it would be a second place to drift
 
 | Type | Natural key |
 |---|---|
+| `DataCenter` | The data centre's own `name` (`colo-galleon`). Prefixed `datacenter-` as of **2026-10-14**, for the same reason `Rack` was the day before: it was a bare `{name}`, which says nothing about what the id names and could collide with any other bare-key type under the interface-level `@id`. ⚠️ Reads long — `colo:datacenter-colo-galleon` repeats the site in both halves — because a namespace holds exactly one data centre and the namespace already identifies it. Kept anyway: one convention that is occasionally verbose beats a per-type exception nobody can predict. ⚠️ **Existing data centres keep their bare ids**; orbIds are immutable, so they migrate when touched. |
 | `Rack` | The rack's own `name` — a site label like `A.OF.C.10`, which is what operators call it and what appears on the physical rack. Prefixed `rack-` as of **2026-10-13**: it was a bare `{name}` (CLAUDE.md's "legacy bare key", migrated when next touched), which since schema v8 could COLLIDE with a `DataCenter` of the same name — `orbId` is `@id(interface: true)`, unique across every implementing type, and `DataCenter`'s pattern is also `{name}`. Verified: *"id zzc:mydc already exists for field orbId in some other implementing type of interface ConfigItem"*. ⚠️ **Existing racks keep their bare ids** — `orbId` is immutable, so re-keying means delete-and-recreate plus re-pointing every `Server.rack` and `NetworkDevice.rack`. New racks follow the convention; old ones migrate when touched. |
 | `Server` | **The vendor's stable chassis identifier**, stored on `Server.serviceTag`. **Dell:** Redfish `ComputerSystem.SKU` — the Service Tag (`CFRHDX3`). **Supermicro:** Redfish `ComputerSystem.SerialNumber` (`S447008X3823034`), because Supermicro leaves SKU unset *(vendor behaviour — not verified against a live BMC; the Dell half was)*. **NOT Dell's `SerialNumber`** — on 15G that is a different value (R650: SKU `CFRHDX3` vs SerialNumber `MXFC400359006Z`, verified on iDRAC 7.20.10.05); on earlier generations the two coincide (R450: `DLP6K74` for both), which is what made the old "SerialNumber" wording look correct. `Server.serialNumber` holds the raw SerialNumber and is **never** an identity key. This same value is the `<serviceTag>` in the network-* ids below. **Never Redfish `AssetTag`** — org-assigned and often empty (`""` on the R650, null for the A100), which breaks scan-idempotency. |
 | `ServerMaintenance` | owner server `serviceTag` — 1:1 with `Server`, so the natural key is just the owner's serviceTag (same value as `server-<serviceTag>`). No discriminator: one maintenance node per server (intent, not history — history lives in the audit log + edge Events). |

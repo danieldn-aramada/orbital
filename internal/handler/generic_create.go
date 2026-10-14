@@ -103,7 +103,7 @@ func buildCreateForm(
 			form.OrbIDPaths = append(form.OrbIDPaths, path)
 		}
 	}
-	form.OrbIDTemplate = strings.ReplaceAll(v.OrbIDPattern[0].Raw, "{kind}", v.OrbIDKind)
+	form.OrbIDTemplate = strings.ReplaceAll(v.OrbIDPattern[0].Raw, "{type}", v.OrbIDType)
 	if len(form.OrbIDPaths) == 0 {
 		// Every pattern crosses an edge or is `external`: this type's id is
 		// minted elsewhere, so offering a create form would invent one.
@@ -136,7 +136,7 @@ func buildCreateForm(
 			ifaceShared[f] = true
 		}
 	}
-	for _, f := range v.Fields {
+	for _, f := range v.CreateFields {
 		if f == "name" || v.NoCreate[f] {
 			continue // already added above, or declared `create: false`
 		}
@@ -199,7 +199,7 @@ func buildCreateForm(
 	if pageView.IsInterface {
 		for _, name := range pageView.Implementations {
 			iv, ok := byType[name]
-			if !ok || len(iv.Fields) == 0 || len(iv.OrbIDPattern) != 1 {
+			if !ok || len(iv.CreateFields) == 0 || len(iv.OrbIDPattern) != 1 {
 				continue
 			}
 			// Split the type's fields against the INTERFACE's. Shared ones are
@@ -214,11 +214,11 @@ func buildCreateForm(
 			ct := page.CreateType{
 				Kind:          name,
 				Label:         configitems.HumanFieldLabel(name),
-				OrbIDTemplate: strings.ReplaceAll(iv.OrbIDPattern[0].Raw, "{kind}", iv.OrbIDKind),
+				OrbIDTemplate: strings.ReplaceAll(iv.OrbIDPattern[0].Raw, "{type}", iv.OrbIDType),
 			}
 			ivLabel := labelFor(name)
 			ivInfo := meta(name)
-			for _, f := range iv.Fields {
+			for _, f := range iv.CreateFields {
 				if shared[f] || f == "name" || iv.NoCreate[f] {
 					continue
 				}
@@ -240,7 +240,7 @@ func buildCreateForm(
 			continue // a list below another hop: the form holds no row to hang it on
 		}
 		cv, ok := byType[m.Type]
-		if !ok || len(cv.Fields) == 0 {
+		if !ok || len(cv.CreateFields) == 0 {
 			continue
 		}
 		tmpl := repeatingChildOrbIDTemplate(cv, m.ParentEdge)
@@ -268,7 +268,7 @@ func buildCreateForm(
 
 		childLabel := labelFor(m.Type)
 		childInfo := meta(m.Type)
-		for _, f := range cv.Fields {
+		for _, f := range cv.CreateFields {
 			if cv.NoCreate[f] {
 				continue
 			}
@@ -287,7 +287,7 @@ func buildCreateForm(
 			continue
 		}
 		cv, ok := byType[m.Type]
-		if !ok || len(cv.Fields) == 0 {
+		if !ok || len(cv.CreateFields) == 0 {
 			continue
 		}
 		tmpl := childOrbIDTemplate(cv, m.ParentEdge)
@@ -303,11 +303,19 @@ func buildCreateForm(
 		}
 		childLabel := labelFor(m.Type)
 		childInfo := meta(m.Type)
-		for _, f := range cv.Fields {
+		// Identity read off the CHILD's own template, same rule as repeating
+		// rows: a bare `{x}` is this child's field and must be required.
+		childIdentity := map[string]bool{}
+		for _, seg := range strings.Split(tmpl, "{")[1:] {
+			if body, _, ok := strings.Cut(seg, "}"); ok && !strings.HasPrefix(body, "parent.") {
+				childIdentity[body] = true
+			}
+		}
+		for _, f := range cv.CreateFields {
 			if cv.NoCreate[f] {
 				continue
 			}
-			child.Fields = append(child.Fields, createField(childInfo, cv, f, childLabel, false))
+			child.Fields = append(child.Fields, createField(childInfo, cv, f, childLabel, childIdentity[f]))
 		}
 		form.Unit = append(form.Unit, child)
 	}
@@ -350,25 +358,25 @@ func createOptions(ctx context.Context, dgraphURL, typeName string) ([]page.Crea
 // PARENT's form inputs.
 //
 // A child's identity is declared in terms of its owner — IdracSettings is
-// `{server.serviceTag}-{kind}` — and on a create that owner is the node being
+// `{server.serviceTag}-{type}` — and on a create that owner is the node being
 // made, whose serviceTag is on the same form. So the back-edge prefix is
-// stripped and `{kind}` resolved, leaving placeholders the form can fill.
+// stripped and `{type}` resolved, leaving placeholders the form can fill.
 //
 // Returns "" when a placeholder survives that the parent cannot supply, because
 // a child whose id cannot be derived must not be offered at all: `orbId` is
 // `String! @id`, so a nested child without one fails the entire mutation.
 func childOrbIDTemplate(child configitems.View, parentEdge string) string {
-	// Same rule as the root: exactly one pattern, or the child's identity is
-	// ambiguous and it must not be offered on this form.
-	if len(child.OrbIDPattern) != 1 || parentEdge == "" {
-		return ""
-	}
-	out := strings.ReplaceAll(child.OrbIDPattern[0].Raw, "{kind}", child.OrbIDKind)
-	out = strings.ReplaceAll(out, "{"+parentEdge+".", "{")
-	if strings.Contains(out, ".") {
-		return "" // a placeholder still crosses an edge the form cannot reach
-	}
-	return out
+	// ONE rule for unit children and repeating rows alike — see
+	// repeatingChildOrbIDTemplate, which this now delegates to.
+	//
+	// It used to strip the parent prefix and leave every placeholder bare,
+	// which worked only because the children that existed referenced the
+	// PARENT: `{server.serviceTag}-idrac` became `{serviceTag}-idrac` and the
+	// form filled it from its own inputs. A child whose id comes from its OWN
+	// field could not be expressed — IPAddress is `{address}`, a Server has no
+	// `address`, so the placeholder resolved to nothing and the child was
+	// SILENTLY not offered. Adding oobIP to a subgraph appeared to do nothing.
+	return repeatingChildOrbIDTemplate(child, parentEdge)
 }
 
 // createField resolves one input: its scalar type and its default.
@@ -435,7 +443,7 @@ func repeatingChildOrbIDTemplate(child configitems.View, parentEdge string) stri
 	if len(child.OrbIDPattern) != 1 || parentEdge == "" {
 		return ""
 	}
-	out := strings.ReplaceAll(child.OrbIDPattern[0].Raw, "{kind}", child.OrbIDKind)
+	out := strings.ReplaceAll(child.OrbIDPattern[0].Raw, "{type}", child.OrbIDType)
 	out = strings.ReplaceAll(out, "{"+parentEdge+".", "{parent.")
 	// Any dot left is a hop through something else entirely — a sibling, or a
 	// grandparent — and the form holds neither.

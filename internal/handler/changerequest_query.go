@@ -122,7 +122,7 @@ const maxOrbIDFilter = 128
 //
 // Repeatable rather than single-valued because a change to a subgraph member
 // records the CHILD's orbId and never the parent's — a server-maintenance edit
-// lands as `<ns>:server-maintenance-<serial>`. Asking about the server alone
+// lands as `<ns>:servermaintenance-<serial>`. Asking about the server alone
 // therefore answers "nothing in flight" while a change to that server sits open,
 // which is exactly what the caller wanted to know. The parent→child knowledge
 // stays in the page composer that already pulled the subgraph (see AUDIT.md's

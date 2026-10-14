@@ -158,10 +158,11 @@ func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg
 			Label:           Label(slug),
 			MenuWeight:      page.MenuWeight,
 			OrbIDPattern:    info.OrbIDPattern,
-			OrbIDKind:       OrbIDKindFor(name, info.Doc),
+			OrbIDType:       OrbIDTypeFor(name, info.Doc),
 			Defaults:        defaultsFor(info, td, orbIDPaths(info.OrbIDPattern)),
 			NoCreate:        noCreateFor(info, td),
 			Fields:          editableFields(info, td, ifaceFields),
+			CreateFields:    createFields(info, td, ifaceFields),
 			Subgraph:        subgraph,
 			Relations:       relationsOf(info),
 		}
@@ -294,6 +295,14 @@ func editableFields(info TypeInfo, decl TypeDecl, ifaceFields []string) []string
 		if !f.Editable {
 			continue
 		}
+		// `createOnly` wins over `editable` in BOTH directions: the field is
+		// settable at create and frozen after, so the EDITOR never sees it even
+		// where someone wrote `editable: true`. An orbId-source field edited
+		// after the fact leaves the entity disagreeing with its own immutable
+		// id — see FieldDecl.CreateOnly.
+		if decl.Fields[f.Name].CreateOnly {
+			continue
+		}
 		if e := decl.Fields[f.Name].Editable; e != nil {
 			if *e {
 				out = append(out, f.Name)
@@ -304,6 +313,23 @@ func editableFields(info TypeInfo, decl TypeDecl, ifaceFields []string) []string
 			continue
 		}
 		out = append(out, f.Name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// createFields is the set the CREATE form may collect: everything the editor
+// writes, PLUS the createOnly fields the editor deliberately refuses.
+//
+// Two sets rather than one because the two surfaces genuinely differ — a
+// service tag must be typed once and never again. Deriving create from edit is
+// what made `createOnly` impossible to express.
+func createFields(info TypeInfo, decl TypeDecl, ifaceFields []string) []string {
+	out := editableFields(info, decl, ifaceFields)
+	for _, f := range info.Fields {
+		if decl.Fields[f.Name].CreateOnly {
+			out = append(out, f.Name)
+		}
 	}
 	sort.Strings(out)
 	return out

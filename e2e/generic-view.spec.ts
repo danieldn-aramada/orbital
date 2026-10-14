@@ -137,7 +137,7 @@ test('path columns render on the server list', async ({ page }) => {
 });
 
 test('a relationship table shows the child type\'s computed columns', async ({ page }) => {
-  await page.goto('/data-centers?open=' + encodeURIComponent('colo:colo-galleon'));
+  await page.goto('/data-centers?open=' + encodeURIComponent('colo:datacenter-colo-galleon'));
   await expect(page.getByTestId('generic-fields')).toBeVisible({ timeout: 15_000 });
   await openAllDetailPanels(page);
 

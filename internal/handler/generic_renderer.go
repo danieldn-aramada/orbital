@@ -223,11 +223,11 @@ func (g *GenericRenderer) List(c echo.Context) error {
 		}
 		// The natural-key tail of the orbId, for a row with no name to label
 		// itself with. Computed HERE because only the server knows this view's
-		// `{kind}` — JS stripping it by convention would mangle every type
-		// whose pattern puts the kind elsewhere (IdracSettings is
+		// `{type}` — JS stripping it by convention would mangle every type
+		// whose pattern puts the token elsewhere (IdracSettings is
 		// `<serviceTag>-idrac`).
 		orbID, _ := row["orbId"].(string)
-		row["naturalKey"] = naturalKeyOf(orbID, v.OrbIDKind)
+		row["naturalKey"] = naturalKeyOf(orbID, v.OrbIDType)
 		data.Rows = append(data.Rows, row)
 	}
 	data.FilterBy = buildFilterBy(v, data.Columns, data.RefColumns, data.Rows)
