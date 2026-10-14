@@ -153,6 +153,34 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   once and says so when it bites; every member is still listed on the page.
 
 ### Changed
+
+- **Seed data is no longer in the repository.** `examples/seed/` and
+  `examples/seed-backup/` held real site names, Dell service tags and MAC
+  addresses, and are gitignored ahead of open-sourcing. They stay on disk, so
+  local `make seed` is unaffected; a fresh clone has none, and both seed
+  scripts now fail naming the cause instead of wiping the graph and then
+  erroring on a missing file.
+- **The Orb ID type token is `{type}`, lower-cased.** The placeholder was
+  `{kind}`, which collides with GraphQL's own meaning — `__Type.kind` is a
+  type's CATEGORY (SCALAR/OBJECT/INTERFACE), not the type. And it resolved to a
+  kebab-cased name; it now lower-cases, following Kubernetes, whose resource
+  names concatenate (`poddisruptionbudgets`) and never hyphenate. So
+  `colo:networkdevice-JX3623130496`, not `colo:network-device-…`. An
+  `orbIdSuffix:` annotation still overrides it, which is how `idrac`, `scp` and
+  `etcd-backup` keep their hand-chosen spellings. Schema `v17`.
+
+  **`examples/seed/` was updated to match** — every seeded Orb ID now follows the
+  convention, including `DataCenter` and `Rack`, whose patterns gained a type
+  prefix earlier and whose seed data had been left behind. The seed is the
+  reference example: anyone reading it to learn the convention was learning the
+  wrong one, and every local graph started non-conforming.
+
+- **A data centre's Orb ID now says it is a data centre**, matching the rack
+  change below: `colo:data-center-colo-galleon` rather than `colo:colo-galleon`.
+  It was the last bare `{name}` pattern outside IPAddress. Existing data centres
+  keep their ids — Orb IDs are immutable — so they migrate when next touched.
+  Schema `v16`.
+
 - **A rack's Orb ID now says it is a rack.** `Rack` used a bare `{name}`
   pattern — `colo:A.OF.C.10` — one of the two legacy exceptions CLAUDE.md flags
   for migration. It is now `{kind}-{name}`, so a new rack reads
@@ -162,7 +190,24 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   centre was refused with a raw DGraph error. **Existing racks keep their ids**;
   Orb IDs are immutable, so they migrate when next touched. Schema `v15`.
 
+### Added
+- **`createOnly` fields, and a server's OOB IP created with the server.** A
+  field can now be settable when an entity is created and frozen afterwards —
+  the shape every Orb ID source needs, because Orb IDs are immutable and editing
+  the field they encode left the entity disagreeing with its own id. Marked on
+  `Server.serviceTag`, `DataCenter.name`, `Rack.name`, `NetworkDevice.serial`
+  and `IPAddress.address`. That last one unblocks `oobIP`: a server's management
+  address is now created alongside the server in one mutation, rather than
+  needing a GraphQL call.
+
 ### Fixed
+- **A subgraph child whose Orb ID comes from its own field is no longer silently
+  dropped from the create form.** Placeholders were filled from the parent, so
+  `IPAddress`'s `{address}` resolved to nothing on a Server form and the child
+  vanished with no message — adding it to a subgraph appeared to do nothing. One
+  rule now covers single children and repeating rows: `{parent.x}` for the
+  parent's fields, a bare `{x}` for the child's own.
+
 - **An identity field left blank no longer mints a stub Orb ID.** The create
   form checked that every placeholder had been *substituted*, not that each had
   a *value* — so `{kind}-{serviceTag}` with an empty service tag became

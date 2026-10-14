@@ -292,7 +292,7 @@ func TestShippedOrbIdPatterns_ParseAndResolve(t *testing.T) {
 				continue
 			}
 			for _, path := range p.Paths() {
-				if path == "kind" {
+				if path == "type" {
 					continue
 				}
 				if !resolvesFrom(typeName, path, fields) {

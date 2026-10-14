@@ -14,7 +14,7 @@ import { openDetail, openAllDetailPanels, openDetailPanel } from './helpers/gene
 // with another spec OR with whatever a developer happens to have in flight.
 // CWJHDX3 is the one people reach for by hand; this is not.
 const SERVER = 'colo:server-5F206G4'
-const MAINT = 'colo:server-maintenance-5F206G4'
+const MAINT = 'colo:servermaintenance-5F206G4'
 const domId = SERVER.replace(/[^a-zA-Z0-9_-]/g, '_')
 
 async function api(page: Page, method: string, path: string, body?: unknown) {
@@ -178,7 +178,7 @@ test('a proposal on a rack is marked on the data centre that lists it', async ({
   expect(res.ok(), 'propose a rack height').toBeTruthy()
   opened.push((await res.json()).id as string)
 
-  await page.goto('/data-centers?open=' + encodeURIComponent('colo:colo-galleon'))
+  await page.goto('/data-centers?open=' + encodeURIComponent('colo:datacenter-colo-galleon'))
   await expect(page.getByTestId('generic-fields')).toBeVisible({ timeout: 15_000 })
   // Open the tab holding the racks, as a person would. The mark RENDERS
   // whether or not the panel is visible — loadFieldMarks does not care — but

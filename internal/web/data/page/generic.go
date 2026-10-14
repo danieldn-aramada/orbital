@@ -314,11 +314,11 @@ type CreateForm struct {
 	// and two sources for one value is two chances to disagree.
 	NamespaceFrom string
 
-	// OrbIDTemplate is the type's orbIdPattern with `{kind}` already resolved —
+	// OrbIDTemplate is the type's orbIdPattern with `{type}` already resolved —
 	// `server-{serviceTag}`. The form substitutes the remaining placeholders as
 	// they are typed, so the reader sees the identity BEFORE committing to it.
-	// Server-side resolution of `{kind}` keeps the kebab/orbIdSuffix rule in one
-	// place rather than reimplementing it in JS.
+	// Server-side resolution of `{type}` keeps the lower-case/orbIdSuffix rule in
+	// one place rather than reimplementing it in JS.
 	OrbIDTemplate string
 
 	// OrbIDPaths are the placeholder paths the type's pattern needs, so the
@@ -458,7 +458,7 @@ type EditorOmission struct {
 type CreateType struct {
 	Kind          string
 	Label         string
-	OrbIDTemplate string // this type's own pattern, `{kind}` resolved
+	OrbIDTemplate string // this type's own pattern, `{type}` resolved
 
 	// Fields are this implementation's OWN editable scalars — the ones the
 	// interface does not declare. Shared fields stay on CreateForm.Fields and

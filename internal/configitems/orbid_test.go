@@ -14,14 +14,14 @@ func TestParseOrbIDPattern_RefusesMalformed(t *testing.T) {
 		name, raw string
 		wantErr   bool
 	}{
-		{"own field", "{kind}-{serviceTag}", false},
-		{"crosses an edge", "{kind}-{server.serviceTag}", false},
+		{"own field", "{type}-{serviceTag}", false},
+		{"crosses an edge", "{type}-{server.serviceTag}", false},
 		{"two hops", "{storageController.server.serviceTag}-{name}", false},
 		{"literal only", "idrac", false},
 		{"external opt-out", "external", false},
-		{"unclosed placeholder", "{kind}-{serviceTag", true},
+		{"unclosed placeholder", "{type}-{serviceTag", true},
 		{"unmatched close", "kind}-{serviceTag}", true},
-		{"empty placeholder", "{kind}-{}", true},
+		{"empty placeholder", "{type}-{}", true},
 		{"empty pattern", "", true},
 		{"whitespace only", "   ", true},
 	} {
@@ -53,24 +53,35 @@ func TestParseOrbIDPattern_ExternalIsAnOptOut(t *testing.T) {
 	}
 }
 
-// `{kind}` defaults to the KEBAB type name, not the lower-cased one that
+// `{type}` defaults to the KEBAB type name, not the lower-cased one that
 // OrbIDSuffixFor falls back to. This is the whole reason the two helpers are
 // separate: `networkdevice` would be wrong against every stored orbId, which
 // all read `network-device-`.
-func TestOrbIDKindFor_DefaultsToKebabNotLowercase(t *testing.T) {
+// `{type}` resolves to the type name LOWER-CASED, not kebabbed.
+//
+// Changed 2026-10-14, following Kubernetes — its resource names concatenate
+// (`poddisruptionbudgets`, `customresourcedefinitions`) and never hyphenate.
+// It also makes the token unambiguous inside an id whose natural key carries
+// hyphens of its own: `networkinterface-CFRHDX3-NIC.1-1` has exactly one type
+// boundary where the kebab spelling had three candidates.
+//
+// This also makes the two defaults AGREE — OrbIDSuffixFor already lower-cased,
+// so `datacenter` and `data-center` were both spellings orbital produced for
+// the same type.
+func TestOrbIDTypeFor_DefaultsToLowercaseNotKebab(t *testing.T) {
 	for _, tc := range []struct{ typeName, doc, want string }{
 		{"Server", "", "server"},
-		{"NetworkDevice", "", "network-device"},
-		{"ServerMaintenance", "", "server-maintenance"},
-		{"IPAddress", "", "ip-address"},
+		{"NetworkDevice", "", "networkdevice"},
+		{"ServerMaintenance", "", "servermaintenance"},
+		{"IPAddress", "", "ipaddress"},
 		// An orbIdSuffix annotation wins — that is how the irregular legacy
 		// tokens (`idrac`, not `idrac-settings`) stay correct.
 		{"IdracSettings", "orbIdSuffix: idrac", "idrac"},
 		{"S3Sync", "orbIdSuffix: s3sync", "s3sync"},
 	} {
 		t.Run(tc.typeName, func(t *testing.T) {
-			if got := OrbIDKindFor(tc.typeName, tc.doc); got != tc.want {
-				t.Errorf("OrbIDKindFor(%q, %q) = %q, want %q", tc.typeName, tc.doc, got, tc.want)
+			if got := OrbIDTypeFor(tc.typeName, tc.doc); got != tc.want {
+				t.Errorf("OrbIDTypeFor(%q, %q) = %q, want %q", tc.typeName, tc.doc, got, tc.want)
 			}
 		})
 	}
@@ -81,8 +92,8 @@ func TestOrbIDKindFor_DefaultsToKebabNotLowercase(t *testing.T) {
 // `derivesIdFrom:` could not express.
 func TestConstructOrbID_FirstResolvablePatternWins(t *testing.T) {
 	patterns := mustParse(t,
-		"{kind}-{server.serviceTag}-{name}",
-		"{kind}-{networkDevice.serial}-{name}")
+		"{type}-{server.serviceTag}-{name}",
+		"{type}-{networkDevice.serial}-{name}")
 
 	t.Run("server-owned", func(t *testing.T) {
 		got, err := ConstructOrbID("colo", "network-interface", patterns, fromMap(map[string]string{
@@ -116,7 +127,7 @@ func TestConstructOrbID_FirstResolvablePatternWins(t *testing.T) {
 // `server-` would both be accepted by DGraph, look approximately right, and
 // collide or orphan later — the worst available outcome.
 func TestConstructOrbID_FailsRatherThanHalfInterpolate(t *testing.T) {
-	patterns := mustParse(t, "{kind}-{server.serviceTag}-{name}")
+	patterns := mustParse(t, "{type}-{server.serviceTag}-{name}")
 	for _, tc := range []struct {
 		name string
 		vals map[string]string
@@ -138,7 +149,7 @@ func TestConstructOrbID_FailsRatherThanHalfInterpolate(t *testing.T) {
 		}
 	})
 	t.Run("no namespace", func(t *testing.T) {
-		if _, err := ConstructOrbID("", "server", mustParse(t, "{kind}"), fromMap(nil)); err == nil {
+		if _, err := ConstructOrbID("", "server", mustParse(t, "{type}"), fromMap(nil)); err == nil {
 			t.Fatal("construct with no namespace succeeded")
 		}
 	})
@@ -149,22 +160,22 @@ func TestConstructOrbID_FailsRatherThanHalfInterpolate(t *testing.T) {
 // reports the whole graph as wrong and nobody reads it again.
 //
 // Samples were read from the blue dev graph on 2026-10-06, one real row per
-// type. This is the test that would have caught `{kind}` defaulting to
+// type. This is the test that would have caught `{type}` defaulting to
 // `networkdevice`, and the one that pins the two-hop paths.
 func TestShippedPatterns_ReproduceStoredOrbIDs(t *testing.T) {
 	for _, tc := range []struct {
 		typeName, kind, pattern, namespace, want string
 		vals                                     map[string]string
 	}{
-		{"DataCenter", "data-center", "{name}", "2f-uae", "2f-uae:2f-uae",
+		{"DataCenter", "datacenter", "{type}-{name}", "2f-uae", "2f-uae:datacenter-2f-uae",
 			map[string]string{"name": "2f-uae"}},
-		{"Rack", "rack", "{name}", "2f-uae", "2f-uae:Rack-3",
+		{"Rack", "rack", "{type}-{name}", "2f-uae", "2f-uae:rack-Rack-3",
 			map[string]string{"name": "Rack-3"}},
-		{"Server", "server", "{kind}-{serviceTag}", "2f-uae", "2f-uae:server-2MLN3D4",
+		{"Server", "server", "{type}-{serviceTag}", "2f-uae", "2f-uae:server-2MLN3D4",
 			map[string]string{"serviceTag": "2MLN3D4"}},
-		{"IdracSettings", "idrac", "{server.serviceTag}-{kind}", "2f-uae", "2f-uae:7MLN3D4-idrac",
+		{"IdracSettings", "idrac", "{server.serviceTag}-{type}", "2f-uae", "2f-uae:7MLN3D4-idrac",
 			map[string]string{"server.serviceTag": "7MLN3D4"}},
-		{"ServerMaintenance", "server-maintenance", "{kind}-{server.serviceTag}", "colo", "colo:server-maintenance-4RK3V64",
+		{"ServerMaintenance", "servermaintenance", "{type}-{server.serviceTag}", "colo", "colo:servermaintenance-4RK3V64",
 			map[string]string{"server.serviceTag": "4RK3V64"}},
 		{"StorageController", "storage-controller", "{server.serviceTag}-{name}", "alaska-dot-cruiser", "alaska-dot-cruiser:GT36XB4-BOSS-S1",
 			map[string]string{"server.serviceTag": "GT36XB4", "name": "BOSS-S1"}},
@@ -172,23 +183,23 @@ func TestShippedPatterns_ReproduceStoredOrbIDs(t *testing.T) {
 			map[string]string{"serialNumber": "YEQ0A0KG0KG3"}},
 		{"StorageVolume", "storage-volume", "{storageController.server.serviceTag}-{name}", "alaska-dot-cruiser", "alaska-dot-cruiser:JT36XB4-VirtualDisk-2",
 			map[string]string{"storageController.server.serviceTag": "JT36XB4", "name": "VirtualDisk-2"}},
-		{"NetworkAdapter", "network-adapter", "{kind}-{server.serviceTag}-{name}", "colo", "colo:network-adapter-BFRHDX3-NIC.Slot.1",
+		{"NetworkAdapter", "network-adapter", "{type}-{server.serviceTag}-{name}", "colo", "colo:network-adapter-BFRHDX3-NIC.Slot.1",
 			map[string]string{"server.serviceTag": "BFRHDX3", "name": "NIC.Slot.1"}},
-		{"NetworkDevice", "network-device", "{kind}-{serial}", "colo", "colo:network-device-JX3623130496",
+		{"NetworkDevice", "network-device", "{type}-{serial}", "colo", "colo:network-device-JX3623130496",
 			map[string]string{"serial": "JX3623130496"}},
-		{"NetworkInterface", "network-interface", "{kind}-{server.serviceTag}-{name}", "colo", "colo:network-interface-BMP6K74-NIC.Integrated.1-1",
+		{"NetworkInterface", "network-interface", "{type}-{server.serviceTag}-{name}", "colo", "colo:network-interface-BMP6K74-NIC.Integrated.1-1",
 			map[string]string{"server.serviceTag": "BMP6K74", "name": "NIC.Integrated.1-1"}},
 		{"EksaKubernetesCluster", "eksa-kubernetes-cluster", "{name}", "alaska-dot-cruiser", "alaska-dot-cruiser:adot-m",
 			map[string]string{"name": "adot-m"}},
 		{"KubernetesNode", "kubernetes-node", "{name}", "alaska-dot-cruiser", "alaska-dot-cruiser:alaska-m-cp1",
 			map[string]string{"name": "alaska-m-cp1"}},
-		{"ClusterBackup", "backup", "{cluster.name}-{kind}", "colo", "colo:dev-main-backup",
+		{"ClusterBackup", "backup", "{cluster.name}-{type}", "colo", "colo:dev-main-backup",
 			map[string]string{"cluster.name": "dev-main"}},
-		{"EtcdBackup", "etcd-backup", "{clusterBackupEtcd.cluster.name}-{kind}", "colo", "colo:dev-main-etcd-backup",
+		{"EtcdBackup", "etcd-backup", "{clusterBackupEtcd.cluster.name}-{type}", "colo", "colo:dev-main-etcd-backup",
 			map[string]string{"clusterBackupEtcd.cluster.name": "dev-main"}},
-		{"VeleroBackup", "velero-backup", "{clusterBackupVelero.cluster.name}-{kind}", "colo", "colo:dev-main-velero-backup",
+		{"VeleroBackup", "velero-backup", "{clusterBackupVelero.cluster.name}-{type}", "colo", "colo:dev-main-velero-backup",
 			map[string]string{"clusterBackupVelero.cluster.name": "dev-main"}},
-		{"S3Sync", "s3sync", "{clusterBackupS3Sync.cluster.name}-{kind}", "colo", "colo:dev-main-s3sync",
+		{"S3Sync", "s3sync", "{clusterBackupS3Sync.cluster.name}-{type}", "colo", "colo:dev-main-s3sync",
 			map[string]string{"clusterBackupS3Sync.cluster.name": "dev-main"}},
 		{"IPAddress", "ip-address", "{address}", "2f-uae", "2f-uae:10.96.127.54",
 			map[string]string{"address": "10.96.127.54"}},
@@ -208,12 +219,12 @@ func TestShippedPatterns_ReproduceStoredOrbIDs(t *testing.T) {
 // The annotation must be RECOGNISED, or every pattern in the schema would be
 // reported at boot as an unknown annotation that does nothing.
 func TestOrbIDPatternAnnotation_IsRecognised(t *testing.T) {
-	if u := UnknownAnnotations("orbIdPattern: {kind}-{serviceTag}"); len(u) > 0 {
+	if u := UnknownAnnotations("orbIdPattern: {type}-{serviceTag}"); len(u) > 0 {
 		t.Errorf("orbIdPattern reported as unknown: %v", u)
 	}
 	// And a typo of it must still be caught — the whole point of the unknown
 	// reporter is that a misspelled annotation is otherwise a valid docstring.
-	if u := UnknownAnnotations("orbIdPatern: {kind}-{serviceTag}"); len(u) == 0 {
+	if u := UnknownAnnotations("orbIdPatern: {type}-{serviceTag}"); len(u) == 0 {
 		t.Error("a misspelled orbIdPattern was not reported as unknown")
 	}
 }
@@ -226,14 +237,14 @@ func TestOrbIDPatternWarnings_ReportUnresolvableFields(t *testing.T) {
 	edge := DerivedField{Name: "server", Kind: "OBJECT"}
 	list := DerivedField{Name: "servers", Kind: "OBJECT", IsList: true}
 	types := map[string]TypeInfo{
-		"Good":      {Doc: "orbIdPattern: {kind}-{serviceTag}", Fields: []DerivedField{scalar}},
-		"GoodEdge":  {Doc: "orbIdPattern: {kind}-{server.serviceTag}", Fields: []DerivedField{edge}},
-		"Bad":       {Doc: "orbIdPattern: {kind}-{nope}", Fields: []DerivedField{scalar}},
-		"Malformed": {Doc: "orbIdPattern: {kind}-{unclosed", Fields: []DerivedField{scalar}},
+		"Good":      {Doc: "orbIdPattern: {type}-{serviceTag}", Fields: []DerivedField{scalar}},
+		"GoodEdge":  {Doc: "orbIdPattern: {type}-{server.serviceTag}", Fields: []DerivedField{edge}},
+		"Bad":       {Doc: "orbIdPattern: {type}-{nope}", Fields: []DerivedField{scalar}},
+		"Malformed": {Doc: "orbIdPattern: {type}-{unclosed", Fields: []DerivedField{scalar}},
 		// A bare relationship interpolates a NODE, not a value.
-		"BareEdge": {Doc: "orbIdPattern: {kind}-{server}", Fields: []DerivedField{edge}},
+		"BareEdge": {Doc: "orbIdPattern: {type}-{server}", Fields: []DerivedField{edge}},
 		// A list cannot say WHICH row.
-		"ListEdge": {Doc: "orbIdPattern: {kind}-{servers.serviceTag}", Fields: []DerivedField{list}},
+		"ListEdge": {Doc: "orbIdPattern: {type}-{servers.serviceTag}", Fields: []DerivedField{list}},
 	}
 	w := strings.Join(OrbIDPatternWarnings(types), "\n")
 	for _, ok := range []string{"Good:", "GoodEdge:"} {
@@ -267,7 +278,7 @@ func TestDerivedChildOrbID_MatchesStoredChildren(t *testing.T) {
 		for _, tc := range []struct{ childType, want string }{
 			{"IdracSettings", "2f-uae:2MLN3D4-idrac"},
 			{"ServerConfigurationProfile", "2f-uae:2MLN3D4-scp"},
-			{"ServerMaintenance", "2f-uae:server-maintenance-2MLN3D4"},
+			{"ServerMaintenance", "2f-uae:servermaintenance-2MLN3D4"},
 		} {
 			t.Run(tc.childType, func(t *testing.T) {
 				got := derivedChildOrbID(meta, tc.childType, "2f-uae", root["name"], root)
@@ -313,7 +324,7 @@ func TestDerivedChildOrbID_MatchesStoredChildren(t *testing.T) {
 // NewOrbID builds a ROOT entity's id from the same patterns, with the caller
 // supplying placeholder paths as keys.
 func TestNewOrbID_UsesTheSchemaPattern(t *testing.T) {
-	v := View{Type: "Server", OrbIDKind: "server", OrbIDPattern: mustParse(t, "{kind}-{serviceTag}")}
+	v := View{Type: "Server", OrbIDType: "server", OrbIDPattern: mustParse(t, "{type}-{serviceTag}")}
 	if got := v.NewOrbID("2f-uae", map[string]string{"serviceTag": "2MLN3D4"}); got != "2f-uae:server-2MLN3D4" {
 		t.Errorf("NewOrbID = %q, want %q", got, "2f-uae:server-2MLN3D4")
 	}
@@ -335,7 +346,7 @@ func TestNewOrbID_UsesTheSchemaPattern(t *testing.T) {
 		})
 	}
 	t.Run("no pattern declared", func(t *testing.T) {
-		bare := View{Type: "Server", OrbIDKind: "server"}
+		bare := View{Type: "Server", OrbIDType: "server"}
 		if got := bare.NewOrbID("2f-uae", map[string]string{"serviceTag": "2MLN3D4"}); got != "" {
 			t.Errorf("NewOrbID with no pattern = %q, want \"\"", got)
 		}
@@ -347,13 +358,13 @@ func TestNewOrbID_UsesTheSchemaPattern(t *testing.T) {
 func fixtureMetaWithPatterns(t *testing.T) MetaFor {
 	t.Helper()
 	docs := map[string]string{
-		"IdracSettings":              "orbIdSuffix: idrac\norbIdPattern: {server.serviceTag}-{kind}",
-		"ServerConfigurationProfile": "orbIdSuffix: scp\norbIdPattern: {server.serviceTag}-{kind}",
-		"ServerMaintenance":          "orbIdPattern: {kind}-{server.serviceTag}",
-		"ClusterBackup":              "orbIdSuffix: backup\norbIdPattern: {cluster.name}-{kind}",
-		"EtcdBackup":                 "orbIdSuffix: etcd-backup\norbIdPattern: {clusterBackupEtcd.cluster.name}-{kind}",
-		"VeleroBackup":               "orbIdSuffix: velero-backup\norbIdPattern: {clusterBackupVelero.cluster.name}-{kind}",
-		"S3Sync":                     "orbIdSuffix: s3sync\norbIdPattern: {clusterBackupS3Sync.cluster.name}-{kind}",
+		"IdracSettings":              "orbIdSuffix: idrac\norbIdPattern: {server.serviceTag}-{type}",
+		"ServerConfigurationProfile": "orbIdSuffix: scp\norbIdPattern: {server.serviceTag}-{type}",
+		"ServerMaintenance":          "orbIdPattern: {type}-{server.serviceTag}",
+		"ClusterBackup":              "orbIdSuffix: backup\norbIdPattern: {cluster.name}-{type}",
+		"EtcdBackup":                 "orbIdSuffix: etcd-backup\norbIdPattern: {clusterBackupEtcd.cluster.name}-{type}",
+		"VeleroBackup":               "orbIdSuffix: velero-backup\norbIdPattern: {clusterBackupVelero.cluster.name}-{type}",
+		"S3Sync":                     "orbIdSuffix: s3sync\norbIdPattern: {clusterBackupS3Sync.cluster.name}-{type}",
 	}
 	return func(typeName string) TypeInfo {
 		doc := docs[typeName]

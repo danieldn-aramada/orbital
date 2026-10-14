@@ -21,7 +21,7 @@ import { savePolicies, clearPolicies, restorePolicies } from './policy-snapshot'
 // A maintenance node this spec owns. Tests here assert "no competitor", which
 // only holds while nothing else proposes against the entity — so it must not be
 // shared with another spec or with whatever a developer has in flight.
-const MAINT = 'colo:server-maintenance-4RK3V64'
+const MAINT = 'colo:servermaintenance-4RK3V64'
 
 async function api(page: Page, method: string, path: string, body?: unknown) {
   return page.request.fetch(path, {

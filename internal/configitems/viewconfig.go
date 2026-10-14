@@ -257,6 +257,26 @@ type FieldDecl struct {
 	// when it does, drop this rather than keeping both.
 	CreateHidden bool `yaml:"createHidden,omitempty"`
 
+	// CreateOnly makes a field settable when the entity is CREATED and frozen
+	// afterwards.
+	//
+	// The third axis, and the one an orbId-source field needs: you must type a
+	// service tag to create a Server, but changing it later leaves the orbId
+	// still encoding the old one. orbIds are immutable, so the entity and its
+	// own id silently disagree — and a scan rebuilding `server-<serviceTag>`
+	// then mints a SECOND server for the same machine, breaking exactly the
+	// upsert idempotence a derivable orbId exists to give.
+	//
+	// Distinct from both neighbours: `editable: false` removes it from the
+	// create form too (nothing could ever set it), and `createHidden` is the
+	// mirror image — absent at create, writable after.
+	//
+	// ⚠️ Not derived from the orbIdPattern, deliberately. Deriving it would
+	// silently override an `editable: true` someone wrote, and this file is
+	// emphatic that a refused flag is SAID rather than quietly cleared. The
+	// load-time warning names any identity field missing this.
+	CreateOnly bool `yaml:"createOnly,omitempty"`
+
 	// CreateDefault pre-fills this field on the CREATE form. A suggestion a
 	// human sees and may change — not a value written behind their back, which
 	// is what DGraph's `@default` directive would be. Nothing downstream can

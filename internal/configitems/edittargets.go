@@ -182,8 +182,8 @@ func StampEditTargetVersion(targets []EditTarget, orbID string, version int) []E
 // type's `orbIdPattern:` and the values of the root entity it hangs off.
 //
 // A subgraph member's pattern always walks back to the root it hangs off
-// — IdracSettings is `{server.serviceTag}-{kind}`, EtcdBackup is
-// `{clusterBackupEtcd.cluster.name}-{kind}` — so a path that crosses at least
+// — IdracSettings is `{server.serviceTag}-{type}`, EtcdBackup is
+// `{clusterBackupEtcd.cluster.name}-{type}` — so a path that crosses at least
 // one edge is resolved by taking its LAST segment from the root's own values.
 // The intermediate hops are the way back to the root and carry no value of
 // their own. A single-segment path names a field on the child itself, which
@@ -211,7 +211,7 @@ func derivedChildOrbID(meta MetaFor, childType, namespace, rootName string, root
 	if len(info.OrbIDPattern) == 0 {
 		return legacy
 	}
-	id, err := ConstructOrbID(namespace, OrbIDKindFor(childType, info.Doc), info.OrbIDPattern,
+	id, err := ConstructOrbID(namespace, OrbIDTypeFor(childType, info.Doc), info.OrbIDPattern,
 		func(path string) (string, bool) {
 			seg := strings.Split(path, ".")
 			if len(seg) < 2 {

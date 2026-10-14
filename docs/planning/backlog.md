@@ -43,6 +43,7 @@ The definitions behind `ROADMAP.md`'s one-line entries.
 - **CI/CD** — `.github/` exists with no workflow files; build, test and image publish are all manual.
 - **AKS smoke suite** — `make smoke-aks` is shallow; expand to the real post-deploy checks.
 - **Security hardening** — clear the Hi items in [`debt.md`](debt.md) before staging or prod exposure.
+- **Open-source readiness** — seed data is gitignored but still in `git log -p` (real site names, Dell service tags, MACs). Rewrite with `git-filter-repo` or publish squashed. The same names also remain in [`DGRAPH.md`](../reference/DGRAPH.md), [`CHANGE-CONTROL.md`](../reference/CHANGE-CONTROL.md) and generated swagger.
 - **Perf & cost** — benchmark DGraph query latency under realistic load; size AKS node SKUs.
 
 ---

@@ -500,7 +500,7 @@ type changeRequestDiffResponse struct {
 
 // fieldOutcomeBody is one row of the review table.
 type fieldOutcomeBody struct {
-	OrbID string `json:"orbId" example:"colo:server-maintenance-CWJHDX3"`
+	OrbID string `json:"orbId" example:"colo:servermaintenance-CWJHDX3"`
 	Type  string `json:"type" example:"ServerMaintenance"`
 	// Field is the bare field name, type prefix stripped — what a table shows.
 	Field string `json:"field" example:"enabled"`

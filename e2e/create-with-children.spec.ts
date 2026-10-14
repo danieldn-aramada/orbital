@@ -9,8 +9,10 @@ import { test, expect } from '@playwright/test';
 // behind when the data centre failed.
 
 const NS = 'e2enested';
-const DC = `${NS}:e2e-nested-dc`;
-// `rack-` prefixed: Rack's pattern became `{kind}-{name}` on 2026-10-13, so a
+// `data-center-` prefixed since 2026-10-14: DataCenter joined the
+// `<namespace>:<kind>-<natural-key>` convention, as Rack did the day before.
+const DC = `${NS}:datacenter-e2e-nested-dc`;
+// `rack-` prefixed: Rack's pattern became `{type}-{name}` on 2026-10-13, so a
 // rack id now says what it is — and cannot collide with the data centre, whose
 // pattern is a bare `{name}` and whose ids share the same interface-level @id.
 const R1 = `${NS}:rack-e2e-rack-a`;

@@ -483,16 +483,16 @@ func TestBuildCreateForm_AmbiguousIdentityOffersNoForm(t *testing.T) {
 	meta := func(string) configitems.TypeInfo { return info }
 	labels := func(string) func(string) string { return func(f string) string { return f } }
 
-	one, err := configitems.ParseOrbIDPattern("{kind}-{serviceTag}")
+	one, err := configitems.ParseOrbIDPattern("{type}-{serviceTag}")
 	if err != nil {
 		t.Fatal(err)
 	}
-	two, err := configitems.ParseOrbIDPattern("{kind}-{networkDevice.serial}-{name}")
+	two, err := configitems.ParseOrbIDPattern("{type}-{networkDevice.serial}-{name}")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	base := configitems.View{Type: "Thing", Slug: "things", OrbIDKind: "thing", Fields: []string{"serviceTag"}}
+	base := configitems.View{Type: "Thing", Slug: "things", OrbIDType: "thing", Fields: []string{"serviceTag"}}
 	byType := map[string]configitems.View{"Thing": base, "DataCenter": {Type: "DataCenter"}}
 
 	// The CONTROL. One pattern gets a form — it cannot reach DGraph for the

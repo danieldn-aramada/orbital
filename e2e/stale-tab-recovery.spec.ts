@@ -18,7 +18,7 @@ test('a tab whose entity is gone says so, and stays retryable', async ({ page, r
   await request.post('/graphql', {
     data: {
       query: `mutation { addNetworkDevice(input: [{ orbId: "${ORB}", namespace: "colo", version: 1,
-        name: "e2e-stale", serial: "E2ESTALE", dataCenter: { orbId: "colo:colo-galleon" } }]) { numUids } }`,
+        name: "e2e-stale", serial: "E2ESTALE", dataCenter: { orbId: "colo:datacenter-colo-galleon" } }]) { numUids } }`,
     },
   });
 

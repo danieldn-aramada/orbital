@@ -20,7 +20,7 @@ const CLUSTER_ID = `colo:${CLUSTER_NAME}`;
 // asks for one and the create brings the Namespace node into existence too.
 const DC_NS = 'e2ecreatens';
 const DC_NAME = 'e2e-create-dc';
-const DC_ID = `${DC_NS}:${DC_NAME}`;
+const DC_ID = `${DC_NS}:datacenter-${DC_NAME}`;
 
 // Remove anything a run left behind. Deletes BY THE IDS THIS SPEC CREATES, never
 // a broad filter — the local graph is shared with whoever is developing.
@@ -38,12 +38,12 @@ async function cleanup(request: any) {
     data: {
       query: `mutation {
         a: deleteIdracSettings(filter: { orbId: { eq: "${IDRAC_ID}" } }) { numUids }
-        b: deleteServerMaintenance(filter: { orbId: { eq: "colo:server-maintenance-${TAG}" } }) { numUids }
+        b: deleteServerMaintenance(filter: { orbId: { eq: "colo:servermaintenance-${TAG}" } }) { numUids }
         c: deleteServer(filter: { orbId: { eq: "${ORB_ID}" } }) { numUids }
         d: deleteEksaKubernetesCluster(filter: { orbId: { eq: "${CLUSTER_ID}" } }) { numUids }
         e: deleteDataCenter(filter: { orbId: { eq: "${DC_ID}" } }) { numUids }
         f: deleteNamespace(filter: { name: { eq: "${DC_NS}" } }) { numUids }
-        g: deleteDataCenter(filter: { orbId: { eq: "colo:${DC_NAME}" } }) { numUids }
+        g: deleteDataCenter(filter: { orbId: { eq: "colo:datacenter-${DC_NAME}" } }) { numUids }
       }`,
     },
   });
@@ -85,7 +85,7 @@ test('an interface page creates a CONCRETE implementation, never the interface',
   await expect(modal, 'the modal must name the IMPLEMENTATION; the interface has no add mutation')
     .toHaveAttribute('data-kind', 'EksaKubernetesCluster');
 
-  await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:colo-galleon' });
+  await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:datacenter-colo-galleon' });
   await modal.locator('[data-create-field="name"]:not([data-create-child])').fill(CLUSTER_NAME);
   // clusterType exists ONLY on EksaKubernetesCluster. Filling it proves the form
   // was generated from the implementation's field set rather than the interface's.
@@ -117,7 +117,7 @@ test('an interface page creates a CONCRETE implementation, never the interface',
   expect(c.__typename, 'a concrete implementation, not the interface').toBe('EksaKubernetesCluster');
   expect(c.namespace, 'namespace comes from the data centre, never typed').toBe('colo');
   expect(c.clusterType, 'an implementation-only field must survive the create').toBe('workload');
-  expect(c.dataCenter.orbId).toBe('colo:colo-galleon');
+  expect(c.dataCenter.orbId).toBe('colo:datacenter-colo-galleon');
 });
 
 test('the form is generated from the view, including the unit', async ({ page }) => {
@@ -157,7 +157,7 @@ test('the orbId is constructed from the schema pattern and shown before submit',
   await modal.locator('[data-create-field="serviceTag"]:not([data-create-child])').fill(TAG);
   await expect(preview, 'still no namespace until a data centre is chosen').toHaveText('—');
 
-  await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:colo-galleon' });
+  await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:datacenter-colo-galleon' });
   await expect(preview).toHaveText(ORB_ID);
 });
 
@@ -168,7 +168,7 @@ test('creating a server with its iDRAC settings writes both, linked', async ({ p
   await page.getByTestId('create-open').click();
   const modal = page.locator('.modal.is-active');
 
-  await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:colo-galleon' });
+  await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:datacenter-colo-galleon' });
   await modal.locator('[data-create-field="name"]:not([data-create-child])').fill('e2e-create-1');
   await modal.locator('[data-create-field="serviceTag"]:not([data-create-child])').fill(TAG);
   await modal.locator('[data-create-field="model"]:not([data-create-child])').fill('PowerEdge R650');
@@ -200,7 +200,7 @@ test('creating a server with its iDRAC settings writes both, linked', async ({ p
   expect(srv.model).toBe('PowerEdge R650');
 
   // Acceptance 7: LINKED, not duplicated.
-  expect(srv.dataCenter.orbId).toBe('colo:colo-galleon');
+  expect(srv.dataCenter.orbId).toBe('colo:datacenter-colo-galleon');
   expect(srv.dataCenter.name, 'the existing data centre must be untouched').toBe('colo-galleon');
 
   // Acceptance 6: the subgraph member exists, carries ITS OWN values, and points back.
@@ -217,14 +217,14 @@ test('a duplicate orbId is refused, and nothing is written', async ({ page, requ
   await request.post('/graphql', {
     data: {
       query: `mutation { addServer(input: [{ orbId: "${ORB_ID}", namespace: "colo", version: 1,
-        name: "already-here", serviceTag: "${TAG}", dataCenter: { orbId: "colo:colo-galleon" } }]) { numUids } }`,
+        name: "already-here", serviceTag: "${TAG}", dataCenter: { orbId: "colo:datacenter-colo-galleon" } }]) { numUids } }`,
     },
   });
 
   await page.goto('/servers');
   await page.getByTestId('create-open').click();
   const modal = page.locator('.modal.is-active');
-  await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:colo-galleon' });
+  await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:datacenter-colo-galleon' });
   await modal.locator('[data-create-field="name"]:not([data-create-child])').fill('second-attempt');
   await modal.locator('[data-create-field="serviceTag"]:not([data-create-child])').fill(TAG);
   await modal.getByTestId('create-submit').click();
@@ -269,7 +269,7 @@ test('a page that offers create carries exactly one resolved pattern', async ({ 
     const tmpl = await page.locator('[id^="create-modal-"]').getAttribute('data-orbid-template');
     expect(tmpl, `/${slug} must carry a resolved pattern`).toBeTruthy();
     expect(tmpl, 'no edge-crossing placeholder may survive into the form').not.toContain('.');
-    expect(tmpl, '{kind} is resolved server-side, not in JS').not.toContain('{kind}');
+    expect(tmpl, '{type} is resolved server-side, not in JS').not.toContain('{type}');
   }
 });
 
@@ -285,7 +285,7 @@ test('defaults pre-fill the form, and identity fields never carry one', async ({
   await expect(modal.locator('[data-create-field="manufacturer"]:not([data-create-child])')).toHaveValue('Dell');
   await expect(modal.locator('[data-create-field="model"]:not([data-create-child])')).toHaveValue('PowerEdge R450');
 
-  // serviceTag feeds `{kind}-{serviceTag}`, so it must arrive EMPTY.
+  // serviceTag feeds `{type}-{serviceTag}`, so it must arrive EMPTY.
   await expect(modal.locator('[data-create-field="serviceTag"]:not([data-create-child])'),
     'an identity field must never be pre-filled').toHaveValue('');
   await expect(modal.locator('[data-create-field="name"]:not([data-create-child])')).toHaveValue('');
@@ -309,7 +309,7 @@ test('a defaulted boolean is written as a boolean, not the string "false"', asyn
   await page.getByTestId('create-open').click();
   const modal = page.locator('.modal.is-active');
 
-  await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:colo-galleon' });
+  await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:datacenter-colo-galleon' });
   await modal.locator('[data-create-field="name"]:not([data-create-child])').fill('e2e-create-1');
   await modal.locator('[data-create-field="serviceTag"]:not([data-create-child])').fill(TAG);
   // Touch ONE child field so the unit is created; the rest ride on their defaults.
@@ -459,7 +459,7 @@ test('a namespace that already holds a data centre is refused', async ({ page, r
   // And nothing was written — a refusal that half-applies is worse than one that
   // explains itself.
   const res = await request.post('/graphql', {
-    data: { query: `{ getDataCenter(orbId: "colo:${DC_NAME}") { orbId } }` },
+    data: { query: `{ getDataCenter(orbId: "colo:datacenter-${DC_NAME}") { orbId } }` },
   });
   expect((await res.json()).data.getDataCenter,
     'a refused create must leave no node behind').toBeNull();
@@ -467,19 +467,19 @@ test('a namespace that already holds a data centre is refused', async ({ page, r
 
 
 test('an identity field left blank is refused, even when the pattern has a prefix', async ({ page, request }) => {
-  // `{kind}-{serviceTag}` with an empty service tag substitutes to `server-`,
+  // `{type}-{serviceTag}` with an empty service tag substitutes to `server-`,
   // which leaves NO unresolved brace — so a check for "are all placeholders
   // filled?" passes and the form would mint `colo:server-` for every nameless
   // server, colliding on the second one.
   //
-  // Found 2026-10-13 when Rack's pattern gained a `{kind}-` prefix and the
+  // Found 2026-10-13 when Rack's pattern gained a `{type}-` prefix and the
   // blank-row case stopped being refused. The root form had the same hole all
   // along; only patterns with no prefix (`{name}`) were accidentally safe.
   await page.goto('/servers');
   await page.getByTestId('create-open').click();
   const modal = page.locator('.modal.is-active');
 
-  await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:colo-galleon' });
+  await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:datacenter-colo-galleon' });
   await modal.locator('[data-create-field="name"]:not([data-create-child])').fill('e2e-blank-identity');
   // serviceTag deliberately left empty — it is what the orbId is built from.
 

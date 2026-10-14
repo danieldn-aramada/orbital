@@ -133,6 +133,7 @@ Open both UIs side by side. Log in as `admin@example.com` / `admin` (or read-onl
 - `dgraph: executable file not found` → `make dev-deps` didn't finish, or `~/.local/bin` isn't on PATH.
 - Port already in use (`:8001`, `:8010`, `:8080`, `:5432`, `:5001`, `:9000`) → `lsof -ti :<port> | xargs kill -9` before retrying.
 - Seed fails with schema mismatch → `make down && make up && make seed`.
+- `make seed` errors with `no files match examples/seed/*.graphql` → seed data is gitignored (it holds real site data) and is not in a clone.
 - Orb import shows "no tags" → run an Export in orbital first, then refresh.
 
 ### Where to go next

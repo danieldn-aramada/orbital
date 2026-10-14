@@ -8,13 +8,13 @@ import (
 
 // OrbIDPatternAnnotation declares the shape of a type's orbId.
 //
-//	"""orbIdPattern: {kind}-{serviceTag}"""
+//	"""orbIdPattern: {type}-{serviceTag}"""
 //	type Server implements ConfigItem {
 //
 // The value is everything AFTER the `<namespace>:` prefix. `{...}` interpolates;
 // literal text is copied through. Three placeholder forms:
 //
-//	{kind}              the type's kind token — `orbIdSuffix:` if annotated,
+//	{type}              the type token — `orbIdSuffix:` if annotated,
 //	                    otherwise the lower-cased type name
 //	{field}             a scalar on this type
 //	{edge.field}        a scalar on the entity this type points at
@@ -23,17 +23,17 @@ import (
 // whichever of several owners it actually has:
 //
 //	"""
-//	orbIdPattern: {kind}-{server.serviceTag}-{fqdd}
-//	orbIdPattern: {kind}-{networkDevice.serial}-{port}
+//	orbIdPattern: {type}-{server.serviceTag}-{fqdd}
+//	orbIdPattern: {type}-{networkDevice.serial}-{port}
 //	"""
 //
 // This is what `derivesIdFrom:` could not express — it was single-valued, which
 // is why NetworkInterface never carried one and why the field it populated was
 // deleted without ever having been read.
 //
-// `{kind}` is a PLACEHOLDER rather than an automatic prefix because the legacy
+// `{type}` is a PLACEHOLDER rather than an automatic prefix because the legacy
 // shapes do not all put it in front: IdracSettings is `<ns>:<serviceTag>-idrac`
-// and Rack is `<ns>:<rackName>` with no kind token at all. A pattern that
+// and Rack is `<ns>:<rackName>` with no type token at all. A pattern that
 // positions it explicitly can describe what is actually stored today, so the
 // annotation doubles as the migration tracker — change the pattern, fix the
 // data, and the audit tells you when the two agree.
@@ -48,21 +48,32 @@ const OrbIDPatternAnnotation = "orbIdPattern:"
 // `generateName`: defaulting exists, but you have to ask for it.
 const OrbIDPatternExternal = "external"
 
-// OrbIDKindFor returns the token `{kind}` resolves to: the `orbIdSuffix:`
-// annotation when the type carries one, otherwise the KEBAB type name.
+// OrbIDTypeFor returns the token `{type}` resolves to: the `orbIdSuffix:`
+// annotation when the type carries one, otherwise the type name LOWER-CASED.
 //
-// Kebab, deliberately — `network-device`, not the `networkdevice` that
-// OrbIDSuffixFor falls back to. The two defaults differ because they answer
-// different questions: OrbIDSuffixFor names a token the EDITOR appends to a
-// parent's id, while this reproduces the documented
-// `<namespace>:<kind>-<natural-key>` convention, which has always been kebab
-// (`network-adapter-`, `server-maintenance-`). Reusing the lower-cased default
-// here would have made every multi-word type's pattern wrong against the graph.
-func OrbIDKindFor(typeName, typeDoc string) string {
+// `{type}`, not `{kind}` — in GraphQL `kind` already means something else.
+// `__Type.kind` is SCALAR/OBJECT/INTERFACE/ENUM/LIST/NON_NULL, the CATEGORY of
+// a type rather than the type itself, and this code reads `f.Kind == "SCALAR"`
+// three files away. Renamed 2026-10-14.
+//
+// Lower-cased, not kebab: `networkdevice`, following Kubernetes, whose resource
+// names concatenate (`poddisruptionbudgets`, `customresourcedefinitions`) and
+// never hyphenate. It also makes the token unambiguous inside an id whose
+// natural key contains hyphens of its own — `networkinterface-CFRHDX3-NIC.1-1`
+// has exactly one type boundary, where the kebab form had three candidates.
+//
+// This makes the two defaults AGREE, where they used to differ: OrbIDSuffixFor
+// already lower-cased, so `datacenter` and `data-center` were both spellings
+// orbital produced for the same type.
+//
+// ⚠️ Existing ids keep the kebab spelling — orbIds are immutable. 503 nodes
+// locally as of the rename. They migrate when touched, like every other orbId
+// convention change.
+func OrbIDTypeFor(typeName, typeDoc string) string {
 	if v := annotationValue(typeDoc, OrbIDSuffixAnnotation); v != "" {
 		return v
 	}
-	return KebabTypeName(typeName)
+	return strings.ToLower(typeName)
 }
 
 // orbIDSegment is one piece of a parsed pattern: literal text, or a placeholder
@@ -129,7 +140,7 @@ func ParseOrbIDPattern(raw string) (OrbIDPattern, error) {
 			return OrbIDPattern{}, fmt.Errorf("unmatched %q in %q", "}", v)
 		default:
 			// A literal run must contain no `}`. Without this check a stray
-			// close brace is swallowed as literal text — `kind}-{serviceTag}`
+			// close brace is swallowed as literal text — `type}-{serviceTag}`
 			// parses happily and builds an orbId with a `}` in it.
 			next := strings.IndexByte(v[i:], '{')
 			lit := v[i:]
@@ -220,7 +231,7 @@ func OrbIDPatternWarnings(types map[string]TypeInfo) []string {
 				continue
 			}
 			for _, path := range p.Paths() {
-				if path == "kind" {
+				if path == "type" {
 					continue
 				}
 				// Only the NEAR end is checkable here: the far end of
@@ -252,7 +263,7 @@ func OrbIDPatternWarnings(types map[string]TypeInfo) []string {
 
 // OrbIDResolver supplies the values a pattern interpolates.
 //
-// `kind` is handed over rather than derived here so construction stays a pure
+// the type token is handed over rather than derived here so construction stays a pure
 // function of what it is given — the caller already knows the type, and a
 // resolver that had to look one up could disagree with the view that named it.
 type OrbIDResolver func(path string) (string, bool)
@@ -269,7 +280,7 @@ type OrbIDResolver func(path string) (string, bool)
 // stored orbId cannot be split back into its parts — `network-adapter-` is
 // followed by a serviceTag and an FQDD, and FQDDs contain hyphens
 // (`NIC.Integrated.1-1-1`), so the boundary is not recoverable.
-func ConstructOrbID(namespace, kind string, patterns []OrbIDPattern, resolve OrbIDResolver) (string, error) {
+func ConstructOrbID(namespace, typeToken string, patterns []OrbIDPattern, resolve OrbIDResolver) (string, error) {
 	if namespace == "" {
 		return "", fmt.Errorf("namespace is required")
 	}
@@ -281,7 +292,7 @@ func ConstructOrbID(namespace, kind string, patterns []OrbIDPattern, resolve Orb
 		if p.External {
 			return "", fmt.Errorf("orbIdPattern is %q: this type's orbId is assigned elsewhere", OrbIDPatternExternal)
 		}
-		s, ok := buildOne(kind, p, resolve)
+		s, ok := buildOne(typeToken, p, resolve)
 		if ok {
 			return namespace + ":" + s, nil
 		}
@@ -293,18 +304,18 @@ func ConstructOrbID(namespace, kind string, patterns []OrbIDPattern, resolve Orb
 // buildOne interpolates one pattern, reporting false if any placeholder is
 // unresolvable or resolves empty. An empty value is a failure, not a blank
 // segment — `server-` with nothing after it is not an identity.
-func buildOne(kind string, p OrbIDPattern, resolve OrbIDResolver) (string, bool) {
+func buildOne(typeToken string, p OrbIDPattern, resolve OrbIDResolver) (string, bool) {
 	var b strings.Builder
 	for _, s := range p.Segments {
 		if s.path == "" {
 			b.WriteString(s.literal)
 			continue
 		}
-		if s.path == "kind" {
-			if kind == "" {
+		if s.path == "type" {
+			if typeToken == "" {
 				return "", false
 			}
-			b.WriteString(kind)
+			b.WriteString(typeToken)
 			continue
 		}
 		v, ok := resolve(s.path)

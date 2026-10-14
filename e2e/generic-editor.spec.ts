@@ -180,7 +180,7 @@ test('an edit through the generic page produces an audit row with a diff', async
 // "cannot use as String" — a whole class of silent-looking failure that no
 // other field in the schema can expose, because it is the only `jsonString`.
 test('a jsonString field is parsed for editing and stored back as a string', async ({ page }) => {
-  const ORB_ID = '2f-uae:2f-uae';
+  const ORB_ID = '2f-uae:datacenter-2f-uae';
   await page.goto(`/data-centers?open=${encodeURIComponent(ORB_ID)}`);
 
   const btn = page.locator('[data-generic-edit-id]');

@@ -67,6 +67,14 @@ pages:
     subgraph:
       - { path: idracSettings, editable: true }
       - { path: serverMaintenance, editable: true }
+      # OWNED, not referenced: every allocated IP has exactly one owner
+      # (verified 2026-10-13 — 281 of 304, none shared), and an `oob` IP is
+      # tied to its server. Subgraph membership means it is created with the
+      # server, edited from it, and DELETED with it, which is what "this
+      # server's management address" should mean.
+      # ⚠️ NOT orbital claiming IPAM. CLAUDE.md scopes general network IPs to
+      # an external system; functional IPs tied to a workload are in scope.
+      - { path: oobIP, editable: true }
       - kubernetesNode
       - storageControllers
       - networkAdapters
@@ -108,7 +116,12 @@ types:
       model:
         createHidden: true
       name:
+        # `editable: true` re-admits it from the ConfigItem interface so the
+        # CREATE form offers it; `createOnly` then freezes it afterwards. The
+        # orbId is `{name}` and orbIds are immutable, so editing it later
+        # leaves the entity disagreeing with its own id.
         editable: true
+        createOnly: true
 
   IdracSettings:
     fields:
@@ -134,7 +147,9 @@ types:
 
   IPAddress:
     fields:
-      address: { editable: false }
+      # createOnly, not editable:false — an address must be typed to create
+      # the IP (the orbId is `{address}`) and must never change after.
+      address: { createOnly: true }
       role: { editable: false }
       type: { editable: false }
 
@@ -168,6 +183,9 @@ types:
   NetworkDevice:
     refColumns: [dataCenter, rack]
     fields:
+      # createOnly — the orbId is `network-device-{serial}` and orbIds are
+      # immutable.
+      serial: { createOnly: true }
       macAddress: { label: MAC Address }
       networkInterfaceConnectedNetworkDevice: { label: Connections }
       networkInterfaces: { label: Ports }
@@ -194,7 +212,8 @@ types:
     columns:
       - servers.count
     fields:
-      name: { editable: true }
+      # createOnly — the orbId is `rack-{name}` and orbIds are immutable.
+      name: { editable: true, createOnly: true }
       # 42U is the standard full-height rack, and what colo's racks carry.
       # A SUGGESTION on the create form, not a value written behind anyone's
       # back — the reader sees it and can change it.
@@ -208,6 +227,10 @@ types:
       - kubernetesNode.role
       - kubernetesNode.gpu
     fields:
+      # createOnly — the orbId is `server-{serviceTag}`. Editing it later leaves
+      # the id encoding the OLD tag, and a scan rebuilding that id mints a
+      # SECOND server for the same machine.
+      serviceTag: { createOnly: true }
       oobIP: { label: OOB IP }
       oobMAC: { label: OOB MAC, tableHidden: true }
       manufacturer: { tableHidden: true, createDefault: Dell }
