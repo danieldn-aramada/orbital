@@ -158,7 +158,7 @@ func buildCreateForm(
 		if _, isConfigItem := byType[f.TypeName]; !isConfigItem {
 			continue
 		}
-		opts, err := createOptions(ctx, dgraphURL, f.TypeName)
+		opts, err := createOptions(ctx, dgraphURL, f.TypeName, "")
 		if err != nil {
 			form.Unavailable = "Orbital could not load the " + labeller(f.Name) +
 				" options, so it cannot offer a create form: " + err.Error()
@@ -328,9 +328,16 @@ func buildCreateForm(
 // integrator drawing their own form needs the same list. Capped: a picker with
 // ten thousand entries is not a picker, and the cap is stated in the UI rather
 // than silently truncating.
-func createOptions(ctx context.Context, dgraphURL, typeName string) ([]page.CreateOption, error) {
+// createOptions lists existing nodes choosable as the far end of a reference.
+// `namespace` scopes it; a CREATE passes "" because the namespace is derived
+// from the parent being chosen and is not known yet.
+func createOptions(ctx context.Context, dgraphURL, typeName, namespace string) ([]page.CreateOption, error) {
 	const cap = 500
-	q := fmt.Sprintf("{ q: query%s(first: %d, order: { asc: orbId }) { orbId name } }", typeName, cap)
+	filter := ""
+	if namespace != "" {
+		filter = fmt.Sprintf("filter: { namespace: { eq: %q } }, ", namespace)
+	}
+	q := fmt.Sprintf("{ q: query%s(%sfirst: %d, order: { asc: orbId }) { orbId name } }", typeName, filter, cap)
 	raw, err := runGraphQL(ctx, dgraphURL, q, "q")
 	if err != nil {
 		return nil, err

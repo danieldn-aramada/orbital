@@ -44,6 +44,21 @@ Prefix. See docs/playbooks/add-configitem.md.
         <p class="is-size-7">{{.CapNotice}}</p>
       </div>
       {{- end}}
+      {{- range $rel := .Relations}}
+      {{/* Chosen, not typed — so a select, not a key in the JSON tree below. */}}
+      <div class="field">
+        <label class="label is-size-7">{{.Label}}</label>
+        <div class="select is-small is-fullwidth">
+          <select data-edit-rel="{{.Field}}" data-edit-rel-current="{{.Current}}"
+                  data-testid="edit-rel-{{.Field}}">
+            <option value="">— none —</option>
+            {{- range .Options}}
+            <option value="{{.OrbID}}" {{if eq .OrbID $rel.Current}}selected{{end}}>{{.Name}}</option>
+            {{- end}}
+          </select>
+        </div>
+      </div>
+      {{- end}}
       <div id="{{.Prefix}}-json-editor-{{.DomID}}" style="min-height:200px"></div>
       {{- end}}
     </section>

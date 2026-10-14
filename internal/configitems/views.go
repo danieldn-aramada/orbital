@@ -78,6 +78,10 @@ type View struct {
 	// FieldDecl.CreateOnly.
 	CreateFields []string `json:"-"`
 
+	// EditableRefs are the single relationships the editor may RE-POINT.
+	// Disjoint from Fields: these hold another entity's orbId, not a scalar.
+	EditableRefs []string `json:"editableRefs,omitempty"`
+
 	// Display are the scalars a page SHOWS, which is a superset of Fields.
 	//
 	// `editorIgnored` is editor-scoped, not display-scoped: a scanned hardware

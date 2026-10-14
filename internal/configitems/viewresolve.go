@@ -163,6 +163,7 @@ func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg
 			NoCreate:        noCreateFor(info, td),
 			Fields:          editableFields(info, td, ifaceFields),
 			CreateFields:    createFields(info, td, ifaceFields),
+			EditableRefs:    editableRefs(info, td, types),
 			Subgraph:        subgraph,
 			Relations:       relationsOf(info),
 		}
@@ -234,6 +235,40 @@ func ColumnWarningsFromConfig(types map[string]TypeInfo, ifaceFields []string, c
 			out = append(out, w...)
 		}
 	}
+	return out
+}
+
+// EditableRefWarningsFromConfig reports an `editable: true` the editor cannot
+// offer — a list, or an edge to something orbital does not model. Said out
+// loud: `editable: true` on a reference was silently ignored before this.
+func EditableRefWarningsFromConfig(types map[string]TypeInfo, cfg ViewConfig) []string {
+	var out []string
+	for typeName, td := range cfg.Types {
+		info, ok := types[typeName]
+		if !ok {
+			continue
+		}
+		for _, f := range info.Fields {
+			e := td.Fields[f.Name].Editable
+			if e == nil || !*e {
+				continue
+			}
+			if f.Kind == "SCALAR" || f.Kind == "ENUM" {
+				continue // an ordinary editable scalar
+			}
+			if isEditableRefField(f, types) {
+				continue // honoured
+			}
+			why := "it points at a type orbital does not model"
+			if f.IsList {
+				why = "it is a list, and the editor re-points one edge at a time"
+			}
+			out = append(out, fmt.Sprintf(
+				"views: %s.%s declares editable: true but the editor cannot offer it — %s",
+				typeName, f.Name, why))
+		}
+	}
+	sort.Strings(out)
 	return out
 }
 
@@ -324,6 +359,38 @@ func editableFields(info TypeInfo, decl TypeDecl, ifaceFields []string) []string
 // Two sets rather than one because the two surfaces genuinely differ — a
 // service tag must be typed once and never again. Deriving create from edit is
 // what made `createOnly` impossible to express.
+// editableRefs are the SINGLE relationships the editor may re-point, declared
+// `editable: true`. Separate from Fields: an edge is chosen from what exists,
+// not typed, so it is a select and not a key in the JSON tree.
+//
+// Opt-in — a reference that identifies the node (dataCenter is in the orbId)
+// must stay frozen. Lists and non-ConfigItem targets are reported by
+// EditableRefWarningsFromConfig, not dropped silently.
+func editableRefs(info TypeInfo, decl TypeDecl, types map[string]TypeInfo) []string {
+	out := []string{}
+	for _, f := range info.Fields {
+		e := decl.Fields[f.Name].Editable
+		if e == nil || !*e {
+			continue
+		}
+		if !isEditableRefField(f, types) {
+			continue
+		}
+		out = append(out, f.Name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Shared so the warning and the resolver cannot disagree about what was honoured.
+func isEditableRefField(f DerivedField, types map[string]TypeInfo) bool {
+	if f.Kind == "SCALAR" || f.Kind == "ENUM" || f.IsList {
+		return false
+	}
+	_, isConfigItem := types[f.TypeName]
+	return isConfigItem
+}
+
 func createFields(info TypeInfo, decl TypeDecl, ifaceFields []string) []string {
 	out := editableFields(info, decl, ifaceFields)
 	for _, f := range info.Fields {
