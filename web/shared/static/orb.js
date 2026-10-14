@@ -6,19 +6,21 @@ import {
   INVENTORY_CACHE_KEY,
   initListPages,
   initGenericTable,
+  clearAllTabState,
 } from './shared.js'
 
 // ─── Stale-state cleanup ──────────────────────────────────────────────────────
 //
-// Orb's open DC/Server tabs are keyed by DGraph UIDs. Two events invalidate
-// those UIDs: (1) orb restart with a re-seed, (2) `orb import` (drop_all +
-// live load assigns new UIDs). Both call this helper so the restoration code
-// on window.load sees empty storage and skips.
+// Orb's open tabs are keyed by orbId. Two events invalidate them: (1) orb
+// restart with a re-seed, (2) `orb import` (drop_all + live load). Both call
+// this so the restoration code on window.load sees empty storage and skips.
+//
+// Delegates to the SHARED sweep rather than keeping its own list. It had one,
+// and `genericTabs` was never added to it — so after an import orb restored
+// tabs for entities the new bundle no longer contained. The fetch 404s, htmx
+// does not swap on 4xx, and the panel stayed blank permanently.
 function clearStaleTabState() {
-  localStorage.removeItem('datacenterTabs')
-  localStorage.removeItem('serverTabs')
-  localStorage.removeItem('dcTabCurrent')
-  localStorage.removeItem('srvTabCurrent')
+  clearAllTabState()
 }
 
 // Server-restart trigger — `window.ORBITAL_CONFIG.serverVersion` is a per-restart

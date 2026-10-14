@@ -51,19 +51,6 @@ func buildCreateForm(
 			// Nothing implements it, so there is no mutation to send.
 			return nil
 		}
-		if len(impls) > 1 {
-			// Which implementation to create is a question the form would have
-			// to ASK, and that is not designed. Say so in the modal rather than
-			// dropping the button: a button that silently disappears the day a
-			// second implementation lands is the failure mode this avoids.
-			return &page.CreateForm{
-				Label: configitems.HumanFieldLabel(pageView.Type),
-				DomID: SafeDomID(pageView.Type),
-				Unavailable: "This page lists more than one kind of " +
-					configitems.HumanFieldLabel(pageView.Type) + ", and creating one means choosing which. " +
-					"Orbital cannot pick for you, so create it from its own type instead.",
-			}
-		}
 		cv, ok := byType[impls[0]]
 		if !ok {
 			// The implementation has no view, so nothing knows how to render
@@ -140,9 +127,21 @@ func buildCreateForm(
 	if hasName {
 		form.Fields = append(form.Fields, createField(info, v, "name", labeller, true))
 	}
+	// On an INTERFACE page these are the SHARED fields only — the ones every
+	// implementation has. An implementation's own are rendered per-type below,
+	// so switching type keeps what was typed into the shared ones.
+	ifaceShared := map[string]bool{}
+	if pageView.IsInterface {
+		for _, f := range pageView.Fields {
+			ifaceShared[f] = true
+		}
+	}
 	for _, f := range v.Fields {
 		if f == "name" || v.NoCreate[f] {
 			continue // already added above, or declared `create: false`
+		}
+		if pageView.IsInterface && !ifaceShared[f] {
+			continue // this implementation's own — see form.Types
 		}
 		form.Fields = append(form.Fields, createField(info, v, f, labeller, identity[f]))
 	}
@@ -184,6 +183,52 @@ func buildCreateForm(
 		// root type gets this with no code change, and that is the whole reason
 		// it is not a `v.Type == "DataCenter"` branch.
 		form.NamespaceInput = true
+	}
+
+	// The TYPE picker. Rendered for an interface page ALWAYS, pre-selected when
+	// there is one implementation.
+	//
+	// A question with one answer is noise; a field that already HOLDS the answer
+	// tells the reader what they are creating at no cost — and the flow does not
+	// change shape the day a second implementation lands. The alternative this
+	// replaced returned an "unavailable" notice at two or more, which would have
+	// removed the button exactly when the model grew.
+	//
+	// Only an implementation whose identity this form can build is offered: a
+	// type the picker lists but cannot mint an id for would fail on submit.
+	if pageView.IsInterface {
+		for _, name := range pageView.Implementations {
+			iv, ok := byType[name]
+			if !ok || len(iv.Fields) == 0 || len(iv.OrbIDPattern) != 1 {
+				continue
+			}
+			// Split the type's fields against the INTERFACE's. Shared ones are
+			// rendered once and keep their values across a type change; only
+			// the implementation's own swap. Re-rendering everything would
+			// discard what the reader already typed into fields that did not
+			// change.
+			shared := map[string]bool{}
+			for _, f := range pageView.Fields {
+				shared[f] = true
+			}
+			ct := page.CreateType{
+				Kind:          name,
+				Label:         configitems.HumanFieldLabel(name),
+				OrbIDTemplate: strings.ReplaceAll(iv.OrbIDPattern[0].Raw, "{kind}", iv.OrbIDKind),
+			}
+			ivLabel := labelFor(name)
+			ivInfo := meta(name)
+			for _, f := range iv.Fields {
+				if shared[f] || f == "name" || iv.NoCreate[f] {
+					continue
+				}
+				ct.Fields = append(ct.Fields, createField(ivInfo, iv, f, ivLabel, identity[f]))
+			}
+			form.Types = append(form.Types, ct)
+		}
+		if len(form.Types) == 0 {
+			return nil
+		}
 	}
 
 	// Repeating rows: the page's editable LIST members, created in the SAME

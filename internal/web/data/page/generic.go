@@ -329,6 +329,15 @@ type CreateForm struct {
 	Fields    []CreateField
 	Relations []CreateRelation
 
+	// Types are the concrete types an INTERFACE page can create, for the Type
+	// picker. Empty for a concrete page, which has nothing to choose.
+	//
+	// Always rendered when non-empty, even at length one: it then states what is
+	// being created rather than asking. The identity preview follows the
+	// selection, because a second implementation need not share the first's
+	// orbId pattern.
+	Types []CreateType
+
 	// Unit are the subgraph members created in the SAME mutation — the set
 	// the editor already edits. Nested, because a nested create is the one
 	// nesting DGraph performs atomically.
@@ -443,4 +452,16 @@ type EditorOmission struct {
 	Omitted int
 	Of      int
 	Setting string // the env var that decides it, so the notice can name it
+}
+
+// CreateType is one concrete type offered by an interface page's Type picker.
+type CreateType struct {
+	Kind          string
+	Label         string
+	OrbIDTemplate string // this type's own pattern, `{kind}` resolved
+
+	// Fields are this implementation's OWN editable scalars — the ones the
+	// interface does not declare. Shared fields stay on CreateForm.Fields and
+	// are rendered once, so switching type keeps whatever was typed into them.
+	Fields []CreateField
 }

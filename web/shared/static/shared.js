@@ -686,12 +686,27 @@ export function deleteServerTab(displayName, id) {
 // /servers and find stale tabs.
 function clearTabStateOnFresh() {
   if (new URLSearchParams(window.location.search).get('fresh') !== '1') return
+  clearAllTabState()
+}
+
+// clearAllTabState removes EVERY tab key, for both apps.
+//
+// One list, deliberately. There were two — this function's body and orb's own
+// `clearStaleTabState` — and the same key went missing from one of them twice:
+// `clusterTabs`/`networkTabs` in 2026-09, then `genericTabs`, which orb never
+// swept at all. Orb has no login, so it never reaches the `?fresh=1` path that
+// sweeps them here, and an import left it restoring tabs for entities the new
+// bundle no longer contained.
+//
+// Any new tab key goes HERE and both callers get it. A second list is the bug.
+export function clearAllTabState() {
   localStorage.removeItem('datacenterTabs')
   localStorage.removeItem('serverTabs')
   localStorage.removeItem('clusterTabs')    // was MISSING — see below
   localStorage.removeItem('networkTabs')    // was MISSING — see below
   localStorage.removeItem('genericTabs')    // every /{slug} page shares this one
   localStorage.removeItem('dcTabCurrent')
+  localStorage.removeItem('srvTabCurrent')  // orb's old per-server key
   localStorage.removeItem('crTabCurrent')   // change-request queue's active tab
   // Swept by PREFIX, not named one by one: the active-tab key is per slug, so
   // enumerating them would reintroduce exactly the omission this function was
@@ -1395,7 +1410,21 @@ export function loadGenericTab(label, slug, orbId, activate = true) {
     if (tabContent.dataset.loading) return
     tabContent.dataset.loading = '1'
     Promise.resolve(htmx.ajax('GET', tabContent.dataset.detailUrl, { target: tabContent, swap: 'innerHTML' }))
-      .then(() => { tabContent.dataset.loaded = '1' })
+      .then(() => {
+        // Marked loaded only if something actually arrived. htmx RESOLVES on a
+        // 4xx and does not swap, so a tab whose entity is gone — stale state
+        // after an import, or deleted by someone else — got flagged loaded with
+        // an empty panel, and the `loaded` short-circuit above then made the
+        // blank permanent: every later click returned early.
+        if (tabContent.innerHTML.trim() !== '') {
+          tabContent.dataset.loaded = '1'
+          return
+        }
+        tabContent.innerHTML =
+          '<div class="notification is-warning is-light" data-testid="tab-load-failed">' +
+          '<p class="is-size-7">This could not be loaded — it may have been deleted, ' +
+          'or replaced by an import. Close the tab, or press Reload to try again.</p></div>'
+      })
       .finally(() => { delete tabContent.dataset.loading })
   })
 

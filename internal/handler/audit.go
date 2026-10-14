@@ -368,9 +368,62 @@ func (h *AuditHandler) List(c echo.Context) error {
 	return c.JSON(http.StatusOK, auditLogResponse{Events: items, Total: total})
 }
 
+// buildDeleteSummary renders what a CASCADE DELETE removed.
+//
+// A delete event stores `before`/`input`/`result` and has no `variables`, so
+// the column that reads variables showed "—" for it — the most consequential
+// row in the log was the least informative, and a reader could not tell a
+// delete from an event with nothing to say. The API has carried this all
+// along; only the view was looking in the wrong place.
+//
+// Returns "" when this is not a cascade delete, so the caller falls through.
+func buildDeleteSummary(raw json.RawMessage) template.HTML {
+	var d struct {
+		Before map[string]any `json:"before"`
+		Result *struct {
+			TotalDeleted int           `json:"totalDeleted"`
+			Breakdown    []DeleteGroup `json:"breakdown"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(raw, &d); err != nil || d.Result == nil {
+		return ""
+	}
+	esc := template.HTMLEscapeString
+	var b strings.Builder
+	if name, _ := d.Before["name"].(string); name != "" {
+		b.WriteString("<strong>" + esc(name) + "</strong>")
+		if t, _ := d.Before["type"].(string); t != "" {
+			b.WriteString(" <span style=\"color:var(--bulma-text-weak)\">" + esc(t) + "</span>")
+		}
+		b.WriteString(" — ")
+	}
+	fmt.Fprintf(&b, "%d deleted", d.Result.TotalDeleted)
+
+	// The breakdown is what makes a cascade legible: "4 deleted" alone does not
+	// say that three of them were racks nobody asked about by name.
+	var parts []string
+	for _, g := range d.Result.Breakdown {
+		n := g.Count
+		if n == 0 {
+			n = len(g.Items) + g.Extra
+		}
+		if g.Label == "" || n == 0 {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%d&nbsp;%s", n, esc(g.Label)))
+	}
+	if len(parts) > 0 {
+		b.WriteString(" <span style=\"color:var(--bulma-text-weak)\">(" + strings.Join(parts, ", ") + ")</span>")
+	}
+	return template.HTML(b.String())
+}
+
 func buildVarSummary(raw json.RawMessage) template.HTML {
 	if raw == nil {
 		return "—"
+	}
+	if s := buildDeleteSummary(raw); s != "" {
+		return s
 	}
 	var d struct {
 		Variables map[string]any `json:"variables"`
