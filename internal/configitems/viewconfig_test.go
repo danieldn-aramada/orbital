@@ -22,8 +22,7 @@ schemaVersion: v12
 pages:
   Server:
     menuWeight: 20
-    summary:
-      ignoreFields: [sku]
+    hide: [sku]
     subgraph:
       - { path: idracSettings, editable: true }
   Rack:
@@ -548,7 +547,7 @@ func TestResolveViews_ScalarsAndLinkRowsAreSubtractiveAndNeverSubgraph(t *testin
 		"NetworkAdapter": {Fields: []DerivedField{{Name: "model", Editable: true, Kind: "SCALAR"}}},
 	}
 	cfg := ViewConfig{Pages: map[string]PageDecl{"Server": {
-		Summary:  SummaryDecl{IgnoreFields: []string{"sku", "dataCenter"}},
+		Hide:     []string{"sku", "dataCenter"},
 		Subgraph: []MemberDecl{{Path: "idracSettings"}},
 	}}}
 	views, err := ResolveViewsFromConfig(types, nil, cfg, nil)
@@ -562,16 +561,23 @@ func TestResolveViews_ScalarsAndLinkRowsAreSubtractiveAndNeverSubgraph(t *testin
 		t.Errorf("display = %q — an undeclared scalar must appear on its own", display)
 	}
 	if strings.Contains(display, "sku") {
-		t.Error("ignoreFields must remove a scalar")
+		t.Error("`hide:` must remove a scalar")
 	}
 
+	// Edges are DERIVED from the schema, not from the subgraph: an undeclared
+	// single, an undeclared LIST and a declared member all appear. Only
+	// `hide:` removes one.
 	var refs []string
-	for _, r := range server.SummaryRefs {
-		refs = append(refs, r.Field)
+	for _, r := range server.Relationships {
+		if !strings.Contains(r.Field, ".") {
+			refs = append(refs, r.Field)
+		}
 	}
-	if strings.Join(refs, ",") != "rack" {
-		t.Errorf("link rows = %v, want [rack] — derived for an undeclared single, "+
-			"removed by ignoreFields, absent for a subgraph member and for a list", refs)
+	if !containsStr(refs, "rack") {
+		t.Errorf("edges = %v, want rack — an undeclared single still renders", refs)
+	}
+	if !containsStr(refs, "idracSettings") {
+		t.Errorf("edges = %v, want idracSettings — a declared member is an edge too", refs)
 	}
 	var members []string
 	for _, m := range server.Subgraph {
@@ -779,5 +785,127 @@ func TestValidateViews_CreateDefaultOnHiddenFieldIsRefused(t *testing.T) {
 	// ...and the hiding itself still stands — the refusal is about the default.
 	if !got.Types["Thing"].Fields["reason"].CreateHidden {
 		t.Error("createHidden must survive; only the default it shadowed is dropped")
+	}
+}
+
+// `hide:` is the page's DENY LIST, and it is the only thing that keeps a
+// relationship off a page.
+//
+// The regression: placement is derived from the schema, so nothing else can
+// remove a tab. If `hide:` stops reaching the edge list, a relationship someone
+// deliberately removed comes back — and the symptom is a tab reappearing, which
+// nobody files a bug about.
+func TestResolveViews_HideIsTheDenyListForScalarsAndRelationships(t *testing.T) {
+	types := map[string]TypeInfo{
+		"Server": {Fields: []DerivedField{
+			{Name: "hostname", Editable: true, Kind: "SCALAR"},
+			{Name: "sku", Editable: true, Kind: "SCALAR"},
+			{Name: "rack", Kind: "OBJECT", TypeName: "Rack"},
+			{Name: "serverConfigurationProfile", Kind: "OBJECT", TypeName: "ServerConfigurationProfile"},
+			{Name: "networkAdapters", Kind: "OBJECT", TypeName: "NetworkAdapter", IsList: true},
+		}},
+		"Rack":                       {Fields: []DerivedField{{Name: "name", Editable: true, Kind: "SCALAR"}}},
+		"ServerConfigurationProfile": {Fields: []DerivedField{{Name: "json", Editable: true, Kind: "SCALAR"}}},
+		"NetworkAdapter":             {Fields: []DerivedField{{Name: "model", Editable: true, Kind: "SCALAR"}}},
+	}
+	cfg := ViewConfig{Pages: map[string]PageDecl{"Server": {
+		Hide: []string{"sku", "serverConfigurationProfile"},
+	}}}
+	views, err := ResolveViewsFromConfig(types, nil, cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := ViewSet(views).Of("Server")
+
+	var edges []string
+	for _, e := range server.Relationships {
+		edges = append(edges, e.Field)
+	}
+	if containsStr(edges, "serverConfigurationProfile") {
+		t.Errorf("edges = %v — a hidden relationship must have no tab at all", edges)
+	}
+	// A hidden relationship is NOT the same as one with nothing on the other
+	// end: `rack` keeps its tab and renders "None." when the server is unracked.
+	if !containsStr(edges, "rack") || !containsStr(edges, "networkAdapters") {
+		t.Errorf("edges = %v — only what `hide:` names may be removed", edges)
+	}
+	if containsStr(server.Display, "sku") {
+		t.Errorf("display = %v — `hide:` drops a scalar too, from the same list", server.Display)
+	}
+	if !containsStr(server.Display, "hostname") {
+		t.Errorf("display = %v — an unnamed scalar still shows", server.Display)
+	}
+}
+
+// The rename is SAID, not silent. A views file still carrying the old key would
+// otherwise have its deny list ignored and the tabs it removed would reappear
+// with nothing reporting why.
+func TestRetiredKeyWarnings_NamesTheReplacementForSummaryIgnoreFields(t *testing.T) {
+	raw := []byte("pages:\n  Server:\n    summary:\n      ignoreFields: [serverConfigurationProfile]\n")
+	got := strings.Join(RetiredKeyWarnings("views.yaml", raw), "\n")
+	if !strings.Contains(got, "summary.ignoreFields:") || !strings.Contains(got, "hide:") {
+		t.Errorf("warnings = %q — a retired key must name its replacement", got)
+	}
+	// And the negative: the new spelling is not reported as retired.
+	ok := []byte("pages:\n  Server:\n    hide: [serverConfigurationProfile]\n")
+	if w := RetiredKeyWarnings("views.yaml", ok); len(w) != 0 {
+		t.Errorf("warnings = %v — `hide:` is the current key and must not warn", w)
+	}
+}
+
+// An overlay renames ONE field without restating the rest.
+//
+// The regression: making `labels:` overlay-wins wholesale, like a scalar key.
+// A deployment relabelling one field would then silently lose every shipped
+// label, and the symptom — labels reverting to "Idrac Settings" — is one
+// nobody files a bug about.
+func TestMergeViewConfig_LabelsMergePerField(t *testing.T) {
+	base := ViewConfig{Labels: map[string]string{"wwn": "WWN", "cni": "CNI"}}
+	overlay := ViewConfig{Labels: map[string]string{"cni": "Container Networking", "pduSettings": "PDU Settings"}}
+
+	got := MergeViewConfig(base, overlay)
+	want := map[string]string{"wwn": "WWN", "cni": "Container Networking", "pduSettings": "PDU Settings"}
+	for k, v := range want {
+		if got.Labels[k] != v {
+			t.Errorf("labels[%q] = %q, want %q", k, got.Labels[k], v)
+		}
+	}
+	// The base is not mutated: LoadViewConfig merges onto a value it also hands
+	// back on its error paths.
+	if base.Labels["cni"] != "CNI" {
+		t.Errorf("base mutated: %v", base.Labels)
+	}
+}
+
+// NO TEST ASSERTS THE CONTENTS OF config/views.yaml.
+//
+// That file is a TUNABLE — relabelling a field, hiding a tab or reordering a
+// subgraph is a configuration change, and a test asserting what it contains
+// turns every such edit into a broken build. One did briefly
+// (TestShippedViewsConfig_DeclaresTheLabelsItsOwnSchemaNeeds, deleted
+// 2026-10-15) and failed the moment the labels were edited.
+//
+// Tests seed their own documents instead — see the ViewConfig literals above.
+// The one legitimate read of the shipped file is in schema_consistency_test.go,
+// which asserts INTEGRITY (every declared path names a field the schema has),
+// a property any config must satisfy however it is tuned.
+
+// Validate rebuilds the document FIELD BY FIELD, so a key it does not name is
+// dropped in silence. `acronyms:` was, and every label on every page quietly
+// reverted to title-casing with nothing reporting it — the shipped config
+// declared iDRAC and the UI still rendered "Idrac Settings".
+//
+// This guards the whole class, not just labels: any top-level key added to
+// ViewConfig must survive validation.
+func TestValidate_CarriesTopLevelKeysThrough(t *testing.T) {
+	types := map[string]TypeInfo{"Server": {Fields: []DerivedField{{Name: "hostname", Editable: true, Kind: "SCALAR"}}}}
+	cfg := ViewConfig{
+		SchemaVersion: "v17",
+		Labels:        map[string]string{"idracSettings": "iDRAC Settings"},
+		Pages:         map[string]PageDecl{"Server": {}},
+	}
+	got, _ := cfg.Validate(types, "v17")
+	if got.Labels["idracSettings"] != "iDRAC Settings" {
+		t.Errorf("labels = %v after Validate, want them carried through", got.Labels)
 	}
 }

@@ -53,11 +53,11 @@ test('the detail path is a fragment endpoint, not a page', async ({ page }) => {
   // The url a tab fetches must not be reachable as a page: that is what made a
   // per-entity "page" exist at all, which nobody designed and which left two
   // layouts for one thing. 404 for a human, 200 for the tab.
-  const res = await page.goto('/network-devices/' + encodeURIComponent('colo:network-device-JX3623130496'));
+  const res = await page.goto('/network-devices/' + encodeURIComponent('colo:networkdevice-JX3623130496'));
   expect(res?.status(), 'a human navigating to the fragment url gets 404').toBe(404);
 
   const asTab = await page.request.get(
-    '/network-devices/' + encodeURIComponent('colo:network-device-JX3623130496'),
+    '/network-devices/' + encodeURIComponent('colo:networkdevice-JX3623130496'),
     { headers: { 'HX-Request': 'true' } });
   expect(asTab.status(), 'the same url with HX-Request is the tab body').toBe(200);
   expect(await asTab.text()).toContain('generic-fields');
@@ -758,7 +758,7 @@ test('a row with NO name says so, instead of standing in a raw Orb ID', async ({
   // has to read that way — a raw orbId looks exactly like a name that happens
   // to be ugly, which is how nine unnamed servers in `seattle` went unnoticed
   // for five months.
-  const ORB = 'colo:network-device-E2ENONAME';
+  const ORB = 'colo:networkdevice-E2ENONAME';
   const clean = () => request.post('/graphql', {
     data: { query: `mutation { deleteNetworkDevice(filter: { orbId: { eq: "${ORB}" } }) { numUids } }` },
   });
@@ -784,7 +784,7 @@ test('a row with NO name says so, instead of standing in a raw Orb ID', async ({
     await expect(tab, 'the tab must state the name is missing').toContainText('(unnamed)');
     await expect(tab, 'and still say WHICH one, so nine of them are not identical').toContainText('E2ENONAME');
     await expect(tab, 'the namespace and kind are noise in a narrow strip')
-      .not.toContainText('colo:network-device-');
+      .not.toContainText('colo:networkdevice-');
   } finally {
     await clean();
   }

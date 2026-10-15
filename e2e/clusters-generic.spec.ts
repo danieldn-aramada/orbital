@@ -51,24 +51,29 @@ test('a cluster detail page resolves its concrete type from the data', async ({ 
   await expect(page.locator('#tab-summary')).toBeVisible();
 });
 
-test('cluster fields show relationships as links', async ({ page }) => {
+test('relationships are tabs, and Fields holds only scalars', async ({ page }) => {
   await page.goto('/clusters?open=' + encodeURIComponent('colo:dev-main'));
   await openAllDetailPanels(page);
+
+  // Fields is scalars ONLY. A relationship in here was the conflation that hid
+  // workloadClusters: placement was decided by the subgraph declaration, so a
+  // list nobody declared rendered nowhere at all.
   const fields = page.getByTestId('generic-fields');
+  await expect(fields).not.toContainText('Data Center');
+  await expect(fields).not.toContainText('Control Plane Endpoint');
 
-  // Each of these is a single relationship, and the bespoke page showed every
-  // one as a summary row. A box per relationship would bury the fields.
-  await expect(fields).toContainText('Data Center');
-  await expect(fields).toContainText('Control Plane Endpoint');
+  // Every 1-hop relationship is a tab, declared or not.
+  const tabs = await page.locator('[id^="generic-detail-tabs-"] li a span').first
+    ? await page.locator('[id^="generic-detail-tabs-"] li').allInnerTexts()
+    : [];
+  for (const want of ['Data Center', 'Control Plane Endpoint', 'Backup', 'Nodes']) {
+    expect(tabs.join('|'), `${want} must be a tab`).toContain(want);
+  }
 
-  // IPAddress has NO page, so the row names the address and does not link —
-  // the dead-row rule. The value must still read as an address rather than a
-  // raw orbId with its namespace prefix.
-  const cpeRow = fields.locator('tr', { hasText: 'Control Plane Endpoint' });
-  await expect(cpeRow.locator('a')).toHaveCount(0);
-  // An IPAddress has no `name`, so the value must still read as an address —
-  // not as a raw orbId with its namespace prefix.
-  await expect(cpeRow.locator('td').nth(1)).toHaveText(/^\d+\.\d+\.\d+\.\d+$/);
+  // IPAddress has NO page, so the panel names the address and does not link —
+  // the dead-row rule, now one level out.
+  const cpe = page.getByTestId('generic-owned').filter({ hasText: 'Control Plane Endpoint' }).first();
+  await expect(cpe).toContainText(/\d+\.\d+\.\d+\.\d+/);
 });
 
 test('the backup tree renders inline, and says so when absent', async ({ page }) => {

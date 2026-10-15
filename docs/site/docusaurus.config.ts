@@ -32,7 +32,7 @@ const config: Config = {
         path: 'content',
         routeBasePath: '/',
         sidebarPath: './sidebars.ts',
-        editUrl: `${GH}/edit/main/website/docs/`,   // site content lives in website/docs
+        editUrl: `${GH}/edit/main/docs/site/content/`,
       },
       blog: false,
       theme: {customCss: './src/css/custom.css'},

@@ -80,7 +80,11 @@ where the tab's own label is the heading and the strip is the way back.
         <div class="column is-8">
 
         <article class="box" style="height:100%">
-          <p class="is-size-6 has-text-weight-semibold mb-3">Fields</p>
+          {{/* "Attributes", not "Fields": in GraphQL a relationship IS a field,
+               so a box excluding them could not be called Fields once the two
+               were split. Attributes/Relationships is also the CMDB pair.
+               `data-testid` stays `generic-fields` — a test handle, not copy. */}}
+          <p class="is-size-6 has-text-weight-semibold mb-3">Attributes</p>
           {{/*
             data-field-orbid / data-field-values drive the proposed-change field
             marks (loadFieldMarks in orbital.js). Only EDITABLE rows carry
@@ -104,23 +108,6 @@ where the tab's own label is the heading and the strip is the way back.
                   {{- end -}}
                 </td>
                 <td>{{if .Editable}}<span class="js-field-mark"></span>{{end}}</td>
-              </tr>
-              {{end}}
-              {{/*
-                Single relationships are rows here, not boxes of their own. A
-                cluster relates to a data centre, a management cluster, a
-                control-plane endpoint and a Tinkerbell IP — four one-row boxes
-                would bury the fields they sit beside.
-              */}}
-              {{range .Refs}}
-              <tr>
-                <td style="white-space:nowrap;width:1%">{{.Label}}</td>
-                {{/* No slug means the target type has no PAGE, so there is
-                     nowhere to go — the value renders as text rather than as a
-                     link to "//<orbId>". Promoting that type to a page is the
-                     one change that turns these into links. */}}
-                <td>{{if .Slug}}<a href="{{$.BasePath}}/{{.Slug}}?open={{.OrbID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td>
-                <td></td>
               </tr>
               {{end}}
             </tbody>
@@ -183,23 +170,26 @@ where the tab's own label is the heading and the strip is the way back.
           something in it. Without it, tabbing would re-hide exactly what the
           field marks exist to surface.
         */}}
-        {{if or .Inline .Tabs .Actions.ShowAuditTab}}
+        {{if or .Tabs .Actions.ShowAuditTab}}
         <article class="box pb-2" data-testid="generic-detail-tabs">
+          {{/* Parallel with Fields and Metadata — three regions, three
+               headings. "Relationships", never "Edges" — DGraph's own glossary
+               calls an edge the MENTAL PICTURE ("bubbles connected by lines")
+               and a relationship "a named, directed link relating one node to
+               another", which is what this is. The Audit Log tab rides at the
+               end of the same strip and is not a relationship; accepted, it is
+               always last and visually separable. */}}
+          <p class="is-size-6 has-text-weight-semibold mb-3">Relationships</p>
           <div class="tabs is-boxed has-text-weight-medium" style="font-size:14px"
                id="generic-detail-tabs-{{.DomID}}">
             <ul>
-              {{range $i, $o := .Inline}}
-              <li {{if eq $i 0}}class="is-active"{{end}} data-panel="gpanel-{{$.DomID}}-owned-{{$i}}">
-                <a><span>{{$o.Label}}</span><span class="js-tab-dot"></span></a>
-              </li>
-              {{end}}
               {{range $i, $t := .Tabs}}
-              <li {{if and (not $.Inline) (eq $i 0)}}class="is-active"{{end}} data-panel="gpanel-{{$.DomID}}-tab-{{$i}}">
+              <li {{if eq $i 0}}class="is-active"{{end}} data-panel="gpanel-{{$.DomID}}-tab-{{$i}}">
                 <a><span>{{$t.Label}}</span><span class="js-tab-dot"></span></a>
               </li>
               {{end}}
               {{if .Actions.ShowAuditTab}}
-              <li {{if and (not .Inline) (not .Tabs)}}class="is-active"{{end}}
+              <li {{if not .Tabs}}class="is-active"{{end}}
                   data-panel="{{.AuditPanelID}}"
                   data-orb-id="{{.OrbID}}"
                   data-subgraph-orb-ids="{{.SubgraphOrbIDsCSV}}">
@@ -209,12 +199,23 @@ where the tab's own label is the heading and the strip is the way back.
             </ul>
           </div>
 
-        {{range $i, $o := .Inline}}
-        <div id="gpanel-{{$.DomID}}-owned-{{$i}}" {{if ne $i 0}}style="display:none"{{end}}>
-        {{with $o}}
+        {{range $i, $t := .Tabs}}
+        <div id="gpanel-{{$.DomID}}-tab-{{$i}}" {{if ne $i 0}}style="display:none"{{end}}>
+        {{/* A SINGLE edge is one record — field tables, not rows. */}}
+        {{with $t.Panel}}
         <article class="pt-3" data-testid="generic-owned" data-field="{{.Label}}">
           <p class="is-size-6 has-text-weight-semibold mb-3">{{.Label}}</p>
+          {{/* Nothing on the other end. Says so, in the same words the list
+               tabs beside it use — a heading over an empty panel reads as a
+               page that failed to load. A panel with CHILDREN is not empty:
+               an unconfigured ClusterBackup still lists Etcd/Velero/S3 Sync. */}}
+          {{if and (not .OrbID) (not .Children)}}
+          <p class="has-text-grey is-size-7">None.</p>
+          {{end}}
           {{if .Fields}}
+          {{/* Its own scroller: a panel can carry a long unbroken value (a
+               jsonString field), and the PAGE must never scroll sideways. */}}
+          <div class="table-container">
           <table class="table is-fullwidth is-size-7"
             data-field-orbid="{{.OrbID}}"
             data-field-values="{{.FieldValuesJSON}}">
@@ -223,16 +224,24 @@ where the tab's own label is the heading and the strip is the way back.
               {{range .Fields}}
               <tr {{if .Field}}data-field="{{.Field}}"{{end}}>
                 <td style="white-space:nowrap;width:1%">{{.Label}}</td>
-                <td>{{if .Value}}{{.Value}}{{else}}<span class="has-text-grey">—</span>{{end}}</td>
+                <td>
+                  {{- if and .Blob .Value -}}
+                  <pre class="is-size-7 mb-0" style="max-height:18rem;overflow:auto">{{.Value}}</pre>
+                  {{- else -}}
+                  {{- with .Value}}{{.}}{{else}}<span class="has-text-grey">—</span>{{end -}}
+                  {{- end -}}
+                </td>
                 <td>{{if .Field}}<span class="js-field-mark"></span>{{end}}</td>
               </tr>
               {{end}}
             </tbody>
           </table>
+          </div>
           {{end}}
           {{range .Children}}
           <p class="is-size-7 has-text-weight-semibold mt-3 mb-1">{{.Label}}</p>
           {{if .OrbID}}
+          <div class="table-container">
           <table class="table is-fullwidth is-size-7 mb-0"
             data-field-orbid="{{.OrbID}}"
             data-field-values="{{.FieldValuesJSON}}">
@@ -241,23 +250,26 @@ where the tab's own label is the heading and the strip is the way back.
               {{range .Fields}}
               <tr {{if .Field}}data-field="{{.Field}}"{{end}}>
                 <td style="white-space:nowrap;width:1%">{{.Label}}</td>
-                <td>{{if .Value}}{{.Value}}{{else}}<span class="has-text-grey">—</span>{{end}}</td>
+                <td>
+                  {{- if and .Blob .Value -}}
+                  <pre class="is-size-7 mb-0" style="max-height:18rem;overflow:auto">{{.Value}}</pre>
+                  {{- else -}}
+                  {{- with .Value}}{{.}}{{else}}<span class="has-text-grey">—</span>{{end -}}
+                  {{- end -}}
+                </td>
                 <td>{{if .Field}}<span class="js-field-mark"></span>{{end}}</td>
               </tr>
               {{end}}
             </tbody>
           </table>
+          </div>
           {{else}}
           <p class="has-text-grey is-size-7">Not configured.</p>
           {{end}}
           {{end}}
         </article>
         {{end}}
-        </div>
-        {{end}}
-
-        {{range $i, $t := .Tabs}}
-        <div id="gpanel-{{$.DomID}}-tab-{{$i}}" {{if or $.Inline (ne $i 0)}}style="display:none"{{end}}>
+        {{if not $t.Panel}}
         {{with $t}}
         <article class="pt-3" data-testid="generic-tab" data-field="{{.Field}}">
           <p class="is-size-6 has-text-weight-semibold mb-3">{{.Label}}</p>
@@ -319,6 +331,7 @@ where the tab's own label is the heading and the strip is the way back.
           {{end}}
         </article>
         {{end}}
+        {{end}}
         </div>
         {{end}}
 
@@ -337,7 +350,7 @@ where the tab's own label is the heading and the strip is the way back.
           alone would report nothing while its settings were being rewritten.
         */}}
         {{if .Actions.ShowAuditTab}}
-        <div id="{{.AuditPanelID}}" {{if or .Inline .Tabs}}style="display:none"{{end}}
+        <div id="{{.AuditPanelID}}" {{if .Tabs}}style="display:none"{{end}}
              data-testid="generic-audit"></div>
         {{end}}
 

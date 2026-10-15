@@ -80,9 +80,14 @@ func TestLoadViews_EmbeddedDefaultAloneResolvesEveryView(t *testing.T) {
 	// and useless. Server is the densest page and exercises every member shape
 	// at once: links, tables, an inline child and a two-segment path.
 	server := got["Server"]
+	// Relationships carry what the page RENDERS (every relationship, declared or not);
+	// Subgraph carries what it EDITS. Both must survive the round trip — they
+	// are different questions and were one field until they came apart.
 	var links, tables, paths, editable int
-	for range server.SummaryRefs {
-		links++
+	for _, e := range server.Relationships {
+		if !e.IsList && !strings.Contains(e.Field, ".") {
+			links++
+		}
 	}
 	for _, m := range server.Subgraph {
 		switch {

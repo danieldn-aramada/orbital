@@ -96,13 +96,13 @@ func containsString(haystack []string, needle string) bool {
 	return false
 }
 
-// genericDetailQuery selects the entity's own fields, a link's worth of every
-// summary link row, and the page's declared SUBGRAPH.
+// genericDetailQuery selects the entity's own fields and its EDGE TREE — every
+// 1-hop relationship, the singles each one owns, and any deeper declared path.
 //
-// The subgraph is selected as a tree of its declared paths and nothing else —
-// finite by construction, so it terminates on a cyclic schema without a depth
-// guard. A hop that ENDS a declared member carries what that member renders and
-// edits; an intermediate hop carries only enough to identify it.
+// Selected as a tree and nothing else — finite by construction, so it
+// terminates on a cyclic schema without a depth guard. A hop that ENDS a member
+// carries what that member renders; an intermediate hop carries only enough to
+// identify it.
 func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View, display func(string) []string, refColumns func(string) []configitems.ViewRefColumn, orbID string) string {
 	// The interface fields are selected alongside the type's own: `version`
 	// because the editor must send it or a concurrent edit overwrites silently
@@ -123,12 +123,9 @@ func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View
 	for _, f := range v.Display {
 		add(f)
 	}
-	// SUMMARY LINK ROWS. Never in the subgraph by construction, so never
-	// selected twice.
-	for _, rc := range v.SummaryRefs {
-		sel += " " + rc.Field + " { " + idNameSel(viewOf(rc.Type)) + " }"
-	}
-	sel += subgraphTreeSelection(configitems.PathTree(v.Subgraph), v, viewOf, display, refColumns)
+	// Edges, not Subgraph: the page renders every relationship, declared or
+	// not, so the query has to fetch every relationship.
+	sel += subgraphTreeSelection(configitems.PathTree(v.Relationships), v, viewOf, display, refColumns)
 	return fmt.Sprintf("{ get%s(orbId: %q) { %s } }", v.Type, orbID, sel)
 }
 
@@ -136,7 +133,14 @@ func genericDetailQuery(v configitems.View, viewOf func(string) configitems.View
 func subgraphTreeSelection(n *configitems.PathNode, parent configitems.View, viewOf func(string) configitems.View, display func(string) []string, refColumns func(string) []configitems.ViewRefColumn) string {
 	out := ""
 	for _, c := range n.Children {
-		cv := viewOf(parent.Relations[c.Field])
+		// The member names its own type; Relations only covers the ROOT's
+		// fields, so a deeper hop resolved to the zero View and an
+		// interface-typed edge lost its `... on ConfigItem` wrapper.
+		t := parent.Relations[c.Field]
+		if c.Member != nil && c.Member.Type != "" {
+			t = c.Member.Type
+		}
+		cv := viewOf(t)
 		inner := idNameVersionSel(cv)
 		if c.Member != nil {
 			// Rendered as a row or an inline panel, and edited where declared:

@@ -14,7 +14,7 @@ import { listRows } from './helpers/generic';
 // early at the `loaded` short-circuit.
 
 test('a tab whose entity is gone says so, and stays retryable', async ({ page, request }) => {
-  const ORB = 'colo:network-device-E2ESTALE';
+  const ORB = 'colo:networkdevice-E2ESTALE';
   await request.post('/graphql', {
     data: {
       query: `mutation { addNetworkDevice(input: [{ orbId: "${ORB}", namespace: "colo", version: 1,

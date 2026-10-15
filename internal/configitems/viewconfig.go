@@ -83,6 +83,25 @@ type ViewConfig struct {
 	// a stale path.
 	SchemaVersion string `yaml:"schemaVersion,omitempty"`
 
+	// Labels map a FIELD NAME to the text the UI shows for it: the stored name
+	// on the left, the human label on the right. Django's `verbose_name`,
+	// ServiceNow's `sys_dictionary.column_label`, Salesforce's Label vs API
+	// Name — the same split every comparable system makes.
+	//
+	// Keyed by field name and NOT by type, deliberately. Django has no drift
+	// problem because a field is declared once, on its model; orbital has no
+	// such site — `wwn` exists on StorageDevice AND StorageVolume, so a
+	// per-type key means two places to state one fact, which is exactly how one
+	// read "WWN" and the other "Wwn". `types.<T>.fields.<f>.label` stays as the
+	// override for the rarer case where two types genuinely want different text.
+	//
+	// A VALUE, not a rule. A title-casing rule with an acronym table cannot
+	// render `osToIdracPassThroughEnabled` as "OS to iDRAC Pass-Through
+	// Enabled" — no rule produces the lowercase "to" or the hyphen — so the
+	// rule would always have needed declared labels on top of it. One
+	// mechanism, not two.
+	Labels map[string]string `yaml:"labels,omitempty"`
+
 	// Pages are the renderable pages, keyed by root type. 1:1 with the menu.
 	//
 	// A type ABSENT from this map has no URL and no menu entry, and a row of
@@ -119,8 +138,19 @@ type PageDecl struct {
 	// not, and live on the type.
 	FilterBy string `yaml:"filterBy,omitempty"`
 
-	// Summary is the left panel: scalars, then link rows.
-	Summary SummaryDecl `yaml:"summary,omitempty"`
+	// Hide is the page's DENY LIST: fields that do not appear on it, scalar or
+	// relationship. Everything else does — which is what keeps a relationship
+	// nobody declared from vanishing, the failure this file used to have.
+	//
+	// One list, one meaning: NOT ON THIS PAGE. A scalar named here is off the
+	// field list; a relationship named here has no tab at all, which is a
+	// different statement from a tab that renders "None." because the entity
+	// has nothing on the other end.
+	//
+	// PAGE-level, not type-level: the same type renders on several pages and
+	// the answer can differ. A type with no page of its own inherits the list
+	// of the interface page it renders on.
+	Hide []string `yaml:"hide,omitempty"`
 
 	// Subgraph is the page's SUBGRAPH: the entities connected to the root that
 	// this page shows, edits, audits and deletes. One declaration, four
@@ -130,17 +160,6 @@ type PageDecl struct {
 	// Order is display order. A list member renders as a tab, a single one as
 	// an inline panel. The audit tab is always last and is never declared.
 	Subgraph []MemberDecl `yaml:"subgraph,omitempty"`
-}
-
-// SummaryDecl is the left panel of a detail page.
-//
-// SUBTRACTIVE throughout. Every scalar shows, and so does every SINGLE
-// relationship to a ConfigItem that is not in the page's subgraph — as a link
-// row, display-only. A link row is navigation: it is never edited, audited or
-// deleted from this page. Naming a field here removes it, scalar or link.
-type SummaryDecl struct {
-	// IgnoreFields drops scalars and link rows.
-	IgnoreFields []string `yaml:"ignoreFields,omitempty"`
 }
 
 // TypeDecl is how a type renders, wherever it renders.
@@ -376,7 +395,8 @@ func RetiredKeyWarnings(file string, raw []byte) []string {
 		Pages           map[string]struct {
 			Tabs    yaml.Node `yaml:"tabs"`
 			Summary struct {
-				Refs yaml.Node `yaml:"refs"`
+				Refs         yaml.Node `yaml:"refs"`
+				IgnoreFields yaml.Node `yaml:"ignoreFields"`
 			} `yaml:"summary"`
 		} `yaml:"pages"`
 	}
@@ -393,7 +413,10 @@ func RetiredKeyWarnings(file string, raw []byte) []string {
 			out = append(out, file+": "+name+": `tabs:` is retired and ignored — list the paths under `subgraph:`")
 		}
 		if !p.Summary.Refs.IsZero() {
-			out = append(out, file+": "+name+": `summary.refs:` is retired and ignored — single relationships outside the subgraph are link rows on their own")
+			out = append(out, file+": "+name+": `summary.refs:` is retired and ignored — every relationship is a tab now")
+		}
+		if !p.Summary.IgnoreFields.IsZero() {
+			out = append(out, file+": "+name+": `summary.ignoreFields:` is retired and ignored — renamed to page-level `hide:`, which drops a scalar or a whole relationship tab")
 		}
 	}
 	return out
@@ -417,6 +440,15 @@ func MergeViewConfig(base, overlay ViewConfig) ViewConfig {
 	}
 	if overlay.SchemaVersion != "" {
 		out.SchemaVersion = overlay.SchemaVersion
+	}
+	// MERGED per key, like Pages and Types: a deployment renaming one field
+	// does not restate the rest. An overlay entry wins for that field only.
+	out.Labels = map[string]string{}
+	for k, v := range base.Labels {
+		out.Labels[k] = v
+	}
+	for k, v := range overlay.Labels {
+		out.Labels[k] = v
 	}
 	for k, v := range base.Pages {
 		out.Pages[k] = v
@@ -462,7 +494,12 @@ func (c ViewConfig) Validate(types map[string]TypeInfo, deployedVersion string) 
 	}
 
 	out := ViewConfig{
-		SchemaVersion:   c.SchemaVersion,
+		SchemaVersion: c.SchemaVersion,
+		// Carried through: this rebuilds the document field by field, so a key
+		// not named here is DROPPED in silence. `labels:` was (as `acronyms:`),
+		// and every label quietly reverted to title-casing with nothing
+		// reporting it.
+		Labels:          c.Labels,
 		Pages:           map[string]PageDecl{},
 		Types:           map[string]TypeDecl{},
 		CanonicalParent: map[string][]CanonicalParentDecl{},
@@ -568,7 +605,7 @@ func (c ViewConfig) Validate(types map[string]TypeInfo, deployedVersion string) 
 			Slug:       decl.Slug,
 			MenuWeight: decl.MenuWeight,
 			FilterBy:   decl.FilterBy,
-			Summary:    decl.Summary,
+			Hide:       decl.Hide,
 		}
 		for _, m := range decl.Subgraph {
 			if reason := validateMemberPath(types, info, typeName, m.Path); reason != "" {

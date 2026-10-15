@@ -569,87 +569,93 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 	// one detail view is open, and colliding the moment two are.
 	data.AuditPanelID = "generic-panel-audit-" + data.DomID
 	data.SubgraphOrbIDsCSV = strings.Join(subgraphOrbIDs(vs, v.Type, orbID, entity), ",")
-	// SINGLE members render inline, each as its own box; LIST members render as
-	// tabs below. A box is rendered even when its member is absent: "this
-	// cluster has no backup configured" is a fact an operator needs, and an
-	// omitted box says nothing at all.
-	for _, n := range configitems.PathTree(v.Subgraph).Children {
-		if !inlineHop(n) {
-			continue
+	// ONE ordered tab strip: every edge, in the deployed schema's order. A
+	// single edge renders as a record panel, a list edge as a table of rows.
+	// Order comes from the schema alone — `subgraph` decides scope, never
+	// layout, which is what stopped a relationship vanishing for not being
+	// declared.
+	//
+	// A panel is rendered even when its entity is absent: "this cluster has no
+	// backup configured" is a fact, and an omitted tab states nothing.
+	// A DEEPER single nests inside its parent's panel, never a tab of its own —
+	// that is what makes a wrapper like ClusterBackup legible. A deeper LIST
+	// keeps its own tab, next to the parent it hangs off:
+	// `storageControllers.storageDevices` is a table of devices, which cannot
+	// nest inside a table of controllers.
+	deeper := map[string][]configitems.ViewTab{}
+	for _, e := range v.Relationships {
+		if i := strings.Index(e.Field, "."); i >= 0 && e.IsList {
+			deeper[e.Field[:i]] = append(deeper[e.Field[:i]], e)
 		}
-		node, _ := entity[n.Field].(map[string]any)
-		data.Inline = append(data.Inline, g.inlineBox(vs, v, n, byType, node))
 	}
-	// Link rows: every single relationship outside the subgraph.
-	refLabeller := g.fieldLabeller(vs, v.Type)
-	for _, rc := range v.SummaryRefs {
-		node, _ := entity[rc.Field].(map[string]any)
-		if node == nil {
+	tree := configitems.PathTree(v.Relationships)
+	for _, e := range v.Relationships {
+		if strings.Contains(e.Field, ".") {
 			continue
 		}
-		id, _ := node["orbId"].(string)
-		name, _ := node["name"].(string)
-		if name == "" {
-			name = refLabel(id)
+		if e.IsList {
+			data.Tabs = append(data.Tabs, g.listTab(vs, v, e, byType, entity, data, orbID, label))
+		} else {
+			node, _ := entity[e.Field].(map[string]any)
+			box := g.inlineBox(vs, v, nodeFor(tree, e.Field), byType, node)
+			data.Tabs = append(data.Tabs, page.GenericTab{
+				Label: tabLabel(e.Field, label), Slug: e.Slug,
+				Field: e.Field, Panel: &box,
+			})
 		}
-		data.Refs = append(data.Refs, page.GenericRef{
-			// The VIEW's labeller, so a declared `label: OOB IP` reaches this
-			// surface too. It used to call humanFieldLabel directly, which is
-			// why the row read "Oob IP" while every other surface read "OOB IP".
-			Label: refLabeller(rc.Field),
-			// Empty when the target type has no page: that is what makes the row
-			// a dead row rather than a link to nothing.
-			Slug: rc.Slug, OrbID: id, Name: name,
-		})
-	}
-
-	for _, tab := range v.Subgraph {
-		if !tab.IsList {
-			continue
+		for _, d := range deeper[e.Field] {
+			data.Tabs = append(data.Tabs, g.listTab(vs, v, d, byType, entity, data, orbID, label))
 		}
-		rows := rowsForTab(entity, tab.Field)
-		if len(rows) == 0 {
-			// A relationship with nothing on the other end is noise on a detail
-			// page; the field list already says the relationship exists.
-			continue
-		}
-		childView := byType[tab.Type]
-		childCols := childView.Columns
-		stamped := make([]map[string]any, 0, len(rows))
-		// Each ROW is a different entity, so the proposed-change marks key on
-		// the row's own orbId. That is the same shape the field tables use, one
-		// level down — which is why loadFieldMarks needs no change: it already
-		// walks [data-field-orbid] then [data-field] within it.
-		rowValues := make(map[string]string, len(rows))
-		for _, r := range rows {
-			row := stringifyRow(r)
-			for _, c := range childCols {
-				row[c.Path] = stringify(columnValue(r, c))
-			}
-			if id, ok := r["orbId"].(string); ok && id != "" {
-				rowValues[id] = rawValuesJSON(editableSubtree(childView, r))
-			}
-			stamped = append(stamped, row)
-		}
-		data.Tabs = append(data.Tabs, page.GenericTab{
-			Label:      tabLabel(tab.Field, label),
-			Slug:       tab.Slug,
-			Field:      tab.Field,
-			IsList:     tab.IsList,
-			Columns:    columnHeaders(byType[tab.Type].ColumnFields(), g.fieldLabeller(vs, tab.Type)),
-			RefColumns: refHeaders(withoutBackReferences(vs, tabRefColumns(byType[tab.Type], data.RefColumnsDropped), stamped, v.Type, orbID), g.fieldLabeller(vs, tab.Type)),
-			// The child type's `column:` paths, so a Server rendered inside a
-			// network device's tab carries its cluster and node role exactly as
-			// it does on /servers. One annotation, every table of that type —
-			// which is what makes this cheap enough to be worth having.
-			ComputedColumns: g.columnHeadersFor(vs, childView.Columns),
-			Rows:            stamped,
-			Editable:        editableSet(childView.Fields),
-			FieldValues:     rowValues,
-		})
 	}
 
 	return g.renderFragment(c, "generic-detail", "generic-detail-content", data)
+}
+
+// nodeFor finds a top-level hop in the edge tree, so a panel can render the
+// singles nested under it.
+func nodeFor(tree *configitems.PathNode, field string) *configitems.PathNode {
+	for _, c := range tree.Children {
+		if c.Field == field {
+			return c
+		}
+	}
+	return &configitems.PathNode{Field: field}
+}
+
+// listTab renders one list edge as a table of its rows.
+func (g *GenericRenderer) listTab(vs configitems.ViewSet, v configitems.View, tab configitems.ViewTab, byType map[string]configitems.View, entity map[string]any, data page.GenericDetail, orbID string, label func(string) string) page.GenericTab {
+	rows := rowsForTab(entity, tab.Field)
+	childView := byType[tab.Type]
+	childCols := childView.Columns
+	stamped := make([]map[string]any, 0, len(rows))
+	// Each ROW is a different entity, so the proposed-change marks key on the
+	// row's own orbId — the same shape the field tables use one level down.
+	rowValues := make(map[string]string, len(rows))
+	for _, r := range rows {
+		row := stringifyRow(r)
+		for _, c := range childCols {
+			row[c.Path] = stringify(columnValue(r, c))
+		}
+		if id, ok := r["orbId"].(string); ok && id != "" {
+			rowValues[id] = rawValuesJSON(editableSubtree(childView, r))
+		}
+		stamped = append(stamped, row)
+	}
+	return page.GenericTab{
+		Label:      tabLabel(tab.Field, label),
+		Slug:       tab.Slug,
+		Field:      tab.Field,
+		IsList:     tab.IsList,
+		Columns:    columnHeaders(childView.ColumnFields(), g.fieldLabeller(vs, tab.Type)),
+		RefColumns: refHeaders(withoutBackReferences(vs, tabRefColumns(childView, data.RefColumnsDropped), stamped, v.Type, orbID), g.fieldLabeller(vs, tab.Type)),
+		// The child type's `column:` paths, so a Server rendered inside a
+		// network device's tab carries its cluster and node role exactly as it
+		// does on /servers.
+		ComputedColumns: g.columnHeadersFor(vs, childView.Columns),
+		Rows:            stamped,
+		Editable:        editableSet(childView.Fields),
+		FieldValues:     rowValues,
+	}
 }
 
 // attachGenericEditor wires the shared edit modal onto a generic detail page.
@@ -1133,7 +1139,7 @@ func (g *GenericRenderer) inlineBox(views configitems.ViewSet, parent configitem
 // inlineFields is one box's own rows. A nil node is an absent member: the box
 // keeps its label and shows nothing else.
 func (g *GenericRenderer) inlineFields(views configitems.ViewSet, cv configitems.View, field string, node map[string]any) page.GenericInline {
-	box := page.GenericInline{Label: humanFieldLabel(field), Slug: cv.Slug}
+	box := page.GenericInline{Label: cv.Labeller()(field), Slug: cv.Slug}
 	if node == nil {
 		return box
 	}
@@ -1145,12 +1151,20 @@ func (g *GenericRenderer) inlineFields(views configitems.ViewSet, cv configitems
 	for _, f := range cv.Fields {
 		editable[f] = true
 	}
+	isJSON := make(map[string]bool, len(cv.JSONString))
+	for _, f := range cv.JSONString {
+		isJSON[f] = true
+	}
 	for _, f := range cv.Display {
 		val := ""
-		if sv := stringify(node[f]); sv != nil {
+		raw := node[f]
+		if isJSON[f] {
+			raw = prettyJSON(raw)
+		}
+		if sv := stringify(raw); sv != nil {
 			val = fmt.Sprintf("%v", sv)
 		}
-		row := page.MetaRow{Label: label(f), Value: val}
+		row := page.MetaRow{Label: label(f), Value: val, Blob: isJSON[f]}
 		if editable[f] {
 			row.Field = f
 		}

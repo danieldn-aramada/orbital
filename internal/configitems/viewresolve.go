@@ -65,12 +65,16 @@ func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg
 		// THE SUBGRAPH, in declared order. A type with no page has none.
 		subgraph := make([]ViewTab, 0, len(page.Subgraph))
 		inSubgraph := map[string]bool{}
+		// Editability of a 1-hop member, for the derived edge list below. Scope
+		// is still declared; only placement stopped being.
+		editableSubgraph := map[string]bool{}
 		for _, m := range page.Subgraph {
 			target, isList, ok := walkMemberPath(types, info, m.Path)
 			if !ok {
 				continue
 			}
 			inSubgraph[m.Path] = true
+			editableSubgraph[m.Path] = m.Editable
 			subgraph = append(subgraph, ViewTab{
 				Field:      m.Path,
 				Type:       target,
@@ -81,16 +85,9 @@ func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg
 			})
 		}
 
-		// THE SUMMARY LINK ROWS. Derived: every single relationship to a
-		// ConfigItem that the subgraph does not already render and the page
-		// does not ignore. Navigation only — a link row is never edited,
-		// audited or deleted from here, which is what keeps a server's data
-		// centre out of its delete.
-		//
 		// A concrete type with no page of its own renders on its INTERFACE's
-		// page (an EksaKubernetesCluster on /clusters), and its own single
-		// relationships — tinkerbellIP, managementCluster — are rows there too,
-		// so it derives them against that page's declaration.
+		// page (an EksaKubernetesCluster on /clusters), so it derives its relationships
+		// against that page's declaration.
 		layout, hasLayout := page, isPage
 		if !hasLayout {
 			for _, in := range info.Implements {
@@ -98,25 +95,39 @@ func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg
 					layout, hasLayout = p, true
 					for _, m := range p.Subgraph {
 						inSubgraph[m.Path] = true
+						editableSubgraph[m.Path] = m.Editable
 					}
 					break
 				}
 			}
 		}
-		summaryRefs := []ViewRefColumn{}
-		ignored := map[string]bool{}
-		for _, f := range layout.Summary.IgnoreFields {
-			ignored[f] = true
+		// RELATIONSHIPS: every 1-hop relationship to a ConfigItem, which is what
+		// the detail page renders as tabs. DERIVED — `subgraph` declares SCOPE
+		// (edit/audit/delete), never visibility, so a relationship nobody
+		// declared still appears. It used to decide both, and the cell that fell
+		// through — a LIST outside the subgraph — rendered nowhere at all
+		// (EksaKubernetesCluster.workloadClusters).
+		//
+		// Order is the deployed schema's own, which puts an interface's fields
+		// before the implementation's. `summary.ignoreFields` is the one opt-out.
+		rels := []ViewTab{}
+		hidden := map[string]bool{}
+		for _, f := range layout.Hide {
+			hidden[f] = true
 		}
 		if hasLayout {
 			for _, f := range info.Fields {
-				if f.Kind == "SCALAR" || f.Kind == "ENUM" || f.IsList || inSubgraph[f.Name] || ignored[f.Name] {
+				if f.Kind == "SCALAR" || f.Kind == "ENUM" || hidden[f.Name] {
 					continue
 				}
 				if _, isConfigItem := types[f.TypeName]; !isConfigItem {
 					continue
 				}
-				summaryRefs = append(summaryRefs, ViewRefColumn{Field: f.Name, Type: f.TypeName, Slug: pageSlug(cfg, f.TypeName)})
+				rels = append(rels, ViewTab{
+					Field: f.Name, Type: f.TypeName, Slug: pageSlug(cfg, f.TypeName),
+					IsList: f.IsList, Editable: editableSubgraph[f.Name],
+					ParentEdge: parentEdgeOf(types, info, name, f.Name, inverse),
+				})
 			}
 		}
 
@@ -140,7 +151,53 @@ func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg
 			refCols = append(refCols, ViewRefColumn{Field: r, Type: f.TypeName, Slug: pageSlug(cfg, f.TypeName)})
 		}
 
-		display := ApplyOrder(displayScalars(info, ifaceFields, td.IgnoreFields(page)), td.Order)
+		// One level down, for the singles an edge OWNS. A wrapper node has no
+		// scalars of its own — ClusterBackup is etcd/velero/s3Sync and nothing
+		// else — so its tab would be blank without this. Ownership is the
+		// project's existing test: the child declares a NON-NULL edge back.
+		// That is what separates `backup.etcd` (owned, nests) from
+		// `rack.dataCenter` (an owner, not a child — it would just echo the
+		// page's own Data Center tab).
+		for _, e := range rels {
+			if e.IsList {
+				continue
+			}
+			ci, ok := types[e.Type]
+			if !ok {
+				continue
+			}
+			for _, g := range ci.Fields {
+				if g.Kind == "SCALAR" || g.Kind == "ENUM" || g.IsList {
+					continue
+				}
+				if _, isConfigItem := types[g.TypeName]; !isConfigItem {
+					continue
+				}
+				if !ownsChild(types, e.Type, g.TypeName) {
+					continue
+				}
+				path := e.Field + "." + g.Name
+				rels = append(rels, ViewTab{
+					Field: path, Type: g.TypeName, Slug: pageSlug(cfg, g.TypeName),
+					Editable:   editableSubgraph[path],
+					ParentEdge: parentEdgeOf(types, info, name, path, inverse),
+				})
+			}
+		}
+		// Declared paths the derivation does not reach — a list under a list,
+		// like `storageControllers.storageDevices`. Scope still declares those,
+		// and they render where they always did.
+		have := map[string]bool{}
+		for _, e := range rels {
+			have[e.Field] = true
+		}
+		for _, m := range subgraph {
+			if !have[m.Field] {
+				rels = append(rels, m)
+			}
+		}
+
+		display := ApplyOrder(displayScalars(info, ifaceFields, td.Hidden(page)), td.Order)
 
 		v := View{
 			IsInterface:     info.IsInterface,
@@ -149,9 +206,9 @@ func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg
 			TableHidden:     tableHiddenFields(info, td),
 			JSONString:      JSONStringFieldsFor(info),
 			Order:           td.Order,
-			Labels:          labelsFor(td),
+			Labels:          labelsFor(td, cfg.Labels),
 			Meta:            metaFields(ifaceFields),
-			SummaryRefs:     summaryRefs,
+			Relationships:   rels,
 			RefColumns:      refCols,
 			Slug:            slug,
 			Type:            name,
@@ -206,15 +263,15 @@ func pageSlug(cfg ViewConfig, typeName string) string {
 	return DerivedSlug(typeName)
 }
 
-// IgnoreFields is the page's subtractive scalar list. It lives on the PAGE
-// rather than the type because hiding a field is a decision about one screen —
-// and a type without a page has nothing to hide it from.
-func (d TypeDecl) IgnoreFields(page PageDecl) map[string]bool {
-	if len(page.Summary.IgnoreFields) == 0 {
+// Hidden is the page's deny list, as a set. On the PAGE rather than the type
+// because hiding is a decision about one screen — and a type without a page has
+// nothing to hide it from.
+func (d TypeDecl) Hidden(page PageDecl) map[string]bool {
+	if len(page.Hide) == 0 {
 		return nil
 	}
-	out := make(map[string]bool, len(page.Summary.IgnoreFields))
-	for _, f := range page.Summary.IgnoreFields {
+	out := make(map[string]bool, len(page.Hide))
+	for _, f := range page.Hide {
 		out[f] = true
 	}
 	return out
@@ -423,8 +480,13 @@ func tableHiddenFields(info TypeInfo, decl TypeDecl) []string {
 // carried a per-type label even when this was a schema annotation. Merged here
 // rather than at every read site, so a caller asking for a label never has to
 // know which of the two declared it.
-func labelsFor(decl TypeDecl) map[string]string {
+// labelsFor folds the document's global field labels together with this type's
+// own overrides. The per-type label WINS: it is the narrower statement.
+func labelsFor(decl TypeDecl, global map[string]string) map[string]string {
 	out := map[string]string{}
+	for name, l := range global {
+		out[name] = l
+	}
 	for name, fd := range decl.Fields {
 		if fd.Label != "" {
 			out[name] = fd.Label
@@ -608,6 +670,21 @@ type PathNode struct {
 	Field    string
 	Member   *ViewTab // the declared member ending here, or nil for an intermediate hop
 	Children []*PathNode
+}
+
+// ownsChild answers whether `parent` OWNS `child`, by the project's existing
+// test: the child declares a non-null single edge back at the parent.
+func ownsChild(types map[string]TypeInfo, parent, child string) bool {
+	ci, ok := types[child]
+	if !ok {
+		return false
+	}
+	for _, f := range ci.Fields {
+		if f.TypeName == parent && !f.IsList && f.NonNull {
+			return true
+		}
+	}
+	return false
 }
 
 // PathTree folds a declared subgraph into a tree of hops.

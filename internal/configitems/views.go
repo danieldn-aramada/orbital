@@ -161,16 +161,17 @@ type View struct {
 	// agree with orbital's own headers.
 	Labels map[string]string `json:"labels,omitempty"`
 
-	// SummaryRefs are the link rows under a detail page's field list: every
-	// single relationship to a ConfigItem that is not in the subgraph and not
-	// ignored, in schema order. DERIVED, and display-only — navigation, never
-	// edited, audited or deleted from this page.
+	// Relationships are every 1-hop relationship to a ConfigItem, in the
+	// deployed schema's order — what the detail page renders as tabs.
 	//
-	// Separate from RefColumns, which is a TYPE fact — the two were briefly one
-	// field, and collapsing them emptied the reference columns of every table
-	// showing a pageless type. A NetworkInterface has no page and still needs to
-	// say which Server it belongs to when it renders as a row.
-	SummaryRefs []ViewRefColumn `json:"summaryRefs,omitempty"`
+	// DERIVED, not declared: Subgraph says what this page EDITS, audits and
+	// deletes, never what it shows. While it decided both, a list relationship
+	// outside it rendered nowhere (EksaKubernetesCluster.workloadClusters).
+	//
+	// "Relationship", not "edge": DGraph's glossary calls an edge the mental
+	// picture and a relationship "a named, directed link relating one node to
+	// another". See UI.md on the settled vocabulary.
+	Relationships []ViewTab `json:"relationships"`
 
 	// RefColumns are the SINGLE relationships rendered as an extra column when
 	// this type appears as a row ANYWHERE: a reference to another entity shows

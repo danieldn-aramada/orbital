@@ -162,6 +162,31 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ### Changed
 
+- **A detail page now shows every relationship, and Fields holds only scalars.**
+  Placement was decided by whether `config/views.yaml` declared a relationship
+  AND whether it was single or a list — and one combination rendered nowhere:
+  a cluster with a workload cluster showed no sign of it. Placement is now
+  derived from the schema (scalars in Fields, every 1-hop relationship a tab,
+  in schema order), and the `subgraph:` declaration means only what the page
+  edits, audits and deletes. Edit scope, delete preview and audit aggregation
+  are unchanged. A single relationship renders as a record panel carrying the
+  children it owns, so a wrapper like Backup still shows Etcd/Velero/S3 Sync
+  without being declared.
+  A relationship is kept off a page with the page's `hide:` list — renamed from
+  `summary.ignoreFields`, which is retired and warns. `Server` hides
+  `serverConfigurationProfile`.
+
+- **Detail-page vocabulary is settled: Attributes, Metadata, Relationships.** The
+  first box was "Fields", which contradicted the schema it is built from — in
+  GraphQL a relationship is a field too. The tab strip had no heading at all.
+  Field labels moved to config: a top-level `labels:` map in
+  `config/views.yaml` gives the stored field name and the text to display, the
+  same split Django, ServiceNow and Salesforce make. An unlisted field derives
+  mechanically from its name. Ten per-type `label:` overrides are gone,
+  including one declared on StorageDevice.wwn but not StorageVolume.wwn, which
+  rendered the same field two ways. A deployment relabels fields in a views
+  overlay, which merges per field.
+
 - **Seed data is no longer in the repository.** `examples/seed/` and
   `examples/seed-backup/` held real site names, Dell service tags and MAC
   addresses, and are gitignored ahead of open-sourcing. They stay on disk, so
