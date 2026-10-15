@@ -22,8 +22,13 @@
 # TWO RULES
 #   scalars        SUBTRACTIVE — a field added to the schema shows up on its own.
 #                  Four keys remove or shape one, each naming its own surface:
-#                    summary.ignoreFields   gone entirely (page-level) — also
-#                                           removes a derived link row
+#                    hide                   gone entirely (page-level) — the
+#                                           page's DENY LIST. Names a scalar or
+#                                           a whole relationship: a hidden
+#                                           relationship has NO TAB, which is a
+#                                           different statement from a tab that
+#                                           renders "None." because nothing is
+#                                           on the other end.
 #                    fields.<f>.tableHidden gone from TABLE columns — the list
 #                                           page and relationship tabs alike.
 #                                           Still shown in the detail summary.
@@ -51,6 +56,41 @@
 
 schemaVersion: v14
 
+# FIELD LABELS — the stored field name on the left, the text the UI shows on
+# the right. Django's `verbose_name`, ServiceNow's `column_label`, Salesforce's
+# Label vs API Name: the same split every comparable system makes.
+#
+# A field NOT listed here derives mechanically (camelCase -> "Camel Case").
+# That default is deliberate and transparent; this file states only what the
+# derivation gets wrong.
+#
+# Keyed by FIELD NAME, not by type: `wwn` is on StorageDevice and
+# StorageVolume, and a per-type key meant two places to state one fact — which
+# is how one page read "WWN" and the other "Wwn".
+# `types.<T>.fields.<f>.label` overrides this for the rarer case where two
+# types genuinely want different text (NetworkDevice.networkInterfaces: Ports).
+#
+# A VALUE, not a rule. A title-casing rule with an acronym table cannot produce
+# "OS to iDRAC Pass-Through Enabled" — no rule yields the lowercase "to" or the
+# hyphen — so a rule would always have needed declared labels on top of it.
+labels:
+  orbId: Orb ID
+  cni: CNI
+  gpu: GPU
+  wwn: WWN
+  macAddress: MAC Address
+  oobIP: OOB IP
+  oobMAC: OOB MAC
+  idracSettings: iDRAC Settings
+  sshEnabled: SSH Enabled
+  dhcpEnabled: DHCP Enabled
+  ipmiEnabled: IPMI Enabled
+  racadmEnabled: RACADM Enabled
+  usbManagementPortEnabled: USB Management Port Enabled
+  osToIdracPassThroughEnabled: OS to iDRAC Pass-Through Enabled
+  vcPosition: VC Position
+  vcPriority: VC Priority
+
 pages:
 
   DataCenter:
@@ -64,16 +104,10 @@ pages:
   Server:
     menuWeight: 20
     filterBy: dataCenter
+    hide: [serverConfigurationProfile]
     subgraph:
       - { path: idracSettings, editable: true }
       - { path: serverMaintenance, editable: true }
-      # OWNED, not referenced: every allocated IP has exactly one owner
-      # (verified 2026-10-13 — 281 of 304, none shared), and an `oob` IP is
-      # tied to its server. Subgraph membership means it is created with the
-      # server, edited from it, and DELETED with it, which is what "this
-      # server's management address" should mean.
-      # ⚠️ NOT orbital claiming IPAM. CLAUDE.md scopes general network IPs to
-      # an external system; functional IPs tied to a workload are in scope.
       - { path: oobIP, editable: true }
       - kubernetesNode
       - storageControllers
@@ -104,7 +138,6 @@ types:
 
   ConfigItem:
     fields:
-      orbId: { label: Orb ID }
 
   DataCenter:
     columns:
@@ -116,10 +149,6 @@ types:
       model:
         createHidden: true
       name:
-        # `editable: true` re-admits it from the ConfigItem interface so the
-        # CREATE form offers it; `createOnly` then freezes it afterwards. The
-        # orbId is `{name}` and orbIds are immutable, so editing it later
-        # leaves the entity disagreeing with its own id.
         editable: true
         createOnly: true
 
@@ -134,10 +163,6 @@ types:
       usbManagementPortEnabled: { createDefault: "true" }
 
   ServerMaintenance:
-    # A new server is not in maintenance, so only the switch is worth asking
-    # about up front. The window and reason stay editable — they are just not
-    # part of CREATING a server, and a maintenance window typed at the moment a
-    # machine is first recorded is a guess.
     fields:
       enabled: { createDefault: "false" }
       reason: { createHidden: true }
@@ -147,8 +172,6 @@ types:
 
   IPAddress:
     fields:
-      # createOnly, not editable:false — an address must be typed to create
-      # the IP (the orbId is `{address}`) and must never change after.
       address: { createOnly: true }
       role: { editable: false }
       type: { editable: false }
@@ -159,7 +182,6 @@ types:
       - nodes.count
     order: [name, provider, clusterType, environment, kubernetesVersion]
     fields:
-      cni: { label: CNI }
       description: { editable: false, tableHidden: true }
       provider: { editable: false }
 
@@ -168,7 +190,7 @@ types:
   KubernetesNode:
     refColumns: [server]
     fields:
-      gpu: { label: GPU, editable: false, tableHidden: true }
+      gpu: { editable: false, tableHidden: true }
       notes: { editable: false, tableHidden: true }
       owner: { editable: false, tableHidden: true }
       role: { editable: false }
@@ -183,17 +205,14 @@ types:
   NetworkDevice:
     refColumns: [dataCenter, rack]
     fields:
-      # createOnly — the orbId is `network-device-{serial}` and orbIds are
-      # immutable.
       serial: { createOnly: true }
-      macAddress: { label: MAC Address }
       networkInterfaceConnectedNetworkDevice: { label: Connections }
       networkInterfaces: { label: Ports }
       face: { tableHidden: true }
       platform: { tableHidden: true }
       rackPosition: { tableHidden: true }
-      vcPosition: { label: VC Position, tableHidden: true }
-      vcPriority: { label: VC Priority, tableHidden: true }
+      vcPosition: { tableHidden: true }
+      vcPriority: { tableHidden: true }
 
   NetworkInterface:
     refColumns: [server, networkAdapter, connectedNetworkDevice]
@@ -204,7 +223,7 @@ types:
     fields:
       connectedNetworkDevicePort: { editable: false }
       linkSpeedMbps: { editable: false }
-      macAddress: { label: MAC Address, editable: false }
+      macAddress: { editable: false }
       mgmtOnly: { editable: false, tableHidden: true }
       portType: { editable: false }
 
@@ -212,11 +231,7 @@ types:
     columns:
       - servers.count
     fields:
-      # createOnly — the orbId is `rack-{name}` and orbIds are immutable.
       name: { editable: true, createOnly: true }
-      # 42U is the standard full-height rack, and what colo's racks carry.
-      # A SUGGESTION on the create form, not a value written behind anyone's
-      # back — the reader sees it and can change it.
       uHeight: { createDefault: "42" }
 
   Server:
@@ -227,15 +242,9 @@ types:
       - kubernetesNode.role
       - kubernetesNode.gpu
     fields:
-      # createOnly — the orbId is `server-{serviceTag}`. Editing it later leaves
-      # the id encoding the OLD tag, and a scan rebuilding that id mints a
-      # SECOND server for the same machine.
       serviceTag: { createOnly: true }
-      # Re-pointable, NOT an owned child — a subgraph member is deleted with
-      # its parent, which would delete the rack with the server.
       rack: { editable: true }
-      oobIP: { label: OOB IP }
-      oobMAC: { label: OOB MAC, tableHidden: true }
+      oobMAC: { tableHidden: true }
       manufacturer: { tableHidden: true, createDefault: Dell }
       model: { createDefault: PowerEdge R450 }
       serialNumber: { tableHidden: true }
@@ -252,7 +261,7 @@ types:
       manufacturer: { editable: false }
       model: { editable: false, tableHidden: true }
       serialNumber: { editable: false }
-      wwn: { label: WWN, editable: false }
+      wwn: { editable: false }
 
   StorageVolume:
     fields:

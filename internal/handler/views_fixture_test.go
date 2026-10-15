@@ -29,10 +29,20 @@ func fixtureViewSet() configitems.ViewSet {
 		m("nodes", "KubernetesNode", true, false),
 	}
 	clusterRelations := map[string]string{"backup": "ClusterBackup", "nodes": "KubernetesNode", "dataCenter": "DataCenter"}
+	// Edges are what the page RENDERS — every relationship, declared or not.
+	// The resolver derives them; this fixture states them, so a query test sees
+	// the same shape production does.
+	clusterEdges := append([]configitems.ViewTab{m("dataCenter", "DataCenter", false, false)}, clusterSubgraph...)
 	return configitems.ViewSet{
 		{Type: "Server", Slug: "servers", Relations: map[string]string{
 			"dataCenter": "DataCenter", "idracSettings": "IdracSettings",
 			"serverMaintenance": "ServerMaintenance", "storageControllers": "StorageController",
+		}, Relationships: []configitems.ViewTab{
+			m("dataCenter", "DataCenter", false, false),
+			m("idracSettings", "IdracSettings", false, true),
+			m("serverMaintenance", "ServerMaintenance", false, true),
+			m("storageControllers", "StorageController", true, false),
+			m("storageControllers.storageDevices", "StorageDevice", true, false),
 		}, Subgraph: []configitems.ViewTab{
 			m("idracSettings", "IdracSettings", false, true),
 			m("serverMaintenance", "ServerMaintenance", false, true),
@@ -41,6 +51,9 @@ func fixtureViewSet() configitems.ViewSet {
 		}},
 		{Type: "DataCenter", Slug: "data-centers", Relations: map[string]string{
 			"servers": "Server", "racks": "Rack",
+		}, Relationships: []configitems.ViewTab{
+			m("servers", "Server", true, false),
+			m("racks", "Rack", true, false),
 		}, Subgraph: []configitems.ViewTab{
 			m("servers", "Server", true, false),
 			m("racks", "Rack", true, false),
@@ -55,8 +68,8 @@ func fixtureViewSet() configitems.ViewSet {
 		// cluster's back-reference column being kept.
 		{Type: "KubernetesCluster", Slug: "clusters", IsInterface: true,
 			Implementations: []string{"EksaKubernetesCluster"},
-			Relations:       clusterRelations, Subgraph: clusterSubgraph},
-		{Type: "EksaKubernetesCluster", Relations: clusterRelations},
+			Relations:       clusterRelations, Relationships: clusterEdges, Subgraph: clusterSubgraph},
+		{Type: "EksaKubernetesCluster", Relations: clusterRelations, Relationships: clusterEdges},
 		{Type: "ClusterBackup", Relations: map[string]string{"etcd": "EtcdBackup", "velero": "VeleroBackup", "s3Sync": "S3Sync"}},
 		{Type: "KubernetesNode"},
 		{Type: "EtcdBackup"},

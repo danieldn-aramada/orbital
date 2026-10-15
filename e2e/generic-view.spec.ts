@@ -168,7 +168,7 @@ test('a relationship table shows the child type\'s computed columns', async ({ p
 // coverage asserted on the data centre page instead, which passes without
 // testing the thing that was lost.
 test('a network device shows what its connected servers do', async ({ page }) => {
-  await page.goto('/network-devices?open=' + encodeURIComponent('colo:network-device-JX3623130496'));
+  await page.goto('/network-devices?open=' + encodeURIComponent('colo:networkdevice-JX3623130496'));
   await expect(page.getByTestId('generic-fields')).toBeVisible({ timeout: 15_000 });
   await openAllDetailPanels(page);
 
@@ -187,4 +187,27 @@ test('a network device shows what its connected servers do', async ({ page }) =>
     (await conns.locator('tbody tr').all()).map(r => r.locator('td').nth(idx).innerText()));
   expect(values.some(v => v.trim() !== '' && v.trim() !== '—'),
     'no connected port resolved a cluster — the path is not being fetched').toBeTruthy();
+});
+
+// An absent relationship states that it is absent — in the same words the list
+// tabs beside it use. A heading over an empty panel reads as a panel that
+// failed to load, which is how this shipped: a list said "None." and an absent
+// single said nothing at all.
+test('an absent relationship says so, and a wrapper with children does not', async ({ page }) => {
+  await page.goto('/servers?open=' + encodeURIComponent('2f-uae:server-abc123'));
+  await openAllDetailPanels(page);
+
+  // `rack` is null on this server, and a list with no rows already said "None."
+  const rack = page.getByTestId('generic-owned').filter({ hasText: 'Rack' }).first();
+  await expect(rack).toContainText('None.');
+  await expect(page.getByTestId('generic-tab').filter({ hasText: 'Network Adapters' }).first())
+    .toContainText('None.');
+
+  // A panel with CHILDREN is not empty even when the wrapper itself is unset:
+  // an unconfigured ClusterBackup still has to list what could be configured.
+  await page.goto('/clusters?open=' + encodeURIComponent('alaska-dot-cruiser:adot-m'));
+  await openAllDetailPanels(page);
+  const backup = page.getByTestId('generic-owned').filter({ hasText: 'Backup' }).first();
+  await expect(backup).toContainText('Etcd');
+  await expect(backup).not.toContainText('None.');
 });

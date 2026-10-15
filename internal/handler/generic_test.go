@@ -48,7 +48,6 @@ func TestHumanFieldLabel(t *testing.T) {
 		{"kubernetesVersion", "Kubernetes Version"},
 		{"tinkerbellIP", "Tinkerbell IP"},
 		{"controlPlaneEndpoint", "Control Plane Endpoint"},
-		{"oobIP", "Oob IP"},
 		{"ipv4", "Ipv4"},
 		{"s3Sync", "S3 Sync"},
 		{"IPAddress", "IP Address"},
@@ -60,6 +59,39 @@ func TestHumanFieldLabel(t *testing.T) {
 				t.Errorf("humanFieldLabel(%q) = %q, want %q", tt.field, got, tt.want)
 			}
 		})
+	}
+}
+
+// The ALGORITHM is in Go; the LABEL is config. This pins the seam: a field the
+// document names renders that text, a field it does not derives mechanically.
+//
+// The regression this catches is a vocabulary table creeping back into the
+// binary. One did, briefly, and it was wrong twice over: an adopter modelling
+// PDUs or iLO cannot edit the binary, and no title-casing rule can produce
+// "OS to iDRAC Pass-Through Enabled" — the lowercase "to" and the hyphen come
+// from a declared value or from nowhere.
+func TestLabeller_TextComesFromConfigNotCode(t *testing.T) {
+	v := configitems.View{Labels: map[string]string{
+		"idracSettings":               "iDRAC Settings",
+		"wwn":                         "WWN",
+		"osToIdracPassThroughEnabled": "OS to iDRAC Pass-Through Enabled",
+		"pduSettings":                 "PDU Settings",
+	}}
+	label := v.Labeller()
+	for _, tt := range []struct{ in, want string }{
+		{"idracSettings", "iDRAC Settings"},
+		{"wwn", "WWN"},
+		// The case no rule can reach.
+		{"osToIdracPassThroughEnabled", "OS to iDRAC Pass-Through Enabled"},
+		// An ADOPTER's field, which orbital ships no knowledge of.
+		{"pduSettings", "PDU Settings"},
+		// Undeclared fields derive mechanically, and that is the default.
+		{"serviceTag", "Service Tag"},
+		{"racadmEnabled", "Racadm Enabled"},
+	} {
+		if got := label(tt.in); got != tt.want {
+			t.Errorf("label(%q) = %q, want %q", tt.in, got, tt.want)
+		}
 	}
 }
 
@@ -127,16 +159,18 @@ func TestListColumns_UnionsImplementationColumns(t *testing.T) {
 	}
 }
 
-// Acceptance 7: a relationship to an INTERFACE is selected in a form DGraph
-// accepts — as a link row AND as a subgraph member. A bare `orbId` off an
-// interface is rejected at validation, which fails the WHOLE query and takes
-// the page with it.
+// A relationship to an INTERFACE is selected in a form DGraph accepts, whether
+// or not the subgraph declares it. A bare `orbId` off an interface is rejected
+// at validation, which fails the WHOLE query and takes the page with it.
 func TestGenericDetailQuery_InterfaceTypedRelationship(t *testing.T) {
 	dc := configitems.View{
-		Type:        "DataCenter",
-		Relations:   map[string]string{"kubernetesClusters": "KubernetesCluster"},
-		SummaryRefs: []configitems.ViewRefColumn{{Field: "primaryCluster", Type: "KubernetesCluster", Slug: "clusters"}},
-		Subgraph:    []configitems.ViewTab{{Field: "kubernetesClusters", Type: "KubernetesCluster", IsList: true}},
+		Type:      "DataCenter",
+		Relations: map[string]string{"kubernetesClusters": "KubernetesCluster"},
+		Relationships: []configitems.ViewTab{
+			{Field: "primaryCluster", Type: "KubernetesCluster", Slug: "clusters"},
+			{Field: "kubernetesClusters", Type: "KubernetesCluster", IsList: true},
+		},
+		Subgraph: []configitems.ViewTab{{Field: "kubernetesClusters", Type: "KubernetesCluster", IsList: true}},
 	}
 	viewOf := func(name string) configitems.View {
 		if name == "KubernetesCluster" {
@@ -147,11 +181,13 @@ func TestGenericDetailQuery_InterfaceTypedRelationship(t *testing.T) {
 	q := genericDetailQuery(dc, viewOf, func(string) []string { return nil },
 		func(string) []configitems.ViewRefColumn { return nil }, "ns:dc-1")
 
-	if !strings.Contains(q, "primaryCluster { __typename ... on ConfigItem { orbId name }") {
-		t.Errorf("an interface-typed link row must select identity through ConfigItem: %s", q)
-	}
-	if !strings.Contains(q, "kubernetesClusters { __typename ... on ConfigItem { orbId name version }") {
-		t.Errorf("an interface-typed subgraph member must select identity through ConfigItem: %s", q)
+	for _, want := range []string{
+		"primaryCluster { __typename ... on ConfigItem { orbId name version }",
+		"kubernetesClusters { __typename ... on ConfigItem { orbId name version }",
+	} {
+		if !strings.Contains(q, want) {
+			t.Errorf("an interface-typed edge must select identity through ConfigItem, declared or not: %s", q)
+		}
 	}
 }
 

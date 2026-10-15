@@ -11,7 +11,7 @@ import { listRows } from './helpers/generic';
 // (`tab-close-srv-…`, `btn-reload-servers`, `tab-content-<dcDomId>`). A generic
 // page has none of them, so no branch matched and the success path did nothing.
 
-const ORB = 'colo:network-device-E2EDELETE';
+const ORB = 'colo:networkdevice-E2EDELETE';
 
 async function seed(request: any) {
   await request.post('/graphql', {

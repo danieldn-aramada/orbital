@@ -173,6 +173,10 @@ type GenericTab struct {
 	Field  string
 	IsList bool
 
+	// Panel is set for a SINGLE edge: one record, rendered as field tables
+	// rather than rows. Nil for a list edge, which renders Rows below.
+	Panel *GenericInline
+
 	// Columns are the related type's display fields, so a relationship renders
 	// as a table of the child's own data rather than a list of names.
 	Columns []ColumnHeader
@@ -216,6 +220,11 @@ type MetaRow struct {
 	// decision is the server's because it knows the field's SCHEMA TYPE;
 	// sniffing the string shape in the template would guess.
 	IsTimestamp bool
+
+	// Blob marks a `jsonString` field, rendered pretty-printed in its own
+	// scrolling block — same treatment the root's FieldRow gets. Without it a
+	// 600-character document renders as one line and pushes the panel sideways.
+	Blob bool
 }
 
 // GenericRef is one single-valued relationship, rendered as a link.
