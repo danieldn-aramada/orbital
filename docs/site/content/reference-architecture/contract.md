@@ -1,6 +1,6 @@
 ---
 description: >-
-  The two API surfaces Orbital guarantees at its boundary — exporting intent for a site, and collecting divergence reports back.
+  The two API surfaces Orbital guarantees at its boundary — exporting intent for a data center, and collecting divergence reports back.
 sidebar_label: The contract
 sidebar_position: 1
 ---
@@ -17,11 +17,11 @@ Everything past Orbital's boundary is yours. These are the two surfaces Orbital 
 | Check or list jobs | `GET /api/v1/export/jobs`, `GET /api/v1/export/jobs/{id}` |
 | Retrieve the artifact | `GET /api/v1/export/jobs/{id}/download` |
 
-An export covers **one namespace** — one site.
+An export covers **one namespace** — one data center.
 
 ```json title="POST /api/v1/export"
 {
-  "orbId": "seattle:dc-01",
+  "orbId": "docs-example:datacenter-docs-example",
   "download": false
 }
 ```
@@ -31,7 +31,7 @@ An export covers **one namespace** — one site.
 The artifact carries the configuration graph as `data.json.gz` and the schema that describes it as `schema.gz`.
 
 :::note
-The schema travels with the data. A site can read an export without asking Orbital what the fields mean, which is what lets an artifact arrive on removable media and still be usable.
+The schema travels with the data. A data center can read an export without asking Orbital what the fields mean, which is what lets an artifact arrive on removable media and still be usable.
 :::
 
 ## Inbound — divergence reports
@@ -43,13 +43,13 @@ The schema travels with the data. A site can read an export without asking Orbit
 | List divergences | `GET /api/v1/divergences` | Orbital |
 | Resolve one | `PUT /api/v1/divergences/{id}/resolution` | Orbital |
 
-A report is the site's full current divergence set, not a delta:
+A report is the data center's full current divergence set, not a delta:
 
 ```json title="POST /api/v1/divergence"
 {
   "overrides": [
     {
-      "orbId": "seattle:idrac-CFRHDX3",
+      "orbId": "docs-example:DOCS001-idrac",
       "field": "sshEnabled",
       "type": "IdracSettings",
       "intendedValue": false,
@@ -65,6 +65,6 @@ Sending the whole set each time is deliberate. A field that stops appearing has 
 
 An empty `overrides` array is valid and means everything agrees.
 
-Orbital never initiates contact with a site. Reports are published outward by the site, and Orbital collects them.
+Orbital never initiates contact with a data center. Reports are published outward by the edge, and Orbital collects them.
 
-That direction is not an implementation detail. It is what lets a site sit behind a one-way boundary, or be unreachable for a week, without anything breaking.
+That direction is not an implementation detail. It is what lets a data center sit behind a one-way boundary, or be unreachable for a week, without anything breaking.

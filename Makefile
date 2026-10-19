@@ -32,7 +32,7 @@ TEST_PKGS := $(shell go list ./... | grep -vE '(/ent$$|/ent/|/docs$$)')
 ACR          := armadaeksatest.azurecr.io
 IMAGE        := $(ACR)/orbital:$(SERVER_VERSION)
 
-.PHONY: help up down run-orbital run-orb seed fmt build test-unit test-integration test-e2e test-e2e-ui release-check release-check-down edge-up edge-down docs build-css build-orbctl push seed-aks seed-aks-dgraph seed-aks-postgres smoke-aks dev-deps
+.PHONY: help up down run-orbital run-orb seed fmt build test-unit test-integration test-e2e test-e2e-ui docs-screenshots release-check release-check-down edge-up edge-down docs build-css build-orbctl push seed-aks seed-aks-dgraph seed-aks-postgres smoke-aks dev-deps
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -167,6 +167,9 @@ test-e2e: ## Run Playwright UI tests for orbital + orb (requires both running; H
 
 test-e2e-ui: ## Open Playwright UI mode for interactive local test watching
 	npx playwright test --ui
+
+docs-screenshots: ## Regenerate the docs site's UI screenshots (needs make seed + orbital started with ORBITAL_VIEWS_OVERLAY_PATH=examples/docs/views-overlay.yaml)
+	npx playwright test --config=playwright.docs.config.ts
 
 e2e-divergence: ## E2E divergence flow: export→publish→orb import→SSA override→assert (requires orbital+orb+cb-bundler+cb-controller all running)
 	bash scripts/e2e-divergence.sh

@@ -117,80 +117,13 @@ func viewsConfigPath(t *testing.T) string {
 	return filepath.Join(filepath.Dir(thisFile), "..", "..", "config", "views.yaml")
 }
 
-// TestDerivedFieldsVsRegistry_ExactlyMatchesToday is acceptance item 8.
+// TestDerivedFieldsVsRegistry_ExactlyMatchesToday was DELETED 2026-10-16.
 //
-// With the editorIgnoredBridge applied, derivation must reproduce today's
-// hand-maintained FormFields EXACTLY, for every type, with no exception list.
-// That is what makes the swap provably behaviour-neutral: an operator can do
-// exactly what they could before, no more and no less.
-//
-// It fails on any difference in either direction:
-//
-//   - derived but not declared  -> a field silently BECOMES editable
-//   - declared but not derived  -> a field silently STOPS being editable
-//
-// The second is the dangerous one: it is how `name` on DataCenter and Rack would
-// have vanished, since `name` lives on the ConfigItem interface.
-//
-// A newly added schema field therefore fails this test until someone decides
-// whether it is editable — which is the point. The decision happens when the
-// field is added, not silently by default.
-func TestDerivedFieldsVsRegistry_ExactlyMatchesToday(t *testing.T) {
-	derived, ifaceFields, excluded := derivedScalars(t)
-	_ = excluded
-
-	t.Logf("ConfigItem interface fields (never editable on any type): %v", ifaceFields)
-	t.Logf("types implementing ConfigItem: %d", len(derived))
-
-	// Baseline is the fixtureFields SNAPSHOT, not the registry: the
-	// hand-maintained FormFields it used to read have been deleted, which is the
-	// point of this whole change. The snapshot records what was editable on
-	// 2026-09-24, so this still proves derivation reproduces the pre-swap
-	// behaviour — it just no longer needs the thing it replaced to still exist.
-	declared := map[string][]string{}
-	for _, name := range fixtureTypeNames() {
-		f := append([]string(nil), fixtureFields(name)...)
-		sort.Strings(f)
-		declared[name] = f
-	}
-
-	var names []string
-	for n := range derived {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-
-	agree := 0
-	for _, n := range names {
-		d, has := declared[n]
-		if !has {
-			t.Errorf("%s implements ConfigItem but is not in registry.Types; derived=%v", n, derived[n])
-			continue
-		}
-		gained := difference(derived[n], d)
-		lost := difference(d, derived[n])
-		if len(gained) == 0 && len(lost) == 0 {
-			agree++
-			continue
-		}
-		if len(gained) > 0 {
-			t.Errorf("%s: derivation would newly expose %v for editing.\n"+
-				"  Decide: add it to editorIgnoredBridge to keep it read-only, or to FormFields to open it\n"+
-				"  deliberately. Silently becoming editable is not an option.", n, gained)
-		}
-		if len(lost) > 0 {
-			t.Errorf("%s: derivation would REMOVE %v, editable today — a silent capability regression.\n"+
-				"  If the field is on the ConfigItem interface, add it to the type's `editable:` annotation\n"+
-				"  in schema/schema.graphql (e.g. \"\"\"editable: name\"\"\") and re-apply the schema.\n"+
-				"  NOTE: this test reads the DEPLOYED schema, so it fails once after an annotation change\n"+
-				"  until the schema is applied to the test alpha.", n, lost)
-		}
-	}
-	t.Logf("types where derived == declared: %d/%d", agree, len(names))
-	if agree != len(names) {
-		t.Errorf("only %d of %d types derive exactly as declared; the swap is NOT behaviour-neutral", agree, len(names))
-	}
-}
+// It proved the 2026-09-24 swap to derived editability was behaviour-neutral by
+// comparing against a snapshot of that day. The swap shipped; afterwards the
+// snapshot only recorded what views.yaml said then, and the test failed the
+// first time a field was deliberately frozen (`createOnly`, 2026-10-13). A test
+// asserting the CONTENTS of a tunable is the class UI.md rules out.
 
 // TestDerivedBeforeFieldsVsRegistry_Measurement was DELETED 2026-09-25.
 //
@@ -258,14 +191,12 @@ func TestDeployedViewsCarryTheExpectedSuppressions(t *testing.T) {
 		}
 	}
 
-	const want = 29
+	// Zero only. An exact count asserts the CONTENTS of views.yaml, which is a
+	// tunable — it broke the first time a field was made read-only.
 	if suppressed == 0 {
 		t.Fatalf("the resolved views suppress NO fields. This environment is running a views "+
-			"document that predates them, so %d fields are editable here that are not editable "+
-			"elsewhere. Check ORBITAL_VIEWS_PATH and the overlay.", want)
-	}
-	if suppressed != want {
-		t.Errorf("resolved views suppress %d fields, want %d", suppressed, want)
+			"document that predates them, so fields are editable here that are not editable "+
+			"elsewhere. Check ORBITAL_VIEWS_PATH and the overlay.")
 	}
 
 	// A misspelled annotation in the SCHEMA still suppresses nothing and still

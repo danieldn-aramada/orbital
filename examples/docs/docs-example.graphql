@@ -1,0 +1,109 @@
+# Docs example — a small, made-up data center used by the docs site and its
+# screenshots (`make docs-screenshots`). Committed, unlike examples/seed/.
+#
+# Everything lives in the `docs-example` namespace, so loading it adds to an
+# existing graph and touches nothing else. Every node is upserted by orbId, so
+# loading it twice changes nothing.
+mutation DocsExample {
+  addNamespace(input: { name: "docs-example" }, upsert: true) { numUids }
+
+  addDataCenter(input: [
+    { orbId: "docs-example:datacenter-docs-example", name: "docs-example", model: Cruiser, namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z" }
+  ], upsert: true) { numUids }
+
+  addRack(input: [
+    { orbId: "docs-example:rack-R01", name: "R01", uHeight: 42, namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+      dataCenter: { orbId: "docs-example:datacenter-docs-example", version: 1 } }
+  ], upsert: true) { numUids }
+
+  addIPAddress(input: [
+    { orbId: "docs-example:10.0.0.11", name: "10.0.0.11", address: "10.0.0.11", type: "ipv4", role: "oob", namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z" }
+    { orbId: "docs-example:10.0.0.12", name: "10.0.0.12", address: "10.0.0.12", type: "ipv4", role: "oob", namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z" }
+    { orbId: "docs-example:10.0.1.10", name: "10.0.1.10", address: "10.0.1.10", type: "ipv4", role: "k8s_api", namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z" }
+  ], upsert: true) { numUids }
+
+  addServer(input: [
+    { orbId: "docs-example:server-DOCS001", name: "docs-node-01", hostname: "docs-node-01", serviceTag: "DOCS001", serialNumber: "SN-DOCS-001", manufacturer: "Dell", model: "PowerEdge R650", rackPosition: 10, uHeight: 1,
+      namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+      dataCenter: { orbId: "docs-example:datacenter-docs-example", version: 1 },
+      rack: { orbId: "docs-example:rack-R01", version: 1 },
+      oobIP: { orbId: "docs-example:10.0.0.11", version: 1 } }
+    { orbId: "docs-example:server-DOCS002", name: "docs-node-02", hostname: "docs-node-02", serviceTag: "DOCS002", serialNumber: "SN-DOCS-002", manufacturer: "Dell", model: "PowerEdge R650", rackPosition: 11, uHeight: 1,
+      namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+      dataCenter: { orbId: "docs-example:datacenter-docs-example", version: 1 },
+      rack: { orbId: "docs-example:rack-R01", version: 1 },
+      oobIP: { orbId: "docs-example:10.0.0.12", version: 1 } }
+  ], upsert: true) { numUids }
+
+  addIdracSettings(input: [
+    { orbId: "docs-example:DOCS001-idrac", name: "DOCS001-idrac", firmwareVersion: "7.10.50.00", sshEnabled: false, ipmiEnabled: false, dhcpEnabled: false, racadmEnabled: true, lockdownModeEnabled: false, usbManagementPortEnabled: true, osToIdracPassThroughEnabled: false,
+      namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+      server: { orbId: "docs-example:server-DOCS001", version: 1 } }
+    { orbId: "docs-example:DOCS002-idrac", name: "DOCS002-idrac", firmwareVersion: "7.10.50.00", sshEnabled: false, ipmiEnabled: false, dhcpEnabled: false, racadmEnabled: true, lockdownModeEnabled: false, usbManagementPortEnabled: true, osToIdracPassThroughEnabled: false,
+      namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+      server: { orbId: "docs-example:server-DOCS002", version: 1 } }
+  ], upsert: true) { numUids }
+
+  addNetworkDevice(input: [
+    { orbId: "docs-example:networkdevice-DOCSSW01", name: "docs-tor-01", serial: "DOCSSW01", manufacturer: "Juniper", model: "EX4650-48Y", role: "tor", platform: "Junos", rackPosition: 40, face: "front",
+      namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+      dataCenter: { orbId: "docs-example:datacenter-docs-example", version: 1 },
+      rack: { orbId: "docs-example:rack-R01", version: 1 } }
+  ], upsert: true) { numUids }
+
+  addNetworkAdapter(input: [
+    { orbId: "docs-example:networkadapter-DOCS001-NIC.Integrated.1", name: "NIC.Integrated.1", manufacturer: "Broadcom", model: "BCM57414", serialNumber: "NIC-DOCS-001",
+      namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+      server: { orbId: "docs-example:server-DOCS001", version: 1 } }
+    { orbId: "docs-example:networkadapter-DOCS002-NIC.Integrated.1", name: "NIC.Integrated.1", manufacturer: "Broadcom", model: "BCM57414", serialNumber: "NIC-DOCS-002",
+      namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+      server: { orbId: "docs-example:server-DOCS002", version: 1 } }
+  ], upsert: true) { numUids }
+
+  switchPorts: addNetworkInterface(input: [
+    { orbId: "docs-example:networkinterface-DOCSSW01-xe-0/0/1", name: "xe-0/0/1", portType: "Ethernet", linkSpeedMbps: 25000,
+      namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+      networkDevice: { orbId: "docs-example:networkdevice-DOCSSW01", version: 1 } }
+    { orbId: "docs-example:networkinterface-DOCSSW01-xe-0/0/2", name: "xe-0/0/2", portType: "Ethernet", linkSpeedMbps: 25000,
+      namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+      networkDevice: { orbId: "docs-example:networkdevice-DOCSSW01", version: 1 } }
+  ], upsert: true) { numUids }
+
+  serverPorts: addNetworkInterface(input: [
+    { orbId: "docs-example:networkinterface-DOCS001-NIC.Integrated.1-1-1", name: "NIC.Integrated.1-1-1", portType: "Ethernet", linkSpeedMbps: 25000, macAddress: "02:00:00:00:01:01",
+      namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+      server: { orbId: "docs-example:server-DOCS001", version: 1 },
+      networkAdapter: { orbId: "docs-example:networkadapter-DOCS001-NIC.Integrated.1", version: 1 },
+      connectedNetworkInterface: { orbId: "docs-example:networkinterface-DOCSSW01-xe-0/0/1", version: 1 },
+      connectedNetworkDevice: { orbId: "docs-example:networkdevice-DOCSSW01", version: 1 },
+      connectedNetworkDevicePort: "xe-0/0/1" }
+    { orbId: "docs-example:networkinterface-DOCS002-NIC.Integrated.1-1-1", name: "NIC.Integrated.1-1-1", portType: "Ethernet", linkSpeedMbps: 25000, macAddress: "02:00:00:00:02:01",
+      namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+      server: { orbId: "docs-example:server-DOCS002", version: 1 },
+      networkAdapter: { orbId: "docs-example:networkadapter-DOCS002-NIC.Integrated.1", version: 1 },
+      connectedNetworkInterface: { orbId: "docs-example:networkinterface-DOCSSW01-xe-0/0/2", version: 1 },
+      connectedNetworkDevice: { orbId: "docs-example:networkdevice-DOCSSW01", version: 1 },
+      connectedNetworkDevicePort: "xe-0/0/2" }
+  ], upsert: true) { numUids }
+
+  # Nodes and the backup are written from the cluster's side: their edge back
+  # points at the KubernetesCluster INTERFACE, which DGraph only links from here.
+  addEksaKubernetesCluster(input: [
+    { orbId: "docs-example:docs-cluster", name: "docs-cluster", clusterType: "standalone", provider: "eksa", environment: "dev", kubernetesVersion: "1.31", cni: "cilium",
+      namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+      dataCenter: { orbId: "docs-example:datacenter-docs-example", version: 1 },
+      controlPlaneEndpoint: { orbId: "docs-example:10.0.1.10", version: 1 },
+      nodes: [
+        { orbId: "docs-example:docs-node-01", name: "docs-node-01", role: "control_plane", gpu: false,
+          namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+          server: { orbId: "docs-example:server-DOCS001", version: 1 } }
+        { orbId: "docs-example:docs-node-02", name: "docs-node-02", role: "worker", gpu: false,
+          namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+          server: { orbId: "docs-example:server-DOCS002", version: 1 } }
+      ]
+      backup: { orbId: "docs-example:docs-cluster-backup", name: "docs-cluster-backup",
+        namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
+        etcd: { orbId: "docs-example:docs-cluster-etcd-backup", name: "docs-cluster-etcd-backup", enabled: true, schedule: "0 2 * * *", location: "s3://docs-example-backups/etcd", retentionDays: 14,
+          namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z" } } }
+  ], upsert: true) { numUids }
+}

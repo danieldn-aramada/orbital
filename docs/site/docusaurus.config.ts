@@ -21,7 +21,7 @@ const config: Config = {
     // of the docs — which matters for a product whose premise is air-gap.
     // Algolia DocSearch needs a live public domain, so it cannot be set up yet.
     ['@easyops-cn/docusaurus-search-local',
-      {hashed: true, indexBlog: false, docsRouteBasePath: '/'}],
+      {hashed: true, indexBlog: false, docsDir: 'content', docsRouteBasePath: '/'}],
   ],
   presets: [
     ['classic', {

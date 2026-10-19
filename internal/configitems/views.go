@@ -179,8 +179,8 @@ type View struct {
 	//
 	// That is the difference between a useful table and one you have to click
 	// through — a DataCenter's servers table shows each server's rack and OOB
-	// IP, and those live one hop away. Derived, not declared: "single" means one
-	// value fits in a cell, which is the only question a column can answer.
+	// IP, and those live one hop away. Resolved from the bare single
+	// relationships in `types.<T>.columns`.
 	RefColumns []ViewRefColumn `json:"refColumns"`
 }
 
@@ -398,6 +398,19 @@ func isIfaceField(ifaceFields []string, name string) bool {
 		}
 	}
 	return false
+}
+
+// splitColumns separates a `columns:` list into its bare single relationships
+// (link columns) and everything else (paths), each in declared order.
+func splitColumns(info TypeInfo, cols []string) (refs, paths []string) {
+	for _, c := range cols {
+		if f, ok := fieldNamed(info, c); ok && !strings.Contains(c, ".") && f.Kind != "SCALAR" && f.Kind != "ENUM" {
+			refs = append(refs, c)
+			continue
+		}
+		paths = append(paths, c)
+	}
+	return refs, paths
 }
 
 func fieldNamed(info TypeInfo, name string) (DerivedField, bool) {

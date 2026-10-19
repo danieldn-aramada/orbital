@@ -1,0 +1,18 @@
+# Docs example — a PARTIAL views overlay that promotes Rack to a page.
+# The worked example in the docs site's "Defining pages" section, and what
+# `make docs-screenshots` expects orbital to be running with:
+#
+#   ORBITAL_VIEWS_OVERLAY_PATH=examples/docs/views-overlay.yaml make run-orbital
+pages:
+  Rack:
+    menuWeight: 15
+    filterBy: dataCenter
+
+types:
+  Rack:
+    columns:
+      - dataCenter
+      - servers.count
+    fields:
+      name: { editable: true, createOnly: true }
+      uHeight: { label: Height (U), createDefault: "42" }

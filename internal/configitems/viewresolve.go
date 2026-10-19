@@ -131,21 +131,14 @@ func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg
 			}
 		}
 
-		// REFERENCE COLUMNS, for when this type renders as a ROW somewhere else.
-		// DERIVED from every single relationship, and that is deliberate: a type
-		// with no page still renders as rows and still has to say what it points
-		// at. A NetworkInterface in a network device's Connections tab names its
-		// Server; declaring that per page would mean declaring it three times.
-		// DECLARED, in `types.<T>.refColumns`. Deriving these — every
-		// single-cardinality edge to a ConfigItem — put `Idrac Settings` and
-		// `Server Configuration Profile` on the servers list, which no
-		// hand-written page ever showed, and meant a new edge in the schema
-		// widened every table of that type with nobody deciding to. The file's
-		// own rule is that relationships are listed; this is a relationship.
+		// LINK COLUMNS, for when this type renders as a ROW somewhere else: the
+		// bare single relationships in `columns:`. Listed, never derived — see
+		// TypeDecl.Columns for what deriving them did.
+		refNames, columnPaths := splitColumns(info, td.Columns)
 		refCols := []ViewRefColumn{}
-		for _, r := range td.RefColumns {
-			f, ok := fieldNamed(info, r)
-			if !ok {
+		for _, r := range refNames {
+			f, _ := fieldNamed(info, r)
+			if f.IsList {
 				continue // Validate already reported it
 			}
 			refCols = append(refCols, ViewRefColumn{Field: r, Type: f.TypeName, Slug: pageSlug(cfg, f.TypeName)})
@@ -234,7 +227,7 @@ func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg
 		if page.FilterBy != "" && v.HasColumn(page.FilterBy) {
 			v.FilterBy = page.FilterBy
 		}
-		v.Columns, _ = resolveColumnPaths(types, info, name, ifaceFields, td.Columns)
+		v.Columns, _ = resolveColumnPaths(types, info, name, ifaceFields, columnPaths)
 		views = append(views, v)
 	}
 
@@ -287,8 +280,8 @@ func ColumnWarningsFromConfig(types map[string]TypeInfo, ifaceFields []string, c
 		if !ok {
 			continue
 		}
-		td := cfg.TypeOf(info, name)
-		if _, w := resolveColumnPaths(types, info, name, ifaceFields, td.Columns); len(w) > 0 {
+		_, paths := splitColumns(info, cfg.TypeOf(info, name).Columns)
+		if _, w := resolveColumnPaths(types, info, name, ifaceFields, paths); len(w) > 0 {
 			out = append(out, w...)
 		}
 	}

@@ -32,7 +32,7 @@ data:
     #
     # types:                 # how a type renders WHEREVER it renders
     #   Server:
-    #     refColumns: [dataCenter, oobIP, rack]
+    #     columns: [dataCenter, oobIP, rack]
     #     fields:
     #       uHeight: { tableHidden: true }
     #

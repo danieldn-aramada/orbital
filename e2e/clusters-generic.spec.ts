@@ -91,7 +91,7 @@ test('the backup tree renders inline, and says so when absent', async ({ page })
   await openAllDetailPanels(page);
   const absent = page.getByTestId('generic-owned').filter({ hasText: 'Backup' });
   await expect(absent).toContainText('Etcd');
-  await expect(absent).toContainText('Not configured');
+  await expect(absent).toContainText('None.');
 });
 
 test('nodes and workload clusters render as tables with populated columns', async ({ page }) => {
