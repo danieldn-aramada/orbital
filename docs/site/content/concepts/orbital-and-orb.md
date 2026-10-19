@@ -17,9 +17,9 @@ It is the only place intent is written.
 
 ## Orb
 
-Orb is a self-contained edge service. It keeps a read-only mirror of Orbital's intent for its own site, serves that locally, and accepts divergence reports from other edge components.
+Orb is a self-contained edge service. It keeps a read-only mirror of Orbital's intent for its own data center, serves that locally, and accepts divergence reports from other edge components.
 
-Orb is built for disconnection. Once it has imported a bundle, it needs nothing from the cloud to answer questions about its own site.
+Orb is built for disconnection. Once it has imported an export, it needs nothing from the cloud to answer questions about its own data center.
 
 :::warning
 Orb never mutates its graph. It has no local override mechanism, and a change written there would be silently discarded on the next import. Local overrides belong on the Kubernetes resources, where they surface as divergence.
@@ -32,13 +32,13 @@ Most confusion about edge configuration resolves into asking which of these is m
 | Store | Role | Source of truth for |
 |---|---|---|
 | Orbital's graph (cloud) | Authored design intent | Intended state, everywhere |
-| Kubernetes resources (edge) | Desired state plus local overrides | Actuation at the site |
-| Orb's graph (edge) | Read-only mirror of one site's intent | Nothing — it is a derived cache |
+| Kubernetes resources (edge) | Desired state plus local overrides | Actuation in the data center |
+| Orb's graph (edge) | Read-only mirror of one data center's intent | Nothing — it is a derived cache |
 
 Only the first is authored. The second is reconciled by local controllers. The third is derived and can be rebuilt from an import at any time.
 
 ## Intent flows one way
 
-Cloud to edge carries intent. Orbital exports a namespace, something packages and delivers it, and the site imports it.
+Cloud to edge carries intent. Orbital exports a namespace, something packages and delivers it, and Orb imports it.
 
-Edge to cloud carries exactly one thing: divergence reports. Nothing else travels upward, and Orbital never initiates contact with a site.
+Edge to cloud carries exactly one thing: divergence reports. Nothing else travels upward, and Orbital never initiates contact with a data center.

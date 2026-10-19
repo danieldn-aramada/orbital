@@ -472,6 +472,9 @@ export function initDetailTabs(tabContainer, options = {}) {
   if (saved && panelPairs.some(p => p.tab.dataset.panel === saved)) {
     activatePanel(saved)
   }
+  // The strip is visible ~20ms before htmx:afterSettle wires it, and a click in
+  // that window is silently dropped. Automation waits on this, not visibility.
+  tabContainer.dataset.wired = 'true'
 }
 
 // splitOrbIds parses a data-subgraph-orb-ids CSV, falling back to a single orbId

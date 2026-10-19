@@ -203,8 +203,8 @@ type statusResponse struct {
 //
 // exportRequest is the POST /api/v1/export body.
 type exportRequest struct {
-	// OrbID identifies the data center to export, in "namespace:name" form. Required.
-	OrbID string `json:"orbId" example:"alaska:dc-01" validate:"required"`
+	// OrbID is the orbId of the data center to export. Required.
+	OrbID string `json:"orbId" example:"docs-example:datacenter-docs-example" validate:"required"`
 	// Download selects the mode. false (default) exports and publishes to OCI,
 	// discarding the zip on completion. true exports only and retains the zip
 	// for GET /api/v1/export/jobs/{jobId}/download.
@@ -1124,7 +1124,7 @@ func dqlBase(graphqlURL string) string {
 }
 
 // fetchDCInfo queries blue GraphQL for the DC name, orbId, and its namespace.
-// datacenterOrbID must be the orbId of the data center (e.g. "alaska:dc-01").
+// datacenterOrbID must be the orbId of the data center (e.g. "docs-example:datacenter-docs-example").
 func (h *Export) fetchDCInfo(ctx context.Context, datacenterOrbID string) (name, orbID, namespaceName string, err error) {
 	query := fmt.Sprintf(`{ getDataCenter(orbId: %q) { name orbId namespace } }`, datacenterOrbID)
 	body, _ := json.Marshal(map[string]string{"query": query})

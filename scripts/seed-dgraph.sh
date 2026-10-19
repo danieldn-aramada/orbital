@@ -23,10 +23,12 @@ done
 # Seed data is gitignored, so a clone has none. Checked HERE rather than at the
 # loops below: those run AFTER the delete block, so a missing-file failure would
 # land with the graph already wiped.
+# examples/docs/ is committed and always seeded. examples/seed/ is gitignored
+# and optional — a fresh clone has only the docs example.
+HAVE_SEED=true
 if ! compgen -G "examples/seed/*.graphql" > /dev/null; then
-  echo "ERROR: no files match examples/seed/*.graphql — nothing to seed." >&2
-  echo "       examples/seed/ is gitignored; obtain the seed set out of band." >&2
-  exit 1
+  HAVE_SEED=false
+  echo "NOTE: examples/seed/ is empty (it is gitignored); seeding the docs example only." >&2
 fi
 
 # apply_schema POSTs the GraphQL schema and VERIFIES it actually installed. DGraph
@@ -125,6 +127,7 @@ seed_file() {
   fi
 }
 
+if [ "$HAVE_SEED" = "true" ]; then
 echo "==> Seeding DGraph (base)..."
 for f in examples/seed/*.graphql; do
   case "$(basename "$f" .graphql)" in
@@ -137,6 +140,14 @@ echo "==> Seeding DGraph (supplementary)..."
 # Clusters must come after base — they reference DataCenters + Servers seeded above.
 for f in examples/seed/*-idrac.graphql examples/seed/*-storage.graphql examples/seed/*-clusters.graphql examples/seed/*-network.graphql examples/seed/*-maintenance.graphql; do
   [ -f "$f" ] || continue
+  seed_file "$f"
+done
+fi
+
+# Last, so the stale-node cleanup above (which deletes every network node) never
+# removes it.
+echo "==> Seeding DGraph (docs example)..."
+for f in examples/docs/*.graphql; do
   seed_file "$f"
 done
 

@@ -34,6 +34,11 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   only verifies the result. Existing servers stay null. Schema `v18` — **apply
   it to each environment's blue DGraph before deploying a cb-bundler that
   queries the field.**
+- **Docs site: a committed example data center, generated screenshots, and two new sections.**
+  `make seed` now always loads `examples/docs/` — the `docs-example` namespace — so a fresh clone
+  seeds without the out-of-band set, which becomes optional. `make docs-screenshots` regenerates
+  the site's UI screenshots from it. New sections: *Using the Orbital UI* and *Defining Pages*
+  (`views.yaml`), plus a glossary; the export API's `orbId` example now follows the orbId convention.
 
 - **A server can be linked to a rack from the editor.** `rack` is nullable, so
   the create form skipped it, and the editor's JSON tree holds scalars only —
@@ -172,6 +177,17 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   once and says so when it bites; every member is still listed on the page.
 
 ### Changed
+
+- **Deleting a server no longer deletes its OOB IP.** `oobIP` was in the Server
+  page's subgraph, so a delete took the IP node with it — including one shared
+  with another entity. It is now re-pointable from the editor (a select of
+  existing IPs, like `rack`); the IP's own fields are no longer edited there.
+
+- **`refColumns:` in `config/views.yaml` is retired; list the relationship under
+  `columns:`.** A bare single relationship there (`columns: [rack]`) is a column
+  of links, a dotted path (`rack.uHeight`) a column of values — one key for
+  both. Tables render exactly as before. An overlay still carrying
+  `refColumns:` logs a warning when views load and loses those columns until moved.
 
 - **A detail page now shows every relationship, and Fields holds only scalars.**
   Placement was decided by whether `config/views.yaml` declared a relationship

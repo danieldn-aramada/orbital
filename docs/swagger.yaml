@@ -858,9 +858,8 @@ definitions:
         example: sha256:045b8a51a0aea59fa
         type: string
       orbId:
-        description: OrbID identifies the data center to export, in "namespace:name"
-          form. Required.
-        example: alaska:dc-01
+        description: OrbID is the orbId of the data center to export. Required.
+        example: docs-example:datacenter-docs-example
         type: string
     required:
     - orbId
@@ -887,7 +886,7 @@ definitions:
         example: enabled
         type: string
       orbId:
-        example: colo:server-maintenance-CWJHDX3
+        example: colo:servermaintenance-CWJHDX3
         type: string
       outcome:
         description: |-

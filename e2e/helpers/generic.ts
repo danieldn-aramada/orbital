@@ -113,7 +113,8 @@ export async function saveEditor(page: Page, domId: string) {
 export async function openDetailPanel(page: Page, label: string | RegExp) {
   const strip = page.locator('[id^="generic-detail-tabs-"]');
   await expect(strip, 'the detail page should have a tab strip').toBeVisible();
-  const tab = strip.locator('li').filter({ hasText: label }).first();
+  await expect(strip.first()).toHaveAttribute('data-wired', 'true');
+  const tab =strip.locator('li').filter({ hasText: label }).first();
   await expect(tab, `no tab labelled ${label}`).toBeVisible();
   await tab.click();
   const panelId = await tab.getAttribute('data-panel');
@@ -132,6 +133,9 @@ export async function openDetailPanel(page: Page, label: string | RegExp) {
 // then reads the audit panel must call this AFTER the reload — relying on an
 // earlier helper having clicked it is a dependency nobody can see.
 export async function openAuditPanel(page: Page) {
+  // Visible is not clickable: the strip renders before initDetailTabs attaches
+  // its handlers, and a click in between does nothing (measured: 12/15 reloads).
+  await page.locator('[id^="generic-detail-tabs-"][data-wired="true"]').first().waitFor();
   await page.locator('[id^="generic-detail-tabs-"] li[data-orb-id]').first().click();
   await expect(page.getByTestId('generic-audit')).not.toBeEmpty({ timeout: 10_000 });
 }

@@ -1,7 +1,7 @@
 ---
 hide_table_of_contents: true
 description: >-
-  The contract at Orbital's boundary, how intent reaches a site, and ConfigBundle as one proven implementation of the delivery layer.
+  The contract at Orbital's boundary, how intent reaches a data center, and ConfigBundle as one proven implementation of the delivery layer.
 slug: /reference-architecture
 sidebar_label: Overview
 sidebar_position: 0
@@ -12,9 +12,9 @@ import Link from '@docusaurus/Link';
 
 # Reference Architecture
 
-Orbital publishes intent. Something has to carry that intent to a site and apply it.
+Orbital publishes intent. Something has to carry that intent to a data center and apply it.
 
-Orbital does not do that part, deliberately — nothing in the cloud executes against a site. These pages describe the contract Orbital guarantees at its boundary, the pattern beyond it, and one proven implementation.
+Orbital does not do that part, deliberately — nothing in the cloud executes against a data center. These pages describe the contract Orbital guarantees at its boundary, the pattern beyond it, and one proven implementation.
 
 :::note
 Most teams adopting Orbital will write their own delivery layer, or adapt one they already run. That is the intended outcome. This is a reference, not a requirement.

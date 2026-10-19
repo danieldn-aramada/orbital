@@ -45,6 +45,11 @@
 #   Single-cardinality at every hop and at most two hops; anything else is
 #   refused out loud at load and renders read-only.
 #
+# COLUMNS  (types.<T>.columns — extra table columns wherever T is a row)
+#   rack            a bare SINGLE relationship: a column of links
+#   rack.uHeight    a path ending in a value; `<list>.count` counts
+#   Link columns render before value columns. `refColumns:` is retired.
+#
 # DERIVED, never declared here
 #   inline panel vs table   <- cardinality
 #   does a row link         <- does its type have a page
@@ -54,7 +59,7 @@
 # declaring only the pages or types it changes. Copying this whole file into an
 # overlay freezes that deployment at today's shape, forever.
 
-schemaVersion: v14
+schemaVersion: v17
 
 # FIELD LABELS — the stored field name on the left, the text the UI shows on
 # the right. Django's `verbose_name`, ServiceNow's `column_label`, Salesforce's
@@ -108,7 +113,6 @@ pages:
     subgraph:
       - { path: idracSettings, editable: true }
       - { path: serverMaintenance, editable: true }
-      - { path: oobIP, editable: true }
       - kubernetesNode
       - storageControllers
       - networkAdapters
@@ -177,8 +181,8 @@ types:
       type: { editable: false }
 
   KubernetesCluster:
-    refColumns: [dataCenter]
     columns:
+      - dataCenter
       - nodes.count
     order: [name, provider, clusterType, environment, kubernetesVersion]
     fields:
@@ -188,7 +192,8 @@ types:
   EksaKubernetesCluster:
 
   KubernetesNode:
-    refColumns: [server]
+    columns:
+      - server
     fields:
       gpu: { editable: false, tableHidden: true }
       notes: { editable: false, tableHidden: true }
@@ -203,7 +208,9 @@ types:
       serialNumber: { editable: false }
 
   NetworkDevice:
-    refColumns: [dataCenter, rack]
+    columns:
+      - dataCenter
+      - rack
     fields:
       serial: { createOnly: true }
       networkInterfaceConnectedNetworkDevice: { label: Connections }
@@ -215,8 +222,10 @@ types:
       vcPriority: { tableHidden: true }
 
   NetworkInterface:
-    refColumns: [server, networkAdapter, connectedNetworkDevice]
     columns:
+      - server
+      - networkAdapter
+      - connectedNetworkDevice
       - server.kubernetesNode.cluster.name
       - server.kubernetesNode.role
       - server.kubernetesNode.gpu
@@ -235,8 +244,10 @@ types:
       uHeight: { createDefault: "42" }
 
   Server:
-    refColumns: [dataCenter, oobIP, rack]
     columns:
+      - dataCenter
+      - oobIP
+      - rack
       - rack.uHeight
       - kubernetesNode.cluster.name
       - kubernetesNode.role
@@ -244,6 +255,7 @@ types:
     fields:
       serviceTag: { createOnly: true }
       rack: { editable: true }
+      oobIP: { editable: true }
       oobMAC: { tableHidden: true }
       manufacturer: { tableHidden: true, createDefault: Dell }
       model: { createDefault: PowerEdge R450 }
@@ -255,7 +267,8 @@ types:
       json: { editable: false }
 
   StorageDevice:
-    refColumns: [storageController]
+    columns:
+      - storageController
     fields:
       capacityBytes: { editable: false }
       manufacturer: { editable: false }

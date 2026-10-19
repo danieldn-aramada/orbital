@@ -169,29 +169,24 @@ type TypeDecl struct {
 	// which a field added later silently never appears.
 	Order []string `yaml:"order,omitempty"`
 
-	// Columns are extra columns whose value lives at the end of a path.
+	// Columns are extra table columns, two shapes in one list:
+	//
+	//   - a dotted PATH ending in a value (`rack.uHeight`, `servers.count`)
+	//   - a bare SINGLE RELATIONSHIP (`rack`) — a column of links to the node on
+	//     the other end. `Data Center`, `Rack`, `OOB IP` on a server.
+	//
+	// Relationship columns are LISTED, not derived. They WERE derived — every
+	// single-cardinality edge to a ConfigItem became a column — and that put
+	// `Idrac Settings` and `Server Configuration Profile` on the servers list,
+	// and meant any edge added to the schema silently widened every table of
+	// that type. Fixed 2026-10-05.
 	//
 	// On the TYPE, not the page, and Rack is the proof: it declares
-	// `servers.count` and Rack is not a page. A Server's computed columns apply
-	// on /servers AND inside a rack's servers tab AND a network device's.
+	// `servers.count` and Rack is not a page. A Server's columns apply on
+	// /servers AND inside a data centre's servers tab AND a network device's.
+	// A link column pointing back at the entity whose page you are on is
+	// dropped automatically.
 	Columns []string `yaml:"columns,omitempty"`
-
-	// RefColumns are the relationship columns a row of this type carries —
-	// `Data Center`, `Rack`, `OOB IP` on a server.
-	//
-	// LISTED, not derived, because a relationship is a relationship: the file's
-	// own rule is that scalars are subtractive and relationships are declared.
-	// It WAS derived — every single-cardinality edge to a ConfigItem became a
-	// column — and that put `Idrac Settings` and `Server Configuration Profile`
-	// on the servers list, where no hand-written page had ever shown them, and
-	// meant any edge added to the schema silently widened every table of that
-	// type. Fixed 2026-10-05.
-	//
-	// On the TYPE for the same reason Columns is: a Server row keeps its columns
-	// inside a data centre's tab and a network device's, and declaring that per
-	// page would be the same list three times. A column pointing back at the
-	// entity whose page you are on is dropped automatically.
-	RefColumns []string `yaml:"refColumns,omitempty"`
 
 	// NO naturalKey here, deliberately. A type's orbId shape is declared in the
 	// SCHEMA as `"""orbIdPattern: ..."""`, because identity is not a view
@@ -399,6 +394,9 @@ func RetiredKeyWarnings(file string, raw []byte) []string {
 				IgnoreFields yaml.Node `yaml:"ignoreFields"`
 			} `yaml:"summary"`
 		} `yaml:"pages"`
+		Types map[string]struct {
+			RefColumns yaml.Node `yaml:"refColumns"`
+		} `yaml:"types"`
 	}
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
 		return nil
@@ -417,6 +415,11 @@ func RetiredKeyWarnings(file string, raw []byte) []string {
 		}
 		if !p.Summary.IgnoreFields.IsZero() {
 			out = append(out, file+": "+name+": `summary.ignoreFields:` is retired and ignored — renamed to page-level `hide:`, which drops a scalar or a whole relationship tab")
+		}
+	}
+	for _, name := range sortedKeys(doc.Types) {
+		if t := doc.Types[name]; !t.RefColumns.IsZero() {
+			out = append(out, file+": "+name+": `refColumns:` is retired and ignored — list the relationship under `columns:`")
 		}
 	}
 	return out
@@ -571,25 +574,26 @@ func (c ViewConfig) Validate(types map[string]TypeInfo, deployedVersion string) 
 				v.Fields = fields
 			}
 
-			kept := v.RefColumns[:0:0]
-			for _, r := range v.RefColumns {
+			// Paths are checked at resolve time (ColumnWarningsFromConfig);
+			// a bare relationship is checked here, because a bad one is dropped.
+			kept := v.Columns[:0:0]
+			for _, r := range v.Columns {
 				f, found := fieldNamed(info, r)
-				switch {
-				case !found:
-					warn = append(warn, k+": refColumn "+r+" is not a field on "+k)
-				case f.Kind == "SCALAR" || f.Kind == "ENUM":
-					warn = append(warn, k+": refColumn "+r+" is a scalar; scalars are columns already")
-				case f.IsList:
-					warn = append(warn, k+": refColumn "+r+" is a LIST, which cannot be one cell — make it a tab")
-				default:
-					if _, isConfigItem := types[f.TypeName]; !isConfigItem {
-						warn = append(warn, k+": refColumn "+r+" points at "+f.TypeName+", which is not a ConfigItem")
-						continue
-					}
+				if strings.Contains(r, ".") || !found || f.Kind == "SCALAR" || f.Kind == "ENUM" {
 					kept = append(kept, r)
+					continue
 				}
+				if f.IsList {
+					warn = append(warn, k+": column "+r+" is a LIST, which cannot be one cell — use "+r+".count, or it is already a tab")
+					continue
+				}
+				if _, isConfigItem := types[f.TypeName]; !isConfigItem {
+					warn = append(warn, k+": column "+r+" points at "+f.TypeName+", which is not a ConfigItem")
+					continue
+				}
+				kept = append(kept, r)
 			}
-			v.RefColumns = kept
+			v.Columns = kept
 		}
 		out.Types[k] = v
 	}
@@ -685,21 +689,17 @@ func (c ViewConfig) Validate(types map[string]TypeInfo, deployedVersion string) 
 // interface they came from.
 func (c ViewConfig) TypeOf(info TypeInfo, typeName string) TypeDecl {
 	own := c.Types[typeName]
-	merged := TypeDecl{Order: own.Order, Columns: own.Columns, RefColumns: own.RefColumns, Fields: map[string]FieldDecl{}}
+	merged := TypeDecl{Order: own.Order, Columns: own.Columns, Fields: map[string]FieldDecl{}}
 	// Interfaces first, so the type's own declaration overwrites them.
 	for _, iface := range info.Implements {
 		in := c.Types[iface]
 		if len(merged.Order) == 0 {
 			merged.Order = in.Order
 		}
+		// EksaKubernetesCluster declares none and inherits KubernetesCluster's,
+		// link columns included.
 		if len(merged.Columns) == 0 {
 			merged.Columns = in.Columns
-		}
-		// EksaKubernetesCluster declares none and inherits KubernetesCluster's,
-		// the same as Order and Columns. Forgetting this list here is silent:
-		// every declaration resolves to nothing and the columns just disappear.
-		if len(merged.RefColumns) == 0 {
-			merged.RefColumns = in.RefColumns
 		}
 		for f, d := range in.Fields {
 			merged.Fields[f] = d

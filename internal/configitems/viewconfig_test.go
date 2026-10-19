@@ -650,7 +650,7 @@ func resolveOne(t *testing.T, types map[string]TypeInfo, cfg ViewConfig, typeNam
 
 func boolPtr(b bool) *bool { return &b }
 
-// Reference columns are LISTED, never derived — the same rule the file states
+// Link columns are LISTED, never derived — the same rule the file states
 // for every other relationship.
 //
 // The regression this guards is the one it was written for: deriving every
@@ -659,7 +659,7 @@ func boolPtr(b bool) *bool { return &b }
 // meant adding an edge to the schema silently widened every table of that type.
 // "It is a property of the type, not the page" is TRUE and is why it lives in
 // `types:` — it is not a reason to derive it.
-func TestResolveViews_RefColumnsAreListedNotDerived(t *testing.T) {
+func TestResolveViews_LinkColumnsAreListedNotDerived(t *testing.T) {
 	types := map[string]TypeInfo{
 		"Server": {Fields: []DerivedField{
 			{Name: "hostname", Editable: true, Kind: "SCALAR"},
@@ -671,16 +671,21 @@ func TestResolveViews_RefColumnsAreListedNotDerived(t *testing.T) {
 			{Name: "storageControllers", Kind: "OBJECT", TypeName: "StorageController", IsList: true},
 		}},
 		"DataCenter":        {Fields: []DerivedField{{Name: "name", Editable: true, Kind: "SCALAR"}}},
-		"Rack":              {Fields: []DerivedField{{Name: "name", Editable: true, Kind: "SCALAR"}}},
+		"Rack":              {Fields: []DerivedField{{Name: "uHeight", Editable: true, Kind: "SCALAR"}}},
 		"IdracSettings":     {Fields: []DerivedField{{Name: "sshEnabled", Editable: true, Kind: "SCALAR"}}},
 		"StorageController": {Fields: []DerivedField{{Name: "name", Editable: true, Kind: "SCALAR"}}},
 	}
+	// One `columns:` list carrying both shapes: a bare relationship is a link
+	// column, a path is a value column.
 	cfg := ViewConfig{Types: map[string]TypeDecl{
-		"Server": {RefColumns: []string{"dataCenter", "rack"}},
+		"Server": {Columns: []string{"dataCenter", "rack", "rack.uHeight"}},
 	}}
 	validated, warn := cfg.Validate(types, "")
 	if len(warn) != 0 {
 		t.Fatalf("a clean declaration must not warn; got %v", warn)
+	}
+	if w := ColumnWarningsFromConfig(types, nil, validated); len(w) != 0 {
+		t.Errorf("a bare relationship is a link column, not a bad path; got %v", w)
 	}
 	got := resolveOne(t, types, validated, "Server")
 
@@ -689,28 +694,59 @@ func TestResolveViews_RefColumnsAreListedNotDerived(t *testing.T) {
 		fields = append(fields, r.Field)
 	}
 	if strings.Join(fields, ",") != "dataCenter,rack" {
-		t.Errorf("refColumns = %v, want exactly what was declared, in declared order", fields)
+		t.Errorf("link columns = %v, want exactly the bare relationships declared, in declared order", fields)
+	}
+	var paths []string
+	for _, c := range got.Columns {
+		paths = append(paths, c.Path)
+	}
+	if strings.Join(paths, ",") != "rack.uHeight" {
+		t.Errorf("value columns = %v, want only the path", paths)
 	}
 }
 
-// An unsupportable refColumn is dropped and SAID, like every other declaration.
-func TestValidateViews_RefColumnDeclarationsAreChecked(t *testing.T) {
-	cfg := ViewConfig{Types: map[string]TypeDecl{"Server": {RefColumns: []string{
+// A bare relationship that cannot be one cell is dropped and SAID.
+func TestValidateViews_LinkColumnDeclarationsAreChecked(t *testing.T) {
+	cfg := ViewConfig{Types: map[string]TypeDecl{"Server": {Columns: []string{
 		"rack",               // fine
-		"nope",               // not a field
-		"hostname",           // a scalar: already a column
 		"storageControllers", // a LIST cannot be one cell
 		"auditTrail",         // points at a non-ConfigItem
 	}}}}
 	got, warn := cfg.Validate(validationFixture(), "")
 
-	for _, want := range []string{"nope", "hostname", "storageControllers", "auditTrail"} {
+	for _, want := range []string{"storageControllers", "auditTrail"} {
 		if !anyContains(warn, want) {
-			t.Errorf("refColumn %s must be reported; got %v", want, warn)
+			t.Errorf("column %s must be reported; got %v", want, warn)
 		}
 	}
-	if strings.Join(got.Types["Server"].RefColumns, ",") != "rack" {
-		t.Errorf("only the valid one survives; got %v", got.Types["Server"].RefColumns)
+	if anyContains(warn, "rack") {
+		t.Errorf("a valid link column must not warn; got %v", warn)
+	}
+	if strings.Join(got.Types["Server"].Columns, ",") != "rack" {
+		t.Errorf("only the valid one survives; got %v", got.Types["Server"].Columns)
+	}
+}
+
+// An implementation that declares no columns inherits its interface's, link
+// columns included. Losing this is silent: the columns just disappear from
+// every EksaKubernetesCluster row.
+func TestResolveViews_LinkColumnsInheritAlongInterfaces(t *testing.T) {
+	cluster := []DerivedField{
+		{Name: "provider", Editable: true, Kind: "SCALAR"},
+		{Name: "dataCenter", Kind: "OBJECT", TypeName: "DataCenter"},
+	}
+	types := map[string]TypeInfo{
+		"KubernetesCluster":     {IsInterface: true, Fields: cluster},
+		"EksaKubernetesCluster": {Implements: []string{"KubernetesCluster"}, Fields: cluster},
+		"DataCenter":            {Fields: []DerivedField{{Name: "name", Editable: true, Kind: "SCALAR"}}},
+	}
+	cfg := ViewConfig{Types: map[string]TypeDecl{
+		"KubernetesCluster": {Columns: []string{"dataCenter"}},
+	}}
+	validated, _ := cfg.Validate(types, "")
+	got := resolveOne(t, types, validated, "EksaKubernetesCluster")
+	if len(got.RefColumns) != 1 || got.RefColumns[0].Field != "dataCenter" {
+		t.Errorf("link columns = %v, want dataCenter inherited from KubernetesCluster", got.RefColumns)
 	}
 }
 
@@ -850,6 +886,20 @@ func TestRetiredKeyWarnings_NamesTheReplacementForSummaryIgnoreFields(t *testing
 	ok := []byte("pages:\n  Server:\n    hide: [serverConfigurationProfile]\n")
 	if w := RetiredKeyWarnings("views.yaml", ok); len(w) != 0 {
 		t.Errorf("warnings = %v — `hide:` is the current key and must not warn", w)
+	}
+}
+
+// `refColumns:` folded into `columns:`. An overlay still carrying it would
+// otherwise lose its link columns with nothing saying why.
+func TestRetiredKeyWarnings_NamesTheReplacementForRefColumns(t *testing.T) {
+	raw := []byte("types:\n  Server:\n    refColumns: [rack]\n")
+	got := strings.Join(RetiredKeyWarnings("views.yaml", raw), "\n")
+	if !strings.Contains(got, "refColumns:") || !strings.Contains(got, "columns:") {
+		t.Errorf("warnings = %q — a retired key must name its replacement", got)
+	}
+	ok := []byte("types:\n  Server:\n    columns: [rack]\n")
+	if w := RetiredKeyWarnings("views.yaml", ok); len(w) != 0 {
+		t.Errorf("warnings = %v — `columns:` is the current key and must not warn", w)
 	}
 }
 

@@ -1,42 +1,83 @@
 ---
 description: >-
-  ConfigItems, relationships and namespaces — why Orbital stores configuration as a traversable graph rather than as tables.
+  Nodes, relationships and namespaces — how Orbital stores configuration as a traversable graph rather than as tables.
 sidebar_label: The graph
 sidebar_position: 2
 ---
 
 # The graph
 
-Orbital stores configuration as a graph, not as rows in tables.
+Orbital stores configuration as a graph of **nodes** joined by **relationships**, not as rows in tables.
 
-A data center contains racks. A rack holds servers. A server has network adapters, each with interfaces, each cabled to a switch port. Those are relationships, and in Orbital they are first-class.
+A data center contains racks. A rack holds servers. A server has network adapters, each with network interfaces, each cabled to a port on a switch. Every one of those is a relationship, and in Orbital relationships are stored as first-class data.
 
 ## Why a graph
 
 The questions that matter at a data center are traversals.
 
-*What runs on this server?* *If this switch fails, which workloads lose connectivity?* *Which servers share this power feed?*
+*What runs on this server?* *If this switch fails, which workloads lose connectivity?* *Which servers share this rack?*
 
-In a relational model each of those is a join you have to write in advance. In a graph they are walks across edges that already exist, and a consumer can ask for a shape nobody anticipated.
+In a relational model each of those is a join you write in advance. In a graph they are walks along relationships that already exist, so a consumer can ask a question nobody anticipated.
 
-## ConfigItems
+## ConfigItems and nodes
 
-Every entity in the graph is a **ConfigItem**: a server, a rack, a cluster, an IP address, a backup schedule.
+**ConfigItem** is the interface every configuration type implements: `DataCenter`, `Rack`, `Server`, `NetworkDevice`, `KubernetesCluster`, and the rest. A type that implements it is a **ConfigItem type**.
 
-ConfigItems share a small set of fields — an identity, a name, a namespace, and audit stamps recording who changed them and when. Beyond that each type declares its own.
+A **node** is one instance of a ConfigItem type — one particular server, one particular rack.
 
-New types are added by editing the schema. Orbital derives the API, the pages and the audit behaviour from that declaration, so adding a type does not mean writing code.
+```graphql
+type Server implements ConfigItem {
+  hostname: String            # an attribute
+  serviceTag: String          # an attribute
+  dataCenter: DataCenter!     # a relationship to exactly one node
+  rack: Rack                  # a relationship to at most one node
+  networkInterfaces: [NetworkInterface]   # a relationship to many nodes
+}
+```
+
+Every node carries the fields `ConfigItem` declares: its identity ([`orbId`](./identity)), a `name`, its `namespace`, a `version`, and stamps recording who created and last changed it. Beyond those, each type declares its own.
+
+A node's fields are of two kinds:
+
+| Kind | What it holds | Example |
+|---|---|---|
+| **Attribute** | A value | `Server.serviceTag` = `DOCS001` |
+| **Relationship** | A named, directed link to another node | `Server.rack` → rack `R01` |
+
+A relationship is either **single** (`rack: Rack` — at most one node) or a **list** (`networkInterfaces: [NetworkInterface]` — any number). That distinction carries all the way to the UI: a single relationship renders as a panel, a list as a table. See [Using the Orbital UI](../using-orbital-ui).
+
+Most relationships have an inverse that Orbital keeps in step. Setting a server's `rack` adds that server to the rack's `servers`. It is one write, viewed from either end.
 
 ## Namespaces
 
-A **namespace** scopes a graph to one data center.
+Every node carries a **namespace**. It is a convention Orbital adopted to tie each node to the data center it belongs to, and the mapping is one-to-one: one namespace, one data center.
 
-Namespaces keep identities from colliding between sites, and they are the unit Orbital exports. Publishing configuration for one site means publishing its namespace.
+The namespace is what lets you treat a data center as a unit:
+
+- **Query everything in it.** One filter returns every node, of every type, in a data center:
+
+  ```graphql
+  {
+    queryConfigItem(filter: { namespace: { eq: "docs-example" } }) {
+      __typename
+      orbId
+      name
+    }
+  }
+  ```
+
+- **Export it.** Exporting configuration for a data center means exporting its namespace. See [the contract](../reference-architecture/contract).
+- **Keep identities from colliding.** The namespace is the first part of every orbId, so two data centers can each have a rack called `R01`.
+- **Spot what is out of place.** A node whose namespace names no data center stands out from a single query, rather than surfacing later as a node no page can reach.
 
 ## Querying it
 
-The graph is served as a GraphQL API. Consumers define the shape they want and the depth they need, rather than calling an endpoint built for one caller.
+The graph is served as a GraphQL API at `/graphql`. A consumer describes the shape and depth it wants, rather than calling an endpoint built for one caller.
 
-:::note
-This is why Orbital has no per-use-case endpoints. A digital twin, a capacity report and a dashboard ask different questions of the same graph, and each writes its own query.
-:::
+That is why Orbital has no per-use-case endpoints. A digital twin, a capacity report and a dashboard ask different questions of the same graph, and each writes its own query.
+
+## Adding a type
+
+A new ConfigItem type is declared in the GraphQL schema. The API for it, its audit trail and its orbId follow from that declaration.
+
+Whether it gets a page in the Orbital UI, and what that page shows and edits, is a separate decision made in configuration. See [Defining pages](../defining-pages).

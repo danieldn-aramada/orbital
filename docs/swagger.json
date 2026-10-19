@@ -3106,9 +3106,9 @@
                     "example": "sha256:045b8a51a0aea59fa"
                 },
                 "orbId": {
-                    "description": "OrbID identifies the data center to export, in \"namespace:name\" form. Required.",
+                    "description": "OrbID is the orbId of the data center to export. Required.",
                     "type": "string",
-                    "example": "alaska:dc-01"
+                    "example": "docs-example:datacenter-docs-example"
                 }
             }
         },
@@ -3142,7 +3142,7 @@
                 },
                 "orbId": {
                     "type": "string",
-                    "example": "colo:server-maintenance-CWJHDX3"
+                    "example": "colo:servermaintenance-CWJHDX3"
                 },
                 "outcome": {
                     "description": "Outcome is `applies`, `satisfied` or `conflict`.\n\n  applies   — the merge writes Proposed over Current.\n  satisfied — Current already equals Proposed; the merge writes nothing.\n  conflict  — someone changed this field since the request was reviewed;\n              the merge REFUSES until it is re-reviewed or amended.",
