@@ -41,7 +41,7 @@ Values were harvested from NetBox before its decommission; two of thirteen
 models resolved only by joining on serviceTag or interface MAC, not by model
 string, so the mapping is not reconstructible from orbital alone.
 
-**`IdracSettings.firmwareSnapshot` is the upgrade TRIGGER; `firmwareVersion` is
+**`IdracSettings.firmwareRepository` is the upgrade TRIGGER; `firmwareVersion` is
 the CHECK (added v18, `String`).** It holds a relative blob path to a pinned Dell
 firmware repository (`dell/R650/2026-10-09T155510Z`) and is passed through
 unchanged to the edge ServerConfig. Set both in one changeset item, since they
