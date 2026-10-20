@@ -96,10 +96,8 @@ orbIdPattern: {server.serviceTag}-{type}
 """
 type IdracSettings implements ConfigItem {
     firmwareVersion: String
-    # Relative blob path of a pinned Dell firmware repository, e.g.
-    # `dell/R650/2026-10-09T155510Z` (v18). Passed through unchanged to
-    # ServerConfig spec.idracSettings.firmwareRepository; on the edge a CHANGE in
-    # it triggers the upgrade, and firmwareVersion only verifies the result.
+    # The firmware repository this server should be on: a relative path to a
+    # pinned Dell firmware repository, e.g. `dell/R650/2026-10-09T155510Z` (v18).
     firmwareRepository: String
     osToIdracPassThroughEnabled: Boolean
     sshEnabled: Boolean
