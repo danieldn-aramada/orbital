@@ -90,7 +90,7 @@ func fixtureFields(typeName string) []string {
 		"EksaKubernetesCluster":      {"kubernetesVersion", "cni", "environment", "clusterType"},
 		"EtcdBackup":                 {"enabled", "schedule", "location", "retentionDays"},
 		"IPAddress":                  nil,
-		"IdracSettings":              {"firmwareVersion", "sshEnabled", "ipmiEnabled", "lockdownModeEnabled", "osToIdracPassThroughEnabled", "usbManagementPortEnabled", "dhcpEnabled", "racadmEnabled"},
+		"IdracSettings":              {"firmwareVersion", "firmwareRepository", "sshEnabled", "ipmiEnabled", "lockdownModeEnabled", "osToIdracPassThroughEnabled", "usbManagementPortEnabled", "dhcpEnabled", "racadmEnabled"},
 		"KubernetesNode":             nil,
 		"NetworkAdapter":             nil,
 		"NetworkDevice":              {"manufacturer", "model", "serial", "role", "macAddress", "rackPosition", "platform", "face", "vcPosition", "vcPriority"},
