@@ -25,15 +25,12 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 ### Added
 
 - **`IdracSettings.firmwareRepository` names the firmware repository a server
-  should be upgraded from.** A plain nullable String holding the relative blob
-  path of a pinned Dell firmware repository (`dell/R650/2026-10-09T155510Z`),
-  produced by armada-firmware-svc's catalog job. It sits beside `firmwareVersion` on the same
-  entity, so one change-request item sets both atomically. It flows unchanged
-  through cb-bundler to ServerConfig `spec.idracSettings.firmwareRepository`, where
-  sc-controller treats a change in it as the upgrade trigger; `firmwareVersion`
-  only verifies the result. Existing servers stay null. Schema `v18` — **apply
-  it to each environment's blue DGraph before deploying a cb-bundler that
-  queries the field.**
+  should be on.** A nullable String holding a relative path to a pinned Dell
+  firmware repository (`dell/R650/2026-10-09T155510Z`), beside `firmwareVersion`
+  on the same entity so one change-request item sets both. Existing servers stay
+  null. Schema `v18` — **apply it to each environment's blue DGraph before
+  deploying any consumer that queries the field.**
+
 - **Docs site: a committed example data center, generated screenshots, and two new sections.**
   `make seed` now always loads `examples/docs/` — the `docs-example` namespace — so a fresh clone
   seeds without the out-of-band set, which becomes optional. `make docs-screenshots` regenerates

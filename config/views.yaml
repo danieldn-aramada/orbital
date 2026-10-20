@@ -59,7 +59,7 @@
 # declaring only the pages or types it changes. Copying this whole file into an
 # overlay freezes that deployment at today's shape, forever.
 
-schemaVersion: v17
+schemaVersion: v18
 
 # FIELD LABELS — the stored field name on the left, the text the UI shows on
 # the right. Django's `verbose_name`, ServiceNow's `column_label`, Salesforce's
