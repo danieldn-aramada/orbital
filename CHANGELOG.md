@@ -24,6 +24,17 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ### Added
 
+- **`IdracSettings.firmwareSnapshot` names the firmware repository a server
+  should run.** A plain nullable String holding the relative blob path of a
+  pinned Dell firmware repository (`dell/R650/2026-10-09T155510Z`), produced by
+  armada-firmware-svc's catalog job. It sits beside `firmwareVersion` on the same
+  entity, so one change-request item sets both atomically. It flows unchanged
+  through cb-bundler to ServerConfig `spec.idracSettings.firmwareSnapshot`, where
+  sc-controller treats a change in it as the upgrade trigger; `firmwareVersion`
+  only verifies the result. Existing servers stay null. Schema `v18` — **apply
+  it to each environment's blue DGraph before deploying a cb-bundler that
+  queries the field.**
+
 - **A server can be linked to a rack from the editor.** `rack` is nullable, so
   the create form skipped it, and the editor's JSON tree holds scalars only —
   leaving no surface anywhere that could set it. A single relationship declared
