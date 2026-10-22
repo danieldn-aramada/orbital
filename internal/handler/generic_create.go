@@ -86,7 +86,7 @@ func buildCreateForm(
 		// DomID follow the PAGE, so /clusters reads "New Kubernetes Cluster"
 		// and not the implementation's spelling.
 		Kind:  v.Type,
-		Label: configitems.HumanFieldLabel(pageView.Type),
+		Label: configitems.HumanTypeName(pageView.Type),
 		DomID: SafeDomID(pageView.Type),
 	}
 
@@ -213,7 +213,7 @@ func buildCreateForm(
 			}
 			ct := page.CreateType{
 				Kind:          name,
-				Label:         configitems.HumanFieldLabel(name),
+				Label:         configitems.HumanTypeName(name),
 				OrbIDTemplate: strings.ReplaceAll(iv.OrbIDPattern[0].Raw, "{type}", iv.OrbIDType),
 			}
 			ivLabel := labelFor(name)

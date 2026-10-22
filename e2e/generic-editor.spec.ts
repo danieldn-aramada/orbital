@@ -56,9 +56,9 @@ test('a pageless type still DISPLAYS its scanned fields, and is not an edit targ
   await page.goto('/servers?open=' + encodeURIComponent('colo:server-CFRHDX3'));
   await openAllDetailPanels(page);
 
-  const devices = page.getByTestId('generic-tab').filter({ hasText: 'Storage Devices' });
-  await expect(devices).toContainText('Capacity Bytes');
-  await expect(devices).toContainText('Serial Number');
+  const devices = page.getByTestId('generic-tab').filter({ hasText: 'storageDevices' });
+  await expect(devices).toContainText('capacityBytes');
+  await expect(devices).toContainText('serialNumber');
 
   // A pageless type's rows are DEAD — text, not links to a route that 404s.
   await expect(devices.locator('tbody tr td:first-child a')).toHaveCount(0);

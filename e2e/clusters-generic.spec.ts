@@ -24,8 +24,8 @@ test('the clusters list is interface-backed and carries implementation columns',
   // `clusterType` is declared by EksaKubernetesCluster, NOT by the interface.
   // Its presence is what proves the columns are a union rather than the
   // interface's own fields.
-  expect(headers, `headers were ${JSON.stringify(headers)}`).toContain('Cluster Type');
-  expect(headers).toContain('Provider');
+  expect(headers, `headers were ${JSON.stringify(headers)}`).toContain('clusterType');
+  expect(headers).toContain('provider');
 
   const rows = page.locator('#generic-table tbody tr');
   expect(await rows.count()).toBeGreaterThan(0);
@@ -42,7 +42,7 @@ test('a cluster detail page resolves its concrete type from the data', async ({ 
   // clusterType exists only on EksaKubernetesCluster. Rendering it proves the
   // page resolved the concrete type — the interface has no such field and no
   // get query at all.
-  await expect(page.getByTestId('generic-fields')).toContainText('Cluster Type');
+  await expect(page.getByTestId('generic-fields')).toContainText('clusterType');
   // ...and it opened on the INTERFACE's list. An EksaKubernetesCluster has no
   // page of its own, so there is one entry in the menu rather than one per
   // provider, and the way back is the Summary tab — the breadcrumb that used to
@@ -59,53 +59,53 @@ test('relationships are tabs, and Fields holds only scalars', async ({ page }) =
   // workloadClusters: placement was decided by the subgraph declaration, so a
   // list nobody declared rendered nowhere at all.
   const fields = page.getByTestId('generic-fields');
-  await expect(fields).not.toContainText('Data Center');
-  await expect(fields).not.toContainText('Control Plane Endpoint');
+  await expect(fields).not.toContainText('dataCenter');
+  await expect(fields).not.toContainText('controlPlaneEndpoint');
 
   // Every 1-hop relationship is a tab, declared or not.
   const tabs = await page.locator('[id^="generic-detail-tabs-"] li a span').first
     ? await page.locator('[id^="generic-detail-tabs-"] li').allInnerTexts()
     : [];
-  for (const want of ['Data Center', 'Control Plane Endpoint', 'Backup', 'Nodes']) {
+  for (const want of ['dataCenter', 'controlPlaneEndpoint', 'backup', 'nodes']) {
     expect(tabs.join('|'), `${want} must be a tab`).toContain(want);
   }
 
   // IPAddress has NO page, so the panel names the address and does not link —
   // the dead-row rule, now one level out.
-  const cpe = page.getByTestId('generic-owned').filter({ hasText: 'Control Plane Endpoint' }).first();
+  const cpe = page.getByTestId('generic-owned').filter({ hasText: 'controlPlaneEndpoint' }).first();
   await expect(cpe).toContainText(/\d+\.\d+\.\d+\.\d+/);
 });
 
 test('the backup tree renders inline, and says so when absent', async ({ page }) => {
   await page.goto('/clusters?open=' + encodeURIComponent('colo:dev-main'));
   await openAllDetailPanels(page);
-  const backup = page.getByTestId('generic-owned').filter({ hasText: 'Backup' });
-  await expect(backup).toContainText('Etcd');
-  await expect(backup).toContainText('Velero');
-  await expect(backup).toContainText('S3 Sync');
-  await expect(backup).toContainText('Schedule');
+  const backup = page.getByTestId('generic-owned').filter({ hasText: 'backup' });
+  await expect(backup).toContainText('etcd');
+  await expect(backup).toContainText('velero');
+  await expect(backup).toContainText('s3Sync');
+  await expect(backup).toContainText('schedule');
 
   // "No backup configured" and "no information about backups" are different
   // answers. An omitted box gives neither.
   await page.goto('/clusters?open=' + encodeURIComponent('alaska-dot-cruiser:adot-m'));
   await openAllDetailPanels(page);
-  const absent = page.getByTestId('generic-owned').filter({ hasText: 'Backup' });
-  await expect(absent).toContainText('Etcd');
+  const absent = page.getByTestId('generic-owned').filter({ hasText: 'backup' });
+  await expect(absent).toContainText('etcd');
   await expect(absent).toContainText('None.');
 });
 
 test('nodes and workload clusters render as tables with populated columns', async ({ page }) => {
   await page.goto('/clusters?open=' + encodeURIComponent('colo:dev-main'));
   await openAllDetailPanels(page);
-  const nodes = page.getByTestId('generic-tab').filter({ hasText: 'Nodes' }).first();
+  const nodes = page.getByTestId('generic-tab').filter({ hasText: 'nodes' }).first();
   await expect(nodes).toBeVisible();
 
   // The Server column is a reference on an SUBGRAPH member. Its selection comes
   // from a different code path than an unowned relationship's, and the two
   // disagreeing rendered a header row above a column of dashes.
   const headers = await nodes.locator('thead th').allInnerTexts();
-  expect(headers).toContain('Server');
-  const serverCell = nodes.locator('tbody tr').first().locator('td').nth(headers.indexOf('Server'));
+  expect(headers).toContain('server');
+  const serverCell = nodes.locator('tbody tr').first().locator('td').nth(headers.indexOf('server'));
   await expect(serverCell).not.toHaveText('—');
 });
 
@@ -113,8 +113,8 @@ test('a cluster detail page shows metadata and its audit log', async ({ page }) 
   await page.goto('/clusters?open=' + encodeURIComponent('colo:dev-main'));
   await openAllDetailPanels(page);
   const meta = page.getByTestId('generic-meta');
-  await expect(meta).toContainText('Namespace');
-  await expect(meta).toContainText('Version');
+  await expect(meta).toContainText('namespace');
+  await expect(meta).toContainText('version');
   await openAuditPanel(page);
 });
 
@@ -243,7 +243,7 @@ test('an subgraph-member edit is attributed to the child, not blobbed into the p
   await page.locator('[id^="generic-edit-submit-"]').click();
 
   // The read-only Backup box reflects it.
-  await expect(page.getByTestId('generic-owned').filter({ hasText: 'Backup' }))
+  await expect(page.getByTestId('generic-owned').filter({ hasText: 'backup' }))
     .toContainText(newSchedule, { timeout: 15_000 });
 
   await page.reload();
@@ -261,7 +261,7 @@ test('the schema pins column order, and back-references are dropped', async ({ p
   // list is the INTERFACE view, so `clusterType` — which only
   // EksaKubernetesCluster declares — is proof the pin is applied to the union
   // of implementations and not just to the interface's own fields.
-  const pinned = ['Provider', 'Cluster Type', 'Environment', 'Kubernetes Version'];
+  const pinned = ['provider', 'clusterType', 'environment', 'kubernetesVersion'];
   const positions = pinned.map((f) => headers.indexOf(f));
   expect(positions.every((p) => p > 0), `pinned fields missing from ${JSON.stringify(headers)}`).toBeTruthy();
   for (let i = 1; i < positions.length; i++) {
@@ -269,19 +269,19 @@ test('the schema pins column order, and back-references are dropped', async ({ p
   }
   // Everything unpinned falls BEHIND. cni sorts first alphabetically, so it
   // would lead without the pin — that is the case that prompted this.
-  expect(headers.indexOf('CNI')).toBeGreaterThan(positions[positions.length - 1]);
+  expect(headers.indexOf('cni')).toBeGreaterThan(positions[positions.length - 1]);
 
   // A relationship table must not carry a column naming the entity you are on.
   await page.goto('/clusters?open=' + encodeURIComponent('houston:g2-m'));
   await openAllDetailPanels(page);
-  const nodes = page.getByTestId('generic-tab').filter({ hasText: 'Nodes' }).first();
+  const nodes = page.getByTestId('generic-tab').filter({ hasText: 'nodes' }).first();
   await expect(nodes).toBeVisible();
   expect(await nodes.locator('thead th').allInnerTexts(),
-    'the Nodes table must not repeat the cluster on every row').not.toContain('Cluster');
+    'the Nodes table must not repeat the cluster on every row').not.toContain('cluster');
 
-  const workloads = page.getByTestId('generic-tab').filter({ hasText: 'Workload Clusters' }).first();
+  const workloads = page.getByTestId('generic-tab').filter({ hasText: 'workloadClusters' }).first();
   if (await workloads.count()) {
-    expect(await workloads.locator('thead th').allInnerTexts()).not.toContain('Management Cluster');
+    expect(await workloads.locator('thead th').allInnerTexts()).not.toContain('managementCluster');
   }
 });
 

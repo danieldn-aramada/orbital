@@ -68,7 +68,7 @@ test.describe('DataTable interactions', () => {
     await expect(page.locator('input[aria-controls="generic-table"]')).toBeVisible({ timeout: 10_000 })
     await waitForDataRows(page, 'generic-table')
 
-    const header = visibleHeader(page, 'Service Tag')
+    const header = visibleHeader(page, 'serviceTag')
     await expect(header).toBeVisible({ timeout: 5_000 })
     await header.click()
     await expect(header).toHaveAttribute('aria-sort', 'ascending', { timeout: 5_000 })
@@ -99,7 +99,7 @@ test.describe('DataTable interactions', () => {
     await waitForDataRows(page, 'generic-table')
 
     // Sort by OOB IP ascending (default is by Data Center; this is first OOB IP click).
-    const oobIPHeader = visibleHeader(page, 'OOB IP')
+    const oobIPHeader = visibleHeader(page, 'oobIP')
     await expect(oobIPHeader).toBeVisible({ timeout: 5_000 })
     await oobIPHeader.click()
     await expect(oobIPHeader).toHaveAttribute('aria-sort', 'ascending', { timeout: 5_000 })
@@ -109,7 +109,7 @@ test.describe('DataTable interactions', () => {
     // here would silently start reading a different column the next time a
     // field is added.
     const headers = await page.locator('#generic-table thead th').allInnerTexts()
-    const oobIPCol = headers.findIndex((h) => h.trim() === 'OOB IP') + 1
+    const oobIPCol = headers.findIndex((h) => h.trim() === 'oobIP') + 1
     expect(oobIPCol, 'no OOB IP column').toBeGreaterThan(0)
     const oobIPs = await domCells(page, '#generic-table', oobIPCol)
     const validIPs = oobIPs.filter(v => /^\d+\.\d+\.\d+\.\d+$/.test(v))
@@ -127,7 +127,7 @@ test.describe('DataTable interactions', () => {
     await expect(page.locator('input[aria-controls="generic-table"]')).toBeVisible({ timeout: 10_000 })
     await waitForDataRows(page, 'generic-table')
 
-    const header = visibleHeader(page, 'Name')
+    const header = visibleHeader(page, 'name')
     await expect(header).toBeVisible({ timeout: 5_000 })
     await header.click()
     await expect(header).toHaveAttribute('aria-sort', 'ascending', { timeout: 5_000 })

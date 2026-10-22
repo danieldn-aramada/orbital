@@ -156,8 +156,8 @@ func TestGeneric_DetailRendersFieldsAndRelationshipTabs(t *testing.T) {
 	if !strings.Contains(body, "42") {
 		t.Error("expected the rack's uHeight value 42 in the Racks tab")
 	}
-	if !strings.Contains(body, "Racks") {
-		t.Error("expected a Racks tab — a list relationship is a table")
+	if !strings.Contains(body, "<span>racks</span>") {
+		t.Error("expected a racks tab — a list relationship is a table")
 	}
 	// A row of a PAGELESS type must not link: Rack has no URL, so there is
 	// nowhere to go. That is derived from "does its type have a page", which is

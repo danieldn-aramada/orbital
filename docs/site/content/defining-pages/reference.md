@@ -71,12 +71,10 @@ Applies wherever the type renders: its own page, and every tab and table on othe
 
 ```yaml
 labels:
-  orbId: Orb ID
-  macAddress: MAC Address
-  osToIdracPassThroughEnabled: OS to iDRAC Pass-Through Enabled
+  networkInterfaceConnectedNetworkDevice: Connections
 ```
 
-A field not listed here is labelled by splitting its name: `rackPosition` becomes **Rack Position**. List only what that gets wrong, usually acronyms. Keyed by field name, so one entry fixes the label on every type that has the field.
+A field not listed here shows its raw name, `rackPosition`, which is the name you query it by. Add a label only when the text adds meaning, not to fix capitalisation. Keyed by field name, so one entry covers every type that has the field.
 
 ## `canonicalParent`
 

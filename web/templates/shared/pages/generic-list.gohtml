@@ -103,11 +103,11 @@ has one query built from the view, so there is nothing per-type for JS to know.
                data-label="{{.View.Label}}">
           <thead>
             <tr>
-              <th>Name</th>
+              <th>name</th>
               {{range .Columns}}<th>{{.Label}}</th>{{end}}
               {{range .RefColumns}}<th style="white-space:nowrap">{{.Label}}</th>{{end}}
               {{range .ComputedColumns}}<th style="white-space:nowrap">{{.Label}}</th>{{end}}
-              <th>Orb ID</th>
+              <th>orbId</th>
             </tr>
           </thead>
           <tbody>

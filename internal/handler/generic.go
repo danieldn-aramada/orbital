@@ -347,18 +347,8 @@ func relatedRows(raw any) []map[string]any {
 	}
 }
 
-// humanFieldLabel turns a GraphQL field name into a tab heading:
-// "networkInterfaces" → "Network Interfaces".
-// humanFieldLabel turns a camelCase field name into a heading: "uHeight" →
-// "U Height", "tinkerbellIP" → "Tinkerbell IP".
-//
-// A run of capitals is an acronym and stays together — splitting on every
-// capital rendered "Tinkerbell I P", which reads as a typo rather than a label.
-// A capital that STARTS a run still breaks the previous word, and the last
-// capital of a run starts the next word when a lowercase follows it
-// ("oobIPAddress" → "Oob IP Address").
 // tabLabel names a relationship panel. A PATH tab is labelled by its LEAF —
-// "Storage Devices", not "Storage Controllers.storage Devices" — because the
+// "storageDevices", not "storageControllers.storageDevices" — because the
 // path is how the rows are reached, not what they are.
 func tabLabel(field string, label func(string) string) string {
 	if _, leaf, isPath := strings.Cut(field, "."); isPath {
@@ -366,12 +356,6 @@ func tabLabel(field string, label func(string) string) string {
 	}
 	return label(field)
 }
-
-// humanFieldLabel title-cases a field name. It lives in configitems because the
-// VIEW carries the resolved labels now, and the fallback has to be the same rule
-// on both sides of that boundary — an integrator reading the response and
-// orbital rendering its own header must not disagree about "oobIP".
-func humanFieldLabel(field string) string { return configitems.HumanFieldLabel(field) }
 
 // refLabel is the link text for a reference with no name of its own.
 //

@@ -62,39 +62,14 @@
 schemaVersion: v18
 
 # FIELD LABELS — the stored field name on the left, the text the UI shows on
-# the right. Django's `verbose_name`, ServiceNow's `column_label`, Salesforce's
-# Label vs API Name: the same split every comparable system makes.
+# the right. A field NOT listed shows its RAW name (`firmwareRepository`): the
+# UI's readers are API developers, and the raw name is what they query by.
 #
-# A field NOT listed here derives mechanically (camelCase -> "Camel Case").
-# That default is deliberate and transparent; this file states only what the
-# derivation gets wrong.
-#
-# Keyed by FIELD NAME, not by type: `wwn` is on StorageDevice and
-# StorageVolume, and a per-type key meant two places to state one fact — which
-# is how one page read "WWN" and the other "Wwn".
-# `types.<T>.fields.<f>.label` overrides this for the rarer case where two
-# types genuinely want different text (NetworkDevice.networkInterfaces: Ports).
-#
-# A VALUE, not a rule. A title-casing rule with an acronym table cannot produce
-# "OS to iDRAC Pass-Through Enabled" — no rule yields the lowercase "to" or the
-# hyphen — so a rule would always have needed declared labels on top of it.
-labels:
-  orbId: Orb ID
-  cni: CNI
-  gpu: GPU
-  wwn: WWN
-  macAddress: MAC Address
-  oobIP: OOB IP
-  oobMAC: OOB MAC
-  idracSettings: iDRAC Settings
-  sshEnabled: SSH Enabled
-  dhcpEnabled: DHCP Enabled
-  ipmiEnabled: IPMI Enabled
-  racadmEnabled: RACADM Enabled
-  usbManagementPortEnabled: USB Management Port Enabled
-  osToIdracPassThroughEnabled: OS to iDRAC Pass-Through Enabled
-  vcPosition: VC Position
-  vcPriority: VC Priority
+# Add an entry only when the text adds MEANING, never to fix capitalisation —
+# `SSH Enabled` over `sshEnabled` is not worth a line. Keyed by field name, so
+# one entry covers every type carrying the field; `types.<T>.fields.<f>.label`
+# overrides it for one type (NetworkDevice.networkInterfaces: Ports).
+labels: {}
 
 pages:
 
