@@ -705,33 +705,32 @@ func PathTree(members []ViewTab) *PathNode {
 }
 
 // Labeller returns the display-label function for a type: the declared label
-// where there is one, title-casing otherwise.
+// where there is one, the RAW field name otherwise. The UI's readers are API
+// developers, so it shows the name they query by.
 //
 // One mechanism, resolved server-side and carried on the view, so a column
 // header, a field row and the metadata box cannot disagree — and so an
 // integrator rendering their own table gets orbital's answer rather than
-// re-deriving the title-casing rule.
+// re-deriving the fallback.
 func (v View) Labeller() func(string) string {
 	return func(field string) string {
 		if l, ok := v.Labels[field]; ok {
 			return l
 		}
-		return HumanFieldLabel(field)
+		return field
 	}
 }
 
-// HumanFieldLabel title-cases a field name: "serviceTag" → "Service Tag".
+// HumanTypeName title-cases a TYPE name for prose — "New Network Device" on a
+// create button. Never a field-label fallback: fields render raw unless
+// `labels:` says otherwise.
 //
 // A run of capitals is an acronym and stays together — splitting on every
 // capital rendered "Tinkerbell I P", which reads as a typo rather than a label.
 // A capital that STARTS a run still breaks the previous word, and the last
 // capital of a run starts the next word when a lowercase follows it
 // ("oobIPAddress" → "Oob IP Address").
-//
-// It cannot know a genuine acronym, which is what the `label:` declaration is
-// for — `cni` becomes "Cni" here and "CNI" with one. Only declare what this
-// rule gets wrong.
-func HumanFieldLabel(field string) string {
+func HumanTypeName(field string) string {
 	isUpper := func(i int) bool { return i >= 0 && i < len(field) && field[i] >= 'A' && field[i] <= 'Z' }
 	isLower := func(i int) bool { return i >= 0 && i < len(field) && field[i] >= 'a' && field[i] <= 'z' }
 

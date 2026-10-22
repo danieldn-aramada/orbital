@@ -41,53 +41,43 @@ func TestGenericDetailQuerySelectsMetaFields(t *testing.T) {
 	}
 }
 
-func TestHumanFieldLabel(t *testing.T) {
-	tests := []struct{ field, want string }{
-		{"name", "Name"},
-		{"uHeight", "U Height"},
-		{"kubernetesVersion", "Kubernetes Version"},
-		{"tinkerbellIP", "Tinkerbell IP"},
-		{"controlPlaneEndpoint", "Control Plane Endpoint"},
-		{"ipv4", "Ipv4"},
-		{"s3Sync", "S3 Sync"},
+func TestHumanTypeName(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"Server", "Server"},
+		{"NetworkDevice", "Network Device"},
 		{"IPAddress", "IP Address"},
+		{"EksaKubernetesCluster", "Eksa Kubernetes Cluster"},
 		{"", ""},
 	}
 	for _, tt := range tests {
-		t.Run(tt.field, func(t *testing.T) {
-			if got := humanFieldLabel(tt.field); got != tt.want {
-				t.Errorf("humanFieldLabel(%q) = %q, want %q", tt.field, got, tt.want)
+		t.Run(tt.in, func(t *testing.T) {
+			if got := configitems.HumanTypeName(tt.in); got != tt.want {
+				t.Errorf("HumanTypeName(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}
 }
 
-// The ALGORITHM is in Go; the LABEL is config. This pins the seam: a field the
-// document names renders that text, a field it does not derives mechanically.
+// A field label is the RAW field name unless config declares one.
 //
-// The regression this catches is a vocabulary table creeping back into the
-// binary. One did, briefly, and it was wrong twice over: an adopter modelling
-// PDUs or iLO cannot edit the binary, and no title-casing rule can produce
-// "OS to iDRAC Pass-Through Enabled" — the lowercase "to" and the hyphen come
-// from a declared value or from nowhere.
-func TestLabeller_TextComesFromConfigNotCode(t *testing.T) {
+// The regressions: a title-casing fallback creeping back (the UI's readers are
+// API developers, who query by `firmwareRepository`, not "Firmware
+// Repository"), or a vocabulary table moving into the binary, where an adopter
+// modelling PDUs cannot edit it.
+func TestLabeller_RawUnlessDeclared(t *testing.T) {
 	v := configitems.View{Labels: map[string]string{
-		"idracSettings":               "iDRAC Settings",
-		"wwn":                         "WWN",
-		"osToIdracPassThroughEnabled": "OS to iDRAC Pass-Through Enabled",
-		"pduSettings":                 "PDU Settings",
+		"networkInterfaces": "Ports",
+		"pduSettings":       "PDU Settings",
 	}}
 	label := v.Labeller()
 	for _, tt := range []struct{ in, want string }{
-		{"idracSettings", "iDRAC Settings"},
-		{"wwn", "WWN"},
-		// The case no rule can reach.
-		{"osToIdracPassThroughEnabled", "OS to iDRAC Pass-Through Enabled"},
+		{"networkInterfaces", "Ports"},
 		// An ADOPTER's field, which orbital ships no knowledge of.
 		{"pduSettings", "PDU Settings"},
-		// Undeclared fields derive mechanically, and that is the default.
-		{"serviceTag", "Service Tag"},
-		{"racadmEnabled", "Racadm Enabled"},
+		// Undeclared: raw, untouched.
+		{"firmwareRepository", "firmwareRepository"},
+		{"oobIP", "oobIP"},
+		{"orbId", "orbId"},
 	} {
 		if got := label(tt.in); got != tt.want {
 			t.Errorf("label(%q) = %q, want %q", tt.in, got, tt.want)

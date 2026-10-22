@@ -1064,7 +1064,7 @@ func (g *GenericRenderer) Fallback(c echo.Context) error {
 // in the view's declared order, with the label and the local-time decision
 // already made.
 // fieldLabeller returns a label function for a type, from the labels the VIEW
-// resolved — declared where there is a declaration, title-cased otherwise.
+// resolved — declared where there is a declaration, raw otherwise.
 //
 // Read off the view rather than re-derived from the schema, because an
 // integrator rendering their own table gets exactly this list from

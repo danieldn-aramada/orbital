@@ -72,7 +72,7 @@ test('a relationship tab shows the child type\'s own fields, not just names', as
 
   const serversTab = page.locator('[data-testid="generic-tab"][data-field="servers"]');
   await expect(serversTab).toBeVisible();
-  for (const col of ['Hostname', 'Model', 'Service Tag', 'Rack Position']) {
+  for (const col of ['hostname', 'model', 'serviceTag', 'rackPosition']) {
     await expect(serversTab).toContainText(col);
   }
   // And actual values, or the columns are headers over an empty table.
@@ -129,11 +129,10 @@ test('path columns render on the server list', async ({ page }) => {
   const headers = await page.locator('#generic-table thead th').allInnerTexts();
   // "Cluster", not "Name": an identity leaf labels by its hop, which also
   // avoids colliding with the row's own Name column.
-  expect(headers).toContain('Cluster');
-  expect(headers).toContain('Role');
-  // "GPU", not "Gpu" — the label is declared on KubernetesNode's view, so the
-  // label must come from the type the field belongs to.
-  expect(headers).toContain('GPU');
+  expect(headers).toContain('cluster');
+  expect(headers).toContain('role');
+  // The leaf's raw field name, `gpu` — not prefixed by the path it was reached by.
+  expect(headers).toContain('gpu');
 });
 
 test('a relationship table shows the child type\'s computed columns', async ({ page }) => {
@@ -141,18 +140,18 @@ test('a relationship table shows the child type\'s computed columns', async ({ p
   await expect(page.getByTestId('generic-fields')).toBeVisible({ timeout: 15_000 });
   await openAllDetailPanels(page);
 
-  const racks = page.getByTestId('generic-tab').filter({ hasText: 'Racks' }).first();
-  await expect(racks.locator('thead th').filter({ hasText: 'Servers' })).toHaveCount(1);
+  const racks = page.getByTestId('generic-tab').filter({ hasText: 'racks' }).first();
+  await expect(racks.locator('thead th').filter({ hasText: 'servers' })).toHaveCount(1);
   // Subgraph members take a different branch of the detail query, and that
   // branch originally skipped the computed columns — header present, cells
   // empty. This asserts the VALUE, which is what caught it.
   const rackHeaders = await racks.locator('thead th').allInnerTexts();
-  const cell = racks.locator('tbody tr').first().locator('td').nth(rackHeaders.indexOf('Servers'));
+  const cell = racks.locator('tbody tr').first().locator('td').nth(rackHeaders.indexOf('servers'));
   expect(parseInt((await cell.innerText()).trim(), 10)).toBeGreaterThan(0);
 
-  const servers = page.getByTestId('generic-tab').filter({ hasText: 'Servers' }).first();
+  const servers = page.getByTestId('generic-tab').filter({ hasText: 'servers' }).first();
   const srvHeaders = await servers.locator('thead th').allInnerTexts();
-  expect(srvHeaders, 'a Server row carries its computed columns wherever it renders').toContain('Cluster');
+  expect(srvHeaders, 'a Server row carries its computed columns wherever it renders').toContain('cluster');
 });
 
 // The case the whole feature was filed for, and the one this spec originally
@@ -174,13 +173,13 @@ test('a network device shows what its connected servers do', async ({ page }) =>
 
   const conns = page.getByTestId('generic-tab').filter({ hasText: 'Connections' }).first();
   const headers = await conns.locator('thead th').allInnerTexts();
-  for (const h of ['Server', 'Cluster', 'Role', 'GPU']) {
+  for (const h of ['server', 'cluster', 'role', 'gpu']) {
     expect(headers, `Connections must carry ${h}`).toContain(h);
   }
 
   // At least one row has a real cluster — headers over universally empty cells
   // is exactly how the subgraph-member branch bug presented.
-  const idx = headers.indexOf('Cluster');
+  const idx = headers.indexOf('cluster');
   const texts = await conns.locator('tbody tr').allInnerTexts();
   expect(texts.length).toBeGreaterThan(0);
   const values = await Promise.all(
@@ -198,16 +197,16 @@ test('an absent relationship says so, and a wrapper with children does not', asy
   await openAllDetailPanels(page);
 
   // `rack` is null on this server, and a list with no rows already said "None."
-  const rack = page.getByTestId('generic-owned').filter({ hasText: 'Rack' }).first();
+  const rack = page.getByTestId('generic-owned').filter({ hasText: 'rack' }).first();
   await expect(rack).toContainText('None.');
-  await expect(page.getByTestId('generic-tab').filter({ hasText: 'Network Adapters' }).first())
+  await expect(page.getByTestId('generic-tab').filter({ hasText: 'networkAdapters' }).first())
     .toContainText('None.');
 
   // A panel with CHILDREN is not empty even when the wrapper itself is unset:
   // an unconfigured ClusterBackup still has to list what could be configured.
   await page.goto('/clusters?open=' + encodeURIComponent('alaska-dot-cruiser:adot-m'));
   await openAllDetailPanels(page);
-  const backup = page.getByTestId('generic-owned').filter({ hasText: 'Backup' }).first();
-  await expect(backup).toContainText('Etcd');
+  const backup = page.getByTestId('generic-owned').filter({ hasText: 'backup' }).first();
+  await expect(backup).toContainText('etcd');
   await expect(backup).not.toContainText('None.');
 });

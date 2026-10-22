@@ -33,13 +33,13 @@ test('detail page', async ({ page }) => {
 
 test('single relationship renders as a panel', async ({ page }) => {
   await openDetailView(page, 'servers', SERVER);
-  await openDetailPanel(page, 'iDRAC Settings');
+  await openDetailPanel(page, 'idracSettings');
   await page.getByTestId('generic-detail-tabs').screenshot({ path: `${OUT}/relationship-panel.png` });
 });
 
 test('list relationship renders as a table', async ({ page }) => {
   await openDetailView(page, 'servers', SERVER);
-  await openDetailPanel(page, 'Network Interfaces');
+  await openDetailPanel(page, 'networkInterfaces');
   await page.getByTestId('generic-detail-tabs').screenshot({ path: `${OUT}/relationship-table.png` });
 });
 

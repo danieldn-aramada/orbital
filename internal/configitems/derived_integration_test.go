@@ -194,8 +194,8 @@ func TestDeployedViewsCarryTheExpectedSuppressions(t *testing.T) {
 	// Zero only. An exact count asserts the CONTENTS of views.yaml, which is a
 	// tunable — it broke the first time a field was made read-only.
 	if suppressed == 0 {
-		t.Fatalf("the resolved views suppress NO fields. This environment is running a views "+
-			"document that predates them, so fields are editable here that are not editable "+
+		t.Fatalf("the resolved views suppress NO fields. This environment is running a views " +
+			"document that predates them, so fields are editable here that are not editable " +
 			"elsewhere. Check ORBITAL_VIEWS_PATH and the overlay.")
 	}
 
