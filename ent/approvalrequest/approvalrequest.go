@@ -59,6 +59,8 @@ const (
 	FieldExecutedBy = "executed_by"
 	// EdgeApprovals holds the string denoting the approvals edge name in mutations.
 	EdgeApprovals = "approvals"
+	// EdgeDecisions holds the string denoting the decisions edge name in mutations.
+	EdgeDecisions = "decisions"
 	// EdgeMergeAttempts holds the string denoting the merge_attempts edge name in mutations.
 	EdgeMergeAttempts = "merge_attempts"
 	// Table holds the table name of the approvalrequest in the database.
@@ -70,6 +72,13 @@ const (
 	ApprovalsInverseTable = "approvals"
 	// ApprovalsColumn is the table column denoting the approvals relation/edge.
 	ApprovalsColumn = "approval_request_id"
+	// DecisionsTable is the table that holds the decisions relation/edge.
+	DecisionsTable = "approval_decisions"
+	// DecisionsInverseTable is the table name for the ApprovalDecision entity.
+	// It exists in this package in order to avoid circular dependency with the "approvaldecision" package.
+	DecisionsInverseTable = "approval_decisions"
+	// DecisionsColumn is the table column denoting the decisions relation/edge.
+	DecisionsColumn = "approval_request_id"
 	// MergeAttemptsTable is the table that holds the merge_attempts relation/edge.
 	MergeAttemptsTable = "merge_attempts"
 	// MergeAttemptsInverseTable is the table name for the MergeAttempt entity.
@@ -263,6 +272,20 @@ func ByApprovals(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByDecisionsCount orders the results by decisions count.
+func ByDecisionsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newDecisionsStep(), opts...)
+	}
+}
+
+// ByDecisions orders the results by decisions terms.
+func ByDecisions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newDecisionsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByMergeAttemptsCount orders the results by merge_attempts count.
 func ByMergeAttemptsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -281,6 +304,13 @@ func newApprovalsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ApprovalsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, ApprovalsTable, ApprovalsColumn),
+	)
+}
+func newDecisionsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(DecisionsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, DecisionsTable, DecisionsColumn),
 	)
 }
 func newMergeAttemptsStep() *sqlgraph.Step {

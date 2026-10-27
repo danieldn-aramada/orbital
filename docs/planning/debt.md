@@ -31,7 +31,6 @@ Every entry is **open**. Closed items are **deleted, not struck through** — `C
 | Audit retention: env var + in-process pruner | Med | `ORBITAL_AUDIT_RETENTION_DAYS`, default `0` = indefinite. → [AUDIT.md](../reference/AUDIT.md) |
 | `changes[]` absent for creates, bulk adds, multi-op events | Med | The cheap half of the per-entity audit spike. → [backlog.md](backlog.md) |
 | Non-orbId-filtered mutations record empty `resource_ids` | Med | A mutation filtered on another field selecting only `{numUids}` names nothing. |
-| A re-decided approval erases the prior decision and its comment | Low | `decide` is delete-then-create (`changerequest.go:696`), so a rejection vanishes when that approver later approves. The obvious fix (`superseded_at` + a partial unique index) must be taught to 3 load sites and 5 iteration sites of `st.Approvals` — miss one and the approval count that gates merges inflates. → [CHANGE-CONTROL.md](../reference/CHANGE-CONTROL.md) |
 | Refactor the bundler URL config DSL | Low | `ORBITAL_BUNDLER_URLS=name=url` is a micro-DSL in one env var; already caused one bug. → [CONFIG.md](../reference/CONFIG.md) |
 | Unify `/graphql` proxy-guard error envelope | Low | **Deferred** — guards return the REST envelope, DGraph errors pass through. Build when a client needs it. → [ERROR-RESPONSES.md](../reference/ERROR-RESPONSES.md) |
 | UUIDv4 primary keys should be v7 | Low | 8 tables still `Default(uuid.New)`; helper at `ent/schema/uuidv7.go`. Do **not** rewrite existing ids — v4 and v7 coexist in one column. |

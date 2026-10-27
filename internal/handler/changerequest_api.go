@@ -358,8 +358,12 @@ type changeRequestResponse struct {
 	// Record is the per-entity account of what this request does, one entry per
 	// change object, with each item's applied status folded in. Built from the
 	// payload so it stays correct after a merge, when the live diff is empty.
-	Record        []changeRecordEntry  `json:"record"`
-	Reviews       []approvalResponse   `json:"reviews,omitempty"`
+	Record  []changeRecordEntry `json:"record"`
+	Reviews []approvalResponse  `json:"reviews,omitempty"`
+	// ReviewHistory is every decision ever cast, oldest first — including the
+	// ones `reviews` no longer shows because the approver re-decided. Present on
+	// a single request, omitted from the list.
+	ReviewHistory []reviewHistoryEntry `json:"reviewHistory,omitempty"`
 	MergeAttempts []mergeAttemptResult `json:"mergeAttempts,omitempty"`
 	CreatedAt     time.Time            `json:"createdAt"`
 	UpdatedAt     *time.Time           `json:"updatedAt,omitempty"`
@@ -385,6 +389,22 @@ type approvalResponse struct {
 	// Current is false when the decision was cast against an earlier version of
 	// the intent and no longer counts — surfaced rather than hidden so the UI
 	// can say "approved an earlier version" instead of the approval vanishing.
+	Current bool `json:"current" example:"true"`
+}
+
+// reviewHistoryEntry is one decision as it was cast. Never changes once written.
+type reviewHistoryEntry struct {
+	Approver string `json:"approver" example:"reviewer@armada.ai"`
+	Decision string `json:"decision" example:"approved"`
+	Comment  string `json:"comment,omitempty"`
+	// Revision is the changeset revision the decision was cast against.
+	Revision int       `json:"revision" example:"1"`
+	At       time.Time `json:"at"`
+	// Superseded is true when the same approver decided again later — this is
+	// no longer their decision.
+	Superseded bool `json:"superseded" example:"false"`
+	// Current has the meaning it has on `reviews`: this decision still counts
+	// against the current version. Always false when Superseded.
 	Current bool `json:"current" example:"true"`
 }
 
@@ -1530,7 +1550,23 @@ func renderFrom(cr *ent.ApprovalRequest, st crState, actor string, caller caller
 			At:       a.CreatedAt,
 			// On a terminal request every decision is a historical fact, not a
 			// claim about the current state.
-			Current: terminal || a.ApprovedAtHash == st.CurrentHash,
+			Current: terminal || stillCounts(a.ApprovedAtHash, a.ApprovedAtRevision, cr, st),
+		})
+	}
+	latest := map[string]int{}
+	for i, d := range cr.Edges.Decisions {
+		latest[d.Approver] = i
+	}
+	for i, d := range cr.Edges.Decisions {
+		superseded := latest[d.Approver] != i
+		out.ReviewHistory = append(out.ReviewHistory, reviewHistoryEntry{
+			Approver:   d.Approver,
+			Decision:   string(d.Decision),
+			Comment:    d.Comment,
+			Revision:   d.ApprovedAtRevision,
+			At:         d.CreatedAt,
+			Superseded: superseded,
+			Current:    !superseded && (terminal || stillCounts(d.ApprovedAtHash, d.ApprovedAtRevision, cr, st)),
 		})
 	}
 	for _, m := range cr.Edges.MergeAttempts {

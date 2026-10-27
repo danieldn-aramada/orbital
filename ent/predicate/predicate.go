@@ -9,6 +9,9 @@ import (
 // Approval is the predicate function for approval builders.
 type Approval func(*sql.Selector)
 
+// ApprovalDecision is the predicate function for approvaldecision builders.
+type ApprovalDecision func(*sql.Selector)
+
 // ApprovalPolicy is the predicate function for approvalpolicy builders.
 type ApprovalPolicy func(*sql.Selector)
 

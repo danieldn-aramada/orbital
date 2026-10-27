@@ -2791,6 +2791,13 @@
                     "type": "integer",
                     "example": 1
                 },
+                "reviewHistory": {
+                    "description": "ReviewHistory is every decision ever cast, oldest first — including the\nones `reviews` no longer shows because the approver re-decided. Present on\na single request, omitted from the list.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.reviewHistoryEntry"
+                    }
+                },
                 "reviews": {
                     "type": "array",
                     "items": {
@@ -3435,6 +3442,40 @@
                 },
                 "confirmSchemaMismatch": {
                     "description": "ConfirmSchemaMismatch must be true to proceed when the backup's schema\nversion differs from the running schema. false (default) makes such a\nrestore fail fast rather than risk a mismatched load.",
+                    "type": "boolean",
+                    "example": false
+                }
+            }
+        },
+        "handler.reviewHistoryEntry": {
+            "type": "object",
+            "properties": {
+                "approver": {
+                    "type": "string",
+                    "example": "reviewer@armada.ai"
+                },
+                "at": {
+                    "type": "string"
+                },
+                "comment": {
+                    "type": "string"
+                },
+                "current": {
+                    "description": "Current has the meaning it has on `reviews`: this decision still counts\nagainst the current version. Always false when Superseded.",
+                    "type": "boolean",
+                    "example": true
+                },
+                "decision": {
+                    "type": "string",
+                    "example": "approved"
+                },
+                "revision": {
+                    "description": "Revision is the changeset revision the decision was cast against.",
+                    "type": "integer",
+                    "example": 1
+                },
+                "superseded": {
+                    "description": "Superseded is true when the same approver decided again later — this is\nno longer their decision.",
                     "type": "boolean",
                     "example": false
                 }

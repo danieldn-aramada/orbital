@@ -18,6 +18,11 @@ var AuditTables = []string{
 	"audit_event_resource_types",
 }
 
+// AppendOnlyTables are every table the guard protects: the audit record, plus
+// approval_decisions — the change-request review record, which is deliberately
+// kept out of the audit log and so is evidence in its own right.
+var AppendOnlyTables = append(append([]string{}, AuditTables...), "approval_decisions")
+
 // auditGuardFn is the trigger body. One function, reused by every table, so the
 // three can never drift apart.
 //
@@ -28,9 +33,9 @@ const auditGuardFn = `
 CREATE OR REPLACE FUNCTION orbital_audit_append_only() RETURNS trigger AS $$
 BEGIN
     RAISE EXCEPTION
-        'audit records are append-only: % on % is refused', TG_OP, TG_TABLE_NAME
+        'append-only table: % on % is refused', TG_OP, TG_TABLE_NAME
         USING ERRCODE = 'integrity_constraint_violation',
-              HINT = 'Audit history is evidence. Correct a mistaken record by writing a new event, never by editing or deleting one.';
+              HINT = 'This history is evidence. Correct a mistaken record by writing a new one, never by editing or deleting one.';
 END;
 $$ LANGUAGE plpgsql;`
 
@@ -60,7 +65,7 @@ func InstallAuditGuard(ctx context.Context, rawDB *sql.DB) error {
 	if _, err := rawDB.ExecContext(ctx, auditGuardFn); err != nil {
 		return fmt.Errorf("creating audit guard function: %w", err)
 	}
-	for _, t := range AuditTables {
+	for _, t := range AppendOnlyTables {
 		// Dropped first because CREATE TRIGGER has no OR REPLACE before
 		// PostgreSQL 14, and orbital does not pin a server version.
 		if _, err := rawDB.ExecContext(ctx,
@@ -91,7 +96,7 @@ func VerifyAuditGuard(ctx context.Context, rawDB *sql.DB) ([]string, error) {
 		return nil, nil
 	}
 	var unprotected []string
-	for _, t := range AuditTables {
+	for _, t := range AppendOnlyTables {
 		// tgenabled 'D' is a trigger that exists but is DISABLED — it reads as
 		// present to anything that only checks for the row, and fires never.
 		var ok bool
@@ -131,7 +136,7 @@ func EnsureAuditGuard(ctx context.Context, rawDB *sql.DB, logger *slog.Logger, o
 	if err != nil {
 		logger.Error("audit append-only guard could not be verified — treat as unprotected", "err", err)
 		if onUnprotected != nil {
-			onUnprotected(len(AuditTables))
+			onUnprotected(len(AppendOnlyTables))
 		}
 		return
 	}
@@ -143,7 +148,7 @@ func EnsureAuditGuard(ctx context.Context, rawDB *sql.DB, logger *slog.Logger, o
 			"unprotected", strings.Join(unprotected, ","))
 		return
 	}
-	logger.Info("audit append-only guard verified", "tables", strings.Join(AuditTables, ","))
+	logger.Info("audit append-only guard verified", "tables", strings.Join(AppendOnlyTables, ","))
 }
 
 func guardName(table string) string { return table + "_append_only" }

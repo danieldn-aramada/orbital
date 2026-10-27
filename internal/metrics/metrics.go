@@ -114,8 +114,8 @@ func init() {
 		jobsTotal, jobFailures, jobLastSuccess)
 }
 
-// SetAuditTablesUnprotected records how many audit tables lack the append-only
-// guard. Called at startup after the guard is installed and verified; passed as
+// SetAuditTablesUnprotected records how many append-only tables (the audit
+// tables and approval_decisions — db.AppendOnlyTables) lack the guard. Called at startup after the guard is installed and verified; passed as
 // a callback so internal/db needs no dependency on this package.
 func SetAuditTablesUnprotected(n int) { auditTablesUnprotected.Set(float64(n)) }
 

@@ -117,7 +117,36 @@ func Migrate(ctx context.Context, rawDB *sql.DB, client *ent.Client, timeout tim
 	if waited {
 		logger.Info("schema migration lock acquired after waiting")
 	}
-	return client.Schema.Create(ctx, migrate.WithDropColumn(true))
+	if err := client.Schema.Create(ctx, migrate.WithDropColumn(true)); err != nil {
+		return err
+	}
+	n, err := BackfillApprovalDecisions(ctx, conn)
+	if err != nil {
+		return fmt.Errorf("backfill approval decisions: %w", err)
+	}
+	if n > 0 {
+		logger.Info("recorded pre-existing approvals in the decision history", "rows", n)
+	}
+	return nil
+}
+
+// BackfillApprovalDecisions copies every current approval into the append-only
+// decision history, so requests reviewed before the history existed do not show
+// an empty one. Each copy keeps its approval's id, so a second run inserts
+// nothing. Decisions replaced before the history existed are not recoverable.
+func BackfillApprovalDecisions(ctx context.Context, db interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}) (int64, error) {
+	res, err := db.ExecContext(ctx, `
+		INSERT INTO approval_decisions
+			(id, approval_request_id, approver, decision, comment, approved_at_hash, approved_at_revision, created_at)
+		SELECT id, approval_request_id, approver, decision, COALESCE(comment, ''), approved_at_hash, approved_at_revision, created_at
+		FROM approvals
+		ON CONFLICT (id) DO NOTHING`)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 // backoff grows the retry interval to a 1s ceiling. Short early so a fresh

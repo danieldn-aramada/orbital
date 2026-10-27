@@ -256,6 +256,8 @@ The audit tab query (`GET /api/v1/audit-log?orbId=...`) filters to `event_catego
   regardless of privilege, which is why this needs no role split and no deployment change.
 - **All three tables are guarded.** A record's orbIds and resource types live in the children;
   guarding only the parent would let someone make an event unfindable without touching the event.
+  **`approval_decisions` is guarded too** *(2026-10-23)* — change-request review is kept out of this
+  log by decision, so that table is the only review record. `db.AppendOnlyTables` is the full list.
 - **Do NOT add a bypass flag or session variable "for the pruner".** An escape hatch nobody uses is
   attack surface. The retention pruner needs a defined path designed with it, not a pre-built one.
 - Installed and verified on every boot by `db.EnsureAuditGuard`; a missing *or disabled* trigger logs

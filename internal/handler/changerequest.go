@@ -13,6 +13,7 @@ import (
 
 	"github.com/armada/orbital/ent"
 	entapproval "github.com/armada/orbital/ent/approval"
+	"github.com/armada/orbital/ent/approvaldecision"
 	"slices"
 
 	"github.com/armada/orbital/ent/approvalpolicy"
@@ -326,6 +327,9 @@ func (h *ChangeRequest) Get(ctx context.Context, id int64) (*ent.ApprovalRequest
 	cr, err := h.db.ApprovalRequest.Query().
 		Where(approvalrequest.ID(id)).
 		WithApprovals().
+		WithDecisions(func(q *ent.ApprovalDecisionQuery) {
+			q.Order(ent.Asc(approvaldecision.FieldCreatedAt), ent.Asc(approvaldecision.FieldID))
+		}).
 		WithMergeAttempts().
 		Only(ctx)
 	if ent.IsNotFound(err) {
@@ -418,7 +422,7 @@ func (h *ChangeRequest) State(ctx context.Context, cr *ent.ApprovalRequest) (crS
 		switch {
 		case a.Decision == entapproval.DecisionRejected:
 			st.Rejected++
-		case terminal || (a.ApprovedAtHash == st.CurrentHash && approvalRevisionMatches(a, cr)):
+		case terminal || stillCounts(a.ApprovedAtHash, a.ApprovedAtRevision, cr, st):
 			st.Valid++
 		}
 	}
@@ -731,6 +735,53 @@ func (h *ChangeRequest) Reject(ctx context.Context, id int64, actor string, role
 	return h.decide(ctx, id, actor, role, comment, entapproval.DecisionRejected)
 }
 
+// recordDecision replaces the approver's current decision and appends it to the
+// decision history, atomically.
+func (h *ChangeRequest) recordDecision(ctx context.Context, cr *ent.ApprovalRequest, hash, actor, comment string, decision entapproval.Decision) error {
+	tx, err := h.db.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("record decision: %w", err)
+	}
+	if _, err := tx.Approval.Delete().
+		Where(
+			entapproval.ApprovalRequestID(cr.ID),
+			entapproval.ApproverEQ(actor),
+		).Exec(ctx); err != nil {
+		tx.Rollback() //nolint:errcheck
+		return fmt.Errorf("clear previous decision: %w", err)
+	}
+	a, err := tx.Approval.Create().
+		SetApprovalRequestID(cr.ID).
+		SetApprover(actor).
+		SetCreatedBy(actor).
+		SetDecision(decision).
+		SetComment(comment).
+		SetApprovedAtHash(hash).
+		SetApprovedAtRevision(cr.ChangesetRevision).
+		Save(ctx)
+	if err != nil {
+		tx.Rollback() //nolint:errcheck
+		return fmt.Errorf("record decision: %w", err)
+	}
+	if err := tx.ApprovalDecision.Create().
+		SetID(a.ID).
+		SetApprovalRequestID(cr.ID).
+		SetApprover(actor).
+		SetDecision(approvaldecision.Decision(decision)).
+		SetComment(comment).
+		SetApprovedAtHash(hash).
+		SetApprovedAtRevision(cr.ChangesetRevision).
+		SetCreatedAt(a.CreatedAt).
+		Exec(ctx); err != nil {
+		tx.Rollback() //nolint:errcheck
+		return fmt.Errorf("append decision history: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("record decision: %w", err)
+	}
+	return nil
+}
+
 func (h *ChangeRequest) decide(ctx context.Context, id int64, actor string, role user.Role, comment string, decision entapproval.Decision) (*ent.ApprovalRequest, error) {
 	cr, err := h.Get(ctx, id)
 	if err != nil {
@@ -757,23 +808,12 @@ func (h *ChangeRequest) decide(ctx context.Context, id int64, actor string, role
 	// distinct clicks. Delete-then-create (matching how divergence resolutions
 	// are replaced) because the unique index would otherwise reject the second
 	// decision outright.
-	if _, err := h.db.Approval.Delete().
-		Where(
-			entapproval.ApprovalRequestID(cr.ID),
-			entapproval.ApproverEQ(actor),
-		).Exec(ctx); err != nil {
-		return nil, fmt.Errorf("clear previous decision: %w", err)
-	}
-	if err := h.db.Approval.Create().
-		SetApprovalRequestID(cr.ID).
-		SetApprover(actor).
-		SetCreatedBy(actor).
-		SetDecision(decision).
-		SetComment(comment).
-		SetApprovedAtHash(st.CurrentHash).
-		SetApprovedAtRevision(cr.ChangesetRevision).
-		Exec(ctx); err != nil {
-		return nil, fmt.Errorf("record decision: %w", err)
+	//
+	// The replaced row is not lost: every decision is also appended to
+	// approval_decisions, in the same transaction, so the current view and the
+	// record cannot disagree.
+	if err := h.recordDecision(ctx, cr, st.CurrentHash, actor, comment, decision); err != nil {
+		return nil, err
 	}
 
 	switch decision {
@@ -1305,7 +1345,19 @@ func staleItems(versions map[string]int, cs approval.Changeset) []fieldOutcome {
 // current changeset. Revision 0 predates the column and is treated as matching,
 // so historical approvals are not retroactively dismissed.
 func approvalRevisionMatches(a *ent.Approval, cr *ent.ApprovalRequest) bool {
-	return a.ApprovedAtRevision == 0 || a.ApprovedAtRevision == cr.ChangesetRevision
+	return revisionMatches(a.ApprovedAtRevision, cr)
+}
+
+func revisionMatches(approvedAt int, cr *ent.ApprovalRequest) bool {
+	return approvedAt == 0 || approvedAt == cr.ChangesetRevision
+}
+
+// stillCounts is the gate's test for whether a decision cast at (hash,
+// revision) counts against the request as it is now. `reviews[].current` and
+// `reviewHistory[].current` use it too, so the page can never call an approval
+// current that the gate has stopped counting.
+func stillCounts(hash string, revision int, cr *ent.ApprovalRequest, st crState) bool {
+	return hash == st.CurrentHash && revisionMatches(revision, cr)
 }
 
 // versionMismatches reports the items whose ENTITY has moved since the caller

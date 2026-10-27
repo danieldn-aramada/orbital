@@ -44,6 +44,38 @@ var (
 			},
 		},
 	}
+	// ApprovalDecisionsColumns holds the columns for the "approval_decisions" table.
+	ApprovalDecisionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "approver", Type: field.TypeString},
+		{Name: "decision", Type: field.TypeEnum, Enums: []string{"approved", "rejected"}},
+		{Name: "comment", Type: field.TypeString, Nullable: true, Size: 2147483647, Default: ""},
+		{Name: "approved_at_hash", Type: field.TypeString},
+		{Name: "approved_at_revision", Type: field.TypeInt, Default: 0},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "approval_request_id", Type: field.TypeInt64},
+	}
+	// ApprovalDecisionsTable holds the schema information for the "approval_decisions" table.
+	ApprovalDecisionsTable = &schema.Table{
+		Name:       "approval_decisions",
+		Columns:    ApprovalDecisionsColumns,
+		PrimaryKey: []*schema.Column{ApprovalDecisionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "approval_decisions_approval_requests_decisions",
+				Columns:    []*schema.Column{ApprovalDecisionsColumns[7]},
+				RefColumns: []*schema.Column{ApprovalRequestsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "approvaldecision_approval_request_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{ApprovalDecisionsColumns[7], ApprovalDecisionsColumns[6]},
+			},
+		},
+	}
 	// ApprovalPoliciesColumns holds the columns for the "approval_policies" table.
 	ApprovalPoliciesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -528,6 +560,7 @@ var (
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		ApprovalsTable,
+		ApprovalDecisionsTable,
 		ApprovalPoliciesTable,
 		ApprovalRequestsTable,
 		AuditEventsTable,
@@ -548,6 +581,7 @@ var (
 
 func init() {
 	ApprovalsTable.ForeignKeys[0].RefTable = ApprovalRequestsTable
+	ApprovalDecisionsTable.ForeignKeys[0].RefTable = ApprovalRequestsTable
 	ApprovalPoliciesTable.Annotation = &entsql.Annotation{}
 	ApprovalPoliciesTable.Annotation.Checks = map[string]string{
 		"approval_policy_namespace_exclusive": "(all_namespaces AND (namespace IS NULL OR namespace = '')) OR ((NOT all_namespaces) AND namespace IS NOT NULL AND namespace <> '')",

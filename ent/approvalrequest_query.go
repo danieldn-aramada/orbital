@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/armada/orbital/ent/approval"
+	"github.com/armada/orbital/ent/approvaldecision"
 	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/mergeattempt"
 	"github.com/armada/orbital/ent/predicate"
@@ -26,6 +27,7 @@ type ApprovalRequestQuery struct {
 	inters            []Interceptor
 	predicates        []predicate.ApprovalRequest
 	withApprovals     *ApprovalQuery
+	withDecisions     *ApprovalDecisionQuery
 	withMergeAttempts *MergeAttemptQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -78,6 +80,28 @@ func (_q *ApprovalRequestQuery) QueryApprovals() *ApprovalQuery {
 			sqlgraph.From(approvalrequest.Table, approvalrequest.FieldID, selector),
 			sqlgraph.To(approval.Table, approval.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, approvalrequest.ApprovalsTable, approvalrequest.ApprovalsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryDecisions chains the current query on the "decisions" edge.
+func (_q *ApprovalRequestQuery) QueryDecisions() *ApprovalDecisionQuery {
+	query := (&ApprovalDecisionClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(approvalrequest.Table, approvalrequest.FieldID, selector),
+			sqlgraph.To(approvaldecision.Table, approvaldecision.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, approvalrequest.DecisionsTable, approvalrequest.DecisionsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -300,6 +324,7 @@ func (_q *ApprovalRequestQuery) Clone() *ApprovalRequestQuery {
 		inters:            append([]Interceptor{}, _q.inters...),
 		predicates:        append([]predicate.ApprovalRequest{}, _q.predicates...),
 		withApprovals:     _q.withApprovals.Clone(),
+		withDecisions:     _q.withDecisions.Clone(),
 		withMergeAttempts: _q.withMergeAttempts.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
@@ -315,6 +340,17 @@ func (_q *ApprovalRequestQuery) WithApprovals(opts ...func(*ApprovalQuery)) *App
 		opt(query)
 	}
 	_q.withApprovals = query
+	return _q
+}
+
+// WithDecisions tells the query-builder to eager-load the nodes that are connected to
+// the "decisions" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *ApprovalRequestQuery) WithDecisions(opts ...func(*ApprovalDecisionQuery)) *ApprovalRequestQuery {
+	query := (&ApprovalDecisionClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withDecisions = query
 	return _q
 }
 
@@ -407,8 +443,9 @@ func (_q *ApprovalRequestQuery) sqlAll(ctx context.Context, hooks ...queryHook) 
 	var (
 		nodes       = []*ApprovalRequest{}
 		_spec       = _q.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [3]bool{
 			_q.withApprovals != nil,
+			_q.withDecisions != nil,
 			_q.withMergeAttempts != nil,
 		}
 	)
@@ -437,6 +474,13 @@ func (_q *ApprovalRequestQuery) sqlAll(ctx context.Context, hooks ...queryHook) 
 			return nil, err
 		}
 	}
+	if query := _q.withDecisions; query != nil {
+		if err := _q.loadDecisions(ctx, query, nodes,
+			func(n *ApprovalRequest) { n.Edges.Decisions = []*ApprovalDecision{} },
+			func(n *ApprovalRequest, e *ApprovalDecision) { n.Edges.Decisions = append(n.Edges.Decisions, e) }); err != nil {
+			return nil, err
+		}
+	}
 	if query := _q.withMergeAttempts; query != nil {
 		if err := _q.loadMergeAttempts(ctx, query, nodes,
 			func(n *ApprovalRequest) { n.Edges.MergeAttempts = []*MergeAttempt{} },
@@ -462,6 +506,36 @@ func (_q *ApprovalRequestQuery) loadApprovals(ctx context.Context, query *Approv
 	}
 	query.Where(predicate.Approval(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(approvalrequest.ApprovalsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.ApprovalRequestID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "approval_request_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *ApprovalRequestQuery) loadDecisions(ctx context.Context, query *ApprovalDecisionQuery, nodes []*ApprovalRequest, init func(*ApprovalRequest), assign func(*ApprovalRequest, *ApprovalDecision)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*ApprovalRequest)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(approvaldecision.FieldApprovalRequestID)
+	}
+	query.Where(predicate.ApprovalDecision(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(approvalrequest.DecisionsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

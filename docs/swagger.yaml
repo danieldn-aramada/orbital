@@ -586,6 +586,14 @@ definitions:
       requiredApprovals:
         example: 1
         type: integer
+      reviewHistory:
+        description: |-
+          ReviewHistory is every decision ever cast, oldest first — including the
+          ones `reviews` no longer shows because the approver re-decided. Present on
+          a single request, omitted from the list.
+        items:
+          $ref: '#/definitions/handler.reviewHistoryEntry'
+        type: array
       reviews:
         items:
           $ref: '#/definitions/handler.approvalResponse'
@@ -1126,6 +1134,35 @@ definitions:
         type: boolean
     required:
     - backupId
+    type: object
+  handler.reviewHistoryEntry:
+    properties:
+      approver:
+        example: reviewer@armada.ai
+        type: string
+      at:
+        type: string
+      comment:
+        type: string
+      current:
+        description: |-
+          Current has the meaning it has on `reviews`: this decision still counts
+          against the current version. Always false when Superseded.
+        example: true
+        type: boolean
+      decision:
+        example: approved
+        type: string
+      revision:
+        description: Revision is the changeset revision the decision was cast against.
+        example: 1
+        type: integer
+      superseded:
+        description: |-
+          Superseded is true when the same approver decided again later — this is
+          no longer their decision.
+        example: false
+        type: boolean
     type: object
   handler.staleEntity:
     properties:

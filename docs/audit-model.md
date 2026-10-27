@@ -208,7 +208,9 @@ needs a hand-off artifact, that is a gap to close.
 
 **Change-request review is NOT in this log, by decision.** Who proposed, approved, rejected, merged
 or closed a change request is recorded in the approval tables and read through
-`GET /api/v1/change-requests/:id` — not here. Routing it into the audit log was considered and
+`GET /api/v1/change-requests/:id` — not here. Every approve and reject is kept in
+`approval_decisions`, which is append-only under the same database guard as this log, and is returned
+as `reviewHistory`; a reviewer who changes their mind adds a decision rather than replacing one. Routing it into the audit log was considered and
 rejected in 2026-09-17: a lifecycle row's identifier is a change-request id like `colo-58`, which the
 audit log's `namespace` filter (an `orbId`-prefix match) would never return, so it would have bought
 a second copy of the record and still not answered the query it was proposed for. The *entity writes*
@@ -309,7 +311,7 @@ published segments rather than arbitrary rows.
 | **AU-6** Review and analysis | Review logs on a cadence | Orbital provides the surface; the review *practice* is the adopter's | 🟡 |
 | **AU-7** Reduction and reporting | Produce filtered reports | Query API and UI; **no file export** | 🟡 |
 | **AU-8** Time stamps | UTC, defined granularity | Stored and served UTC at sub-second precision (RFC 3339 with fractional seconds) | ✅ |
-| **AU-9(a)** Protect audit info | Protect from unauthorized access, modification, deletion | Append-only **enforced by a PostgreSQL trigger** on all three tables; read access is any authenticated user (§4) | ✅ |
+| **AU-9(a)** Protect audit info | Protect from unauthorized access, modification, deletion | Append-only **enforced by a PostgreSQL trigger** on all three tables (and on `approval_decisions`, the review record); read access is any authenticated user (§4) | ✅ |
 | **AU-9(b)** Alert on detection | Alert when tampering is detected | Startup verification detects a removed or disabled guard; `ERROR` + `orbital_audit_tables_unprotected`. Detects the *protection* being removed, not a superuser bypass | 🟡 |
 | **AU-9(2)** Separate system | Store records on a separate system | Not implemented | ➖ |
 | **AU-9(3)** Cryptographic protection | Cryptographic integrity protection | Designed, not built — §5 | 📋 |
@@ -332,11 +334,8 @@ Named rather than omitted. Each is tracked work.
    here.)*
 2. **No tamper detection.** AU-9(b) asks for an alert on detection of unauthorized modification; there
    is nothing to detect with. The §5 design addresses this.
-3. **Re-deciding a change request erases the earlier decision.** An approver who rejects and later
-   approves leaves only the approval — the rejection and its comment are deleted, because re-deciding
-   is implemented as delete-then-create. This is the one genuine hole in the review record.
-4. **No file export.** §4.
-5. **No capacity signal.** Retention is unbounded by default with no growth metric — AU-4.
+3. **No file export.** §4.
+4. **No capacity signal.** Retention is unbounded by default with no growth metric — AU-4.
 9. **No detection of a superuser bypass.** The append-only guard is enforced and monitored (§5), but a
    superuser can disable triggers for their session, and nothing would see it. That gap is what the
    hash chain and external anchor exist to close.
