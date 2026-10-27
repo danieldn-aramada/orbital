@@ -1,121 +1,29 @@
 # Orbital API Cheatsheet
 
-Copy-paste GraphQL + REST for backend services talking to Orbital on **AKS dev** (Keycloak bearer tokens, `ORBITAL_AUTH_PROVIDERS`). Deeper context lives in `docs/reference/`.
-
-Change requests and approval policies have their own sheet: `docs/api-cheatsheet-change-control.md`.
+Copy-paste GraphQL and REST for services calling orbital on AKS dev. Change requests and approval policies: [`api-cheatsheet-change-control.md`](api-cheatsheet-change-control.md).
 
 ## Setup
 
-- Base URL (AKS dev): `http://ilb.devnew.armada.internal/orbital`
-  - GraphQL: `/graphql`
-  - REST: `/api/v1`
-  - Swagger — authoritative reference for every REST endpoint's params (types, required/optional): `$ORBITAL_URL/swagger/index.html`
-- `orbId` = `namespace:name` — the stable key (don't cache DGraph UIDs)
-- Auth: every request needs `Authorization: Bearer <token>`
-  - AEP / Keycloak: forward the user's bearer token
+| | |
+|---|---|
+| Base URL | `http://ilb.devnew.armada.internal/orbital` |
+| GraphQL | `/graphql` |
+| REST | `/api/v1` — full parameter reference at `$ORBITAL_URL/swagger/index.html` |
+| Auth | `Authorization: Bearer <token>` on every request. AEP forwards the user's Keycloak token. |
+| Key | `orbId` (`namespace:name`) — stable. Never cache DGraph UIDs. |
 
 ```bash
 export ORBITAL_URL=http://ilb.devnew.armada.internal/orbital
 export TOKEN=<your bearer token>
 
-# smoke test — lists data centers; confirms your token + connectivity
+# smoke test — lists data centers
 curl -s -X POST $ORBITAL_URL/graphql -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 -d '{"query":"query { queryDataCenter { orbId name } }"}' | jq .
 ```
 
-**Reads** send only `query`. **Mutations** send two fields — `query` **and** `variables`: the `query` holds the operation with `$orbId`/`$set` placeholders; `variables` holds the values. The names are yours to choose — `$serverOrbId`/`$patch` works identically; what matters is that the mutation names exactly one row. Always put `orbId` (and the `set` payload) in **`variables`**, never inline in the query. A single-entity `update{Kind}` with an inline `orbId` or `set` is **rejected with `400 VARIABLE_FORM_REQUIRED`** — orbital stamps `version`/`updatedAt`/`updatedBy` into a variable `set` resolved via a variable `orbId`, and can't do that against inline literals. Reads with inline filters are fine.
+## Schema
 
-The `-d` body is JSON and may span multiple lines for readability — only the `query` string stays on one line. A mutation's returned entity confirms the write: the server stamps `updatedAt`/`updatedBy` (**no milliseconds**) and bumps `version`.
-
-### Guard a write with `version` (optimistic concurrency)
-
-Add `version` to **`variables`** — the value you read. Concurrent edit ⇒ `409
-MVCC_CONFLICT` instead of a silent overwrite. Omit it ⇒ last-writer-wins.
-
-```jsonc
-{ "orbId": "houston:BB52FZ3-idrac", "version": 7, "set": { "sshEnabled": false } }
-```
-
-Leave your query alone — orbital rewrites it before DGraph sees it, so the check
-happens inside the write:
-
-```graphql
-mutation UpdateIdracSettings($orbId: String!, $set: IdracSettingsPatch!, $version: Int!) {
-  updateIdracSettings(input: { filter: { orbId: { eq: $orbId }, version: { eq: $version } }, set: $set }) { numUids }
-}
-```
-
-Do not write the version filter yourself or put `version` in `set` — orbital does
-both. Full detail: `docs/api-cheatsheet-change-control.md`.
-
-### Never put `orbId` in `set`
-
-Send only the fields you are changing. `orbId` is the identity key, and child ids embed it
-(`network-adapter-<serviceTag>-<FQDD>`, `server-maintenance-<serviceTag>`) — so "rename the
-service tag, update the orbId to match" looks tidy and quietly breaks the graph.
-
-`ServerPatch` and its siblings currently **accept** `orbId`, and a write that changes it re-keys
-the node: the old id stops resolving, children are orphaned, and every diff, export preview and
-change-request base capture reads it as one node deleted and another created. Nothing warns.
-Verified 2026-09-22; tracked in `docs/planning/debt.md`.
-
-Orbital does enforce the other half — a write must target exactly one row **by orbId**. An empty
-filter, or a filter on any other field, is refused with `VARIABLE_FORM_REQUIRED`, so a mass update
-is not reachable through the API.
-
-### Clearing a field — use `remove` (with a `set`)
-
-Orbital's `/graphql` is DGraph GraphQL. To **clear** a field, use the update input's **`remove`** — `set: { field: null }` is a DGraph **no-op** (nulls in `set` are silently ignored, the value stays), and `set: { field: "" }` is **rejected** on typed scalars like `DateTime`. Two rules:
-
-- **`remove` matches on the value** — pass the field's **current** value, so read it first, then remove it.
-- **Keep a variable `set`** (even `{}`) alongside `remove`. A `remove`-only mutation is rejected `400 VARIABLE_FORM_REQUIRED`, and the variable `set` is what orbital stamps `version`/`updatedAt`/`updatedBy` into.
-
-```graphql
-# 1. read the current value(s)
-query { getServerMaintenance(orbId: "ns:server-maintenance-<serial>") { windowStart windowEnd } }
-
-# 2. clear them — remove takes the current values; set can be empty
-mutation Clear($orbId: String!, $set: ServerMaintenancePatch!, $remove: ServerMaintenancePatch) {
-  updateServerMaintenance(input: { filter: { orbId: { eq: $orbId } }, set: $set, remove: $remove }) { numUids }
-}
-# variables:
-#   { "orbId": "ns:server-maintenance-<serial>",
-#     "set": {},
-#     "remove": { "windowStart": "<current windowStart>", "windowEnd": "<current windowEnd>" } }
-```
-
-The full request body on the wire (what the UI editor sends — kept fields go in `set`, cleared fields in `remove`):
-
-```json
-{
-  "query": "mutation UpdateServerMaintenance($orbId: String!, $set: ServerMaintenancePatch!, $remove: ServerMaintenancePatch) { updateServerMaintenance(input: { filter: { orbId: { eq: $orbId } }, set: $set, remove: $remove }) { serverMaintenance { orbId } } }",
-  "variables": {
-    "orbId": "colo:server-maintenance-CWJHDX3",
-    "version": 4,
-    "set":    { "enabled": true, "reason": "test" },
-    "remove": { "windowStart": "2026-08-14T18:00:00Z", "windowEnd": "2026-08-14T22:00:00Z" }
-  }
-}
-```
-
-Orbital's UI editor does this read-then-remove automatically; API callers do it explicitly.
-
-### Deleting a config item
-
-Delete through `/graphql`. It removes only the node you name: delete its children first, or they are left without a parent.
-
-```bash
-curl -s -X POST $ORBITAL_URL/graphql -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{
-  "query": "mutation DeleteServer($orbId: String!) { deleteServer(filter: { orbId: { eq: $orbId } }) { numUids } }",
-  "variables": { "orbId": "colo:server-CWJHDX3" }
-}'
-```
-
----
-
-## Example schema 
-
-Focused on iDRAC settings and backup config, not the full schema.
+Example visual reference. For complete schema, see [schema.graphql](/schema/schema.graphql).
 
 <p align="center"><img src="example-schema.png"/></p>
 
@@ -126,58 +34,66 @@ Focused on iDRAC settings and backup config, not the full schema.
 query { queryDataCenter(filter: { assetDataV2: { regexp: "/<asset_id>/" } }) { orbId name assetDataV2 } }
 ```
 
-### Lookup by model
-
-View models
+### List the models
 ```graphql
-query {
-  __type(name: "DataCenterModel"){
-    enumValues{
-      name
-    }
-  }
-}
+query { __type(name: "DataCenterModel") { enumValues { name } } }
 ```
-response
+
 ```json
-{
-  "data": {
-    "__type": {
-      "enumValues": [
-        { "name": "Beacon" },
-        { "name": "Cruiser" },
-        { "name": "Triton" },
-        { "name": "Leviathan" }
-      ]
-    }
-  }
-}
+# response
+{ "data": { "__type": { "enumValues": [
+  { "name": "Beacon" }, { "name": "Cruiser" }, { "name": "Triton" }, { "name": "Leviathan" } ] } } }
 ```
-Query by model
+
+### Look up by model
 ```graphql
 query { queryDataCenter(filter: { model: { eq: Beacon } }) { orbId name model } }
 ```
 
 ### Update model
 
-query
 ```graphql
+# mutation
 mutation UpdateDataCenter($orbId: String!, $set: DataCenterPatch!) {
   updateDataCenter(input: { filter: { orbId: { eq: $orbId } }, set: $set }) {
     numUids dataCenter { orbId name model version updatedBy }
   }
 }
-```
-variables
-```json
-{ "orbId": "demo:demo-galleon", "set": { "model": "Leviathan" } }
-```
-response
-```json
+
+# variables
+{ "orbId": "demo:demo-galleon", "version": 1, "set": { "model": "Leviathan" } }
+
+# response
 { "data": { "updateDataCenter": { "numUids": 1, "dataCenter": [
   { "orbId": "demo:demo-galleon", "name": "demo-galleon", "model": "Leviathan",
     "version": 2, "updatedBy": "admin@armada.ai" } ] } } }
 ```
+
+## Racks
+
+### Rack topology — the racks in a data center and the servers in each, by U position
+
+```graphql
+# query
+query {
+  getDataCenter(orbId: "2f-uae:datacenter-2f-uae") {
+    orbId name
+    racks {
+      orbId name uHeight
+      servers(order: { asc: rackPosition }) { orbId hostname rackPosition uHeight }
+    }
+  }
+}
+
+# response (one rack shown)
+{ "data": { "getDataCenter": { "orbId": "2f-uae:datacenter-2f-uae", "name": "2f-uae", "racks": [
+  { "orbId": "2f-uae:rack-Rack-3", "name": "Rack-3", "uHeight": 42, "servers": [
+    { "orbId": "2f-uae:server-5HSC3D4", "hostname": "r03-u23.2f-uae", "rackPosition": 23, "uHeight": 1 },
+    { "orbId": "2f-uae:server-6MLN3D4", "hostname": "r03-u24.2f-uae", "rackPosition": 24, "uHeight": 1 },
+    { "orbId": "2f-uae:server-9MLN3D4", "hostname": "r03-u25.2f-uae", "rackPosition": 25, "uHeight": 1 } ] } ] } } }
+```
+
+A rack also holds network devices: add `networkDevices(order: { asc: rackPosition }) { orbId name role rackPosition }` beside `servers`.
 
 ## Servers
 
@@ -203,27 +119,26 @@ query {
 ```
 
 ### Update iDRAC settings — by the `idracSettings.orbId` from the fetch above
-query
+
 ```graphql
+# mutation
 mutation UpdateIdracSettings($orbId: String!, $set: IdracSettingsPatch!) {
   updateIdracSettings(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids }
 }
-```
-variables
-```json
+
+# variables
 { "orbId": "houston:BB52FZ3-idrac", "version": 7, "set": { "sshEnabled": false } }
 ```
 
 ### Update a server field
 
-This example updates the `serialNumber` for server.
 ```graphql
+# mutation
 mutation UpdateServer($orbId: String!, $set: ServerPatch!) {
   updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids }
 }
-```
-variables
-```json
+
+# variables
 { "orbId": "houston:server-BB52FZ3", "version": 1, "set": { "serialNumber": "MXFC400359006Z" } }
 ```
 
@@ -254,59 +169,51 @@ query {
 ```
 
 ### Update a backup config — by the `etcd`/`velero` orbId from the fetch above
-query
+
 ```graphql
+# mutation
 mutation UpdateEtcdBackup($orbId: String!, $set: EtcdBackupPatch!) {
   updateEtcdBackup(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids }
 }
-```
-variables
-```json
+
+# variables
 { "orbId": "colo:dev-main-etcd-backup", "version": 2, "set": { "schedule": "0 */6 * * *", "retentionDays": 7 } }
 ```
 
-Example using curl
+### The same, as one curl
+
 ```bash
+# curl
 curl -s -X POST $ORBITAL_URL/graphql -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 -d '{
   "query": "mutation UpdateVeleroBackup($orbId: String!, $set: VeleroBackupPatch!) { updateVeleroBackup(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids veleroBackup { orbId retentionDays version updatedAt updatedBy } } }",
   "variables": { "orbId": "colo:dev-main-velero-backup", "version": 5, "set": { "retentionDays": 14 } }
 }' | jq .
+
+# response
+{ "data": { "updateVeleroBackup": { "numUids": 1, "veleroBackup": [
+  { "orbId": "colo:dev-main-velero-backup", "retentionDays": 14, "version": 30,
+    "updatedAt": "2026-07-28T19:13:50Z", "updatedBy": "daniel.nguyen@armada.ai" } ] } } }
 ```
-Response
-```json
-{
-  "data": {
-    "updateVeleroBackup": {
-      "numUids": 1,
-      "veleroBackup": [
-        {
-          "orbId": "colo:dev-main-velero-backup",
-          "retentionDays": 14,
-          "version": 30,
-          "updatedAt": "2026-07-28T19:13:50Z",
-          "updatedBy": "daniel.nguyen@armada.ai"
-        }
-      ]
-    }
-  }
-}
-```
-`updatedAt` has no milliseconds and `updatedBy` is the authenticated caller — both server-stamped (the client never sent them).
 
 ## Network devices
 
-NICs are modeled as `NetworkAdapter` (the card) → `NetworkInterface` (the interface, carries the MAC + `linkSpeedMbps`), and switches/firewalls/routers as `NetworkDevice`. The **BMC/iDRAC is a `NetworkInterface` too** (`mgmtOnly: true`, **no** `networkAdapter` — it's a Redfish *Manager*, not a NIC card), owned by the server directly. Adapters and interfaces are **read-only** (Redfish-sourced, owned by the server); only `NetworkDevice` is directly mutable.
+| Type | Is | Writable |
+|---|---|---|
+| `NetworkAdapter` | a NIC card (Redfish `NetworkAdapter`) | no — Redfish-sourced |
+| `NetworkInterface` | a port: MAC, `linkSpeedMbps`. The BMC/iDRAC is one too: `mgmtOnly: true`, no adapter | no — Redfish-sourced |
+| `NetworkDevice` | a switch, firewall or router (NetBox device + `role`) | yes |
 
-- **Redfish convention (server side).** `NetworkAdapter` = Redfish/DMTF `NetworkAdapter` (the physical NIC card / FRU); `NetworkInterface` collapses Redfish `Port` ⇄ `EthernetInterface` (1:1, joined on MAC). A port links to its `Server` **directly** — mirroring Redfish's `EthernetInterface`-under-`ComputerSystem` — *and* to its card via `networkAdapter`, mirroring `Port`-under-`NetworkAdapter`. The card layer is optional (absent for LAGs, NetBox-only sources, and the BMC/iDRAC). `mgmtOnly: true` flags the management-plane interface (the BMC), mirroring NetBox `interface.mgmt_only`; `macAddress` is an indexed field (not a node) — the cross-source join key.
-- **NetBox convention (network side).** `NetworkDevice` = the DCIM *device + `role`* (`tor` / `firewall` / `router` / …), enumerated from a site's NetBox device inventory. `connectedNetworkDevice` / `connectedNetworkDevicePort` mirror NetBox `connected_endpoints` — a *cabled-to* reference (singular per physical port), **not** ownership. `macAddress` is the cross-source join key between Redfish (server side) and NetBox (switch side).
+- A port links to its `Server` directly and to its card through `networkAdapter`. The card is absent for the BMC, LAGs and NetBox-only sources.
+- `connectedNetworkDevice` / `connectedNetworkDevicePort` mean *cabled to* (NetBox `connected_endpoints`), not owned by.
+- `macAddress` is the join key between Redfish and NetBox.
 
-### List a server's NICs (data + management) — by server orbId
+### List a server's NICs — by server orbId
 ```graphql
 query {
   getServer(orbId: "colo:CFRHDX3") {
     orbId name
-    # data NICs — grouped under their NetworkAdapter (the card)
+    # data NICs, grouped by card
     networkAdapters {
       orbId name manufacturer model serialNumber
       networkInterfaces {
@@ -315,7 +222,7 @@ query {
         connectedNetworkDevice { orbId name role }
       }
     }
-    # BMC / iDRAC — a mgmtOnly interface with no adapter; filter to the mgmt plane
+    # the BMC / iDRAC
     networkInterfaces(filter: { mgmtOnly: true }) {
       orbId name macAddress portType linkSpeedMbps mgmtOnly
     }
@@ -332,7 +239,7 @@ query {
 }
 ```
 
-### Fetch one device + its connected servers (blast radius) — by device orbId
+### Fetch one device and the servers cabled to it — by device orbId
 ```graphql
 query {
   getNetworkDevice(orbId: "colo:network-device-XH3123090344") {
@@ -346,32 +253,33 @@ query {
 }
 ```
 
-### Edit a network device — by its orbId (variable form, required)
-query
+### Edit a network device
+
 ```graphql
+# mutation
 mutation UpdateNetworkDevice($orbId: String!, $set: NetworkDevicePatch!) {
   updateNetworkDevice(input: { filter: { orbId: { eq: $orbId } }, set: $set }) {
     numUids networkDevice { orbId role version updatedBy }
   }
 }
-```
-variables
-```json
+
+# variables
 { "orbId": "colo:network-device-XH3123090344", "version": 1, "set": { "role": "core" } }
 ```
 
-### Add a new network device — orbital stamps `version`/`createdBy`/`createdAt`
-Pass the input as a **variable** (array-of-maps) so the proxy injects `version: 1` and stamps the create-metadata; `dataCenter` links to the existing DC by `orbId`.
-query
+### Add a network device
+
+Pass the input as a variable — orbital sets `version: 1` and stamps `createdBy`/`createdAt`. `dataCenter` links by `orbId`.
+
 ```graphql
+# mutation
 mutation AddNetworkDevice($input: [AddNetworkDeviceInput!]!) {
   addNetworkDevice(input: $input) {
     numUids networkDevice { orbId version createdBy createdAt }
   }
 }
-```
-variables
-```json
+
+# variables
 { "input": [ {
   "orbId": "colo:network-device-JX3623130496",
   "namespace": "colo",
@@ -387,118 +295,21 @@ variables
 
 ## Audit log (REST)
 
-Every intent mutation is recorded as an audit event. Read them at `GET /api/v1/audit-log` (JSON) — a read-only endpoint; there is no API to create or modify an event. Events are written by orbital as a side effect of the mutation, and the data is **append-only**: nothing in orbital updates or deletes an event. That is a property of the write paths, not a cryptographic guarantee — see [`docs/audit-model.md`](audit-model.md) for what is and isn't protected.
+`GET /api/v1/audit-log` — read-only. Orbital writes an event for every change to intent; events are append-only. What that does and doesn't guarantee: [`audit-model.md`](audit-model.md).
 
-### Was this change reviewed, and under which change request?
-
-An event carries `authorization` when the write passed a control. Two types exist:
-
-| `type` | `id` is | Written when |
-|---|---|---|
-| `changeRequest` | the human identifier, e.g. `colo-36` — resolve at `GET /api/v1/change-requests/colo-36` | a change request is merged |
-| `divergenceResolution` | the divergence entry's uuid | a divergence is accepted |
- It is **absent on a direct write**, and that absence is the signal: it is how
-you tell a reviewed change from an ungated one on the same resource.
+### Every edit to one resource, newest first
 
 ```bash
-# every edit to one server's iDRAC settings, newest first
-curl -s "$ORBITAL_URL/api/v1/audit-log?orbId=colo:CFRHDX3-idrac&limit=50" \
-  -H "Authorization: Bearer $TOKEN" | jq '.events[] | {createdAt, actor, operations, authorization}'
-```
-
-```json
-{
-  "timestamp": "2026-10-07T14:22:08.418293Z",
-  "actor": "daniel.nguyen@armada.ai",
-  "operations": ["updateIdracSettings"],
-  "authorization": { "type": "changeRequest", "id": "colo-58" }
-}
-{
-  "timestamp": "2026-10-06T09:14:51.002771Z",
-  "actor": "asharma@armada.ai",
-  "operations": ["updateIdracSettings"]
-}
-```
-
-The first edit was merged from change request `colo-58`; resolve it with
-`GET /api/v1/change-requests/colo-58` for the author, approvers and comments. The second carries no
-`authorization`, so it was written directly against `/graphql`.
-
-**Just the reviewed ones:**
-```bash
-curl -s "$ORBITAL_URL/api/v1/audit-log?orbId=colo:CFRHDX3-idrac&limit=50" \
-  -H "Authorization: Bearer $TOKEN" | jq '[.events[] | select(.authorization)]'
-```
-There is no server-side filter for this yet — `authorization` is returned for display, and filtering
-is client-side.
-
-Three things to know before you build on it:
-
-- **`actor` is whoever merged, not who approved.** The audit log answers *which* change request; the
-  approval tables answer *who signed off*. That is a deliberate split — `GET /api/v1/change-requests/colo-58`
-  is the second hop.
-- **One event per change item.** A five-item change request produces five events, each carrying the
-  same `colo-58`, each findable by the orbId it touched.
-- ⚠️ **Absent on every event written before 2026-10-07**, regardless of provenance. Audit rows are
-  append-only in the database, so historical events could not be annotated. Do not read an absence
-  on an older event as "not reviewed".
-
-Filter by the resource's `orbId`. For example, to see the trail for the velero backup edits:
-```bash
-curl -s "$ORBITAL_URL/api/v1/audit-log?orbId=colo:dev-main-velero-backup&operation=updateVeleroBackup&limit=50" \
+# curl
+curl -s "$ORBITAL_URL/api/v1/audit-log?orbId=colo:dev-main-velero-backup&limit=50" \
   -H "Authorization: Bearer $TOKEN" | jq .
-```
-Example response
-```json
-{
-  "events": [
-    {
-      "id": "e671bfb1-88b8-4af1-881d-9a268b39150c",
-      "operations": [
-        "updateVeleroBackup"
-      ],
-      "resourceTypes": [
-        "VeleroBackup"
-      ],
-      "resourceIds": [
-        "colo:dev-main-velero-backup"
-      ],
-      "actor": "admin@armada.ai",
-      "createdAt": "2026-07-29T19:40:50Z",
-      ... 
-      "changes": [
-        {
-          "field": "retentionDays",
-          "before": 14,
-          "after": 13
-        }
-      ]
-    }
-  ],
-  "total": 37
-}
-```
 
-All filters are **optional** and **combinable** — omit them all for the full log (newest first)
-- `orbId=colo:dev-main-velero-backup` — events touching a resource (repeatable, max 128)
-- `operation=updateVeleroBackup` — one operation (must match a value in the event's `operations` array)
-- `type=Server` — resource type (repeatable)
-- `namespace=colo` — everything under a data center (`colo:*`)
-- `createdAt_gte` / `createdAt_lte` — RFC3339 window; `limit` / `offset` — pagination (`limit` ≤ 500)
-
-Every list endpoint takes time filters the same way: `<field>_gte` / `<field>_lte` (`_gt` / `_lt` for exclusive) on a timestamp field in its response. Encode a `+` offset as `%2B`, or use `Z`:
-```bash
-curl -s "$ORBITAL_URL/api/v1/change-requests?createdAt_gte=2026-10-01T00:00:00Z&createdAt_lte=2026-10-07T23:59:59Z&type=Server" \
-  -H "Authorization: Bearer $TOKEN" | jq .total
-```
-
-### Response shape + rendering a diff
-```json
+# response
 {
   "events": [
     {
       "id": "3d6bb15f-8c4c-45f0-8a6c-939b6f9cc512",
-      "timestamp": "2026-07-28T19:13:50Z",
+      "createdAt": "2026-07-28T19:13:50Z",
       "actor": "asharma@armada.ai",
       "operations": ["updateVeleroBackup"],
       "resourceTypes": ["VeleroBackup"],
@@ -511,21 +322,58 @@ curl -s "$ORBITAL_URL/api/v1/change-requests?createdAt_gte=2026-10-01T00:00:00Z&
   "total": 42
 }
 ```
-Diff can be rendered via `changes`. Each entry is `{ field, before, after }` with raw typed values (numbers, bools, strings). 
 
-`changes` is present only for a clean single-entity update. It is omitted for bulk adds, creates, and multi-operation events (which have no single before/after). Its presence is the signal — no need to inspect `operations` or `before`:
+### Filters
+
+All optional, all combinable. None gives the full log.
+
+| Param | Matches |
+|---|---|
+| `orbId=colo:dev-main-velero-backup` | events touching a resource (repeatable, max 128) |
+| `operation=updateVeleroBackup` | one operation name |
+| `type=Server` | resource type (repeatable) |
+| `namespace=colo` | everything in a data center |
+| `createdAt_gte` / `createdAt_lte` | RFC3339 window. Encode `+` as `%2B`, or use `Z` |
+| `limit` / `offset` | pagination, `limit` ≤ 500 |
+
+Every list endpoint filters time the same way: `<field>_gte` / `<field>_lte` (`_gt` / `_lt` exclusive).
+
+### Render a diff
+
+`changes` is `{ field, before, after }` with typed values — the same diff orbital's UI shows. It is present only for a single-entity update; creates, bulk adds and multi-operation events omit it.
 
 ```js
 if (event.changes) event.changes.forEach(c => renderRow(c.field, c.before, c.after))
-else               renderSummary(event.operations, event.resourceIds)   // no field diff available
+else               renderSummary(event.operations, event.resourceIds)
 ```
 
-The raw `details` (`before` + `variables.set`) is always included if you'd rather compute the diff yourself — but `changes` already does it, matching exactly what orbital's own UI renders. 
+### Was this change reviewed?
 
+An event carries `authorization` when the write passed a control. Absent means it was written directly.
 
-## Export + publish a data center (REST)
+| `authorization.type` | `id` | Written when |
+|---|---|---|
+| `changeRequest` | e.g. `colo-58` — open it at `GET /api/v1/change-requests/colo-58` | a change request is merged |
+| `divergenceResolution` | the divergence entry's uuid | a divergence is accepted |
+
 ```bash
-# trigger (download:false = export + publish to OCI)
+# curl — only the reviewed edits (the filter is client-side)
+curl -s "$ORBITAL_URL/api/v1/audit-log?orbId=colo:CFRHDX3-idrac&limit=50" \
+  -H "Authorization: Bearer $TOKEN" | jq '[.events[] | select(.authorization)]'
+
+# response
+[ { "createdAt": "2026-10-07T14:22:08.418293Z", "actor": "daniel.nguyen@armada.ai",
+    "operations": ["updateIdracSettings"],
+    "authorization": { "type": "changeRequest", "id": "colo-58" } } ]
+```
+
+- `actor` is whoever merged. Who approved is on the change request (`reviewHistory`).
+- A five-item change request writes five events, each carrying the same id.
+
+## Export and publish a data center (REST)
+
+```bash
+# trigger — exports and publishes to OCI
 curl -s -X POST $ORBITAL_URL/api/v1/export -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"orbId":"houston:houston-galleon"}'
 
@@ -533,27 +381,23 @@ curl -s -X POST $ORBITAL_URL/api/v1/export -H "Authorization: Bearer $TOKEN" -H 
 curl -s $ORBITAL_URL/api/v1/export/jobs/<jobId> -H "Authorization: Bearer $TOKEN" | jq '{status, phase, published}'
 ```
 
+## Show what is already proposed
 
-## Show what is already proposed (REST + GraphQL, in parallel)
-
-Two calls, joined on `orbId`. `orbId` is `@id` on the ConfigItem interface — globally unique
-across every type — so the overlay is a map lookup, not a correlation. Issue them in parallel;
-they have no dependency on each other.
+Two calls, in parallel, joined on `orbId`.
 
 ```bash
-# 1. the entities you are rendering, and their owned children
-curl -s $ORBITAL_URL/graphql -H "Content-Type: application/json" -d '{"query":"
+# 1. the entities you render, with their owned children
+curl -s $ORBITAL_URL/graphql -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"query":"
   { getServer(orbId:\"colo:server-CWJHDX3\") {
       orbId hostname
       serverMaintenance { orbId enabled reason }
     } }"}'
 
-# 2. what is proposed for any of those orbIds (repeatable, max 128)
-curl -s "$ORBITAL_URL/api/v1/proposed-changes\
-?orbId=colo:server-CWJHDX3&orbId=colo:server-maintenance-CWJHDX3" -H "Authorization: Bearer $TOKEN"
-```
+# 2. open proposals for those orbIds (repeatable, max 128 — more is refused 400, never truncated)
+curl -s "$ORBITAL_URL/api/v1/proposed-changes?orbId=colo:server-CWJHDX3&orbId=colo:server-maintenance-CWJHDX3" \
+  -H "Authorization: Bearer $TOKEN"
 
-```json
+# response
 { "colo:server-maintenance-CWJHDX3": {
     "type": "ServerMaintenance",
     "fields": { "enabled": {
@@ -561,25 +405,87 @@ curl -s "$ORBITAL_URL/api/v1/proposed-changes\
       "proposals": [{ "changeRequestId": "colo-42", "status": "open", "op": "update",
                       "value": true, "approvals": 0, "requiredApprovals": 1,
                       "author": "dev@armada.ai", "createdAt": "2026-08-30T22:14:03Z" }] } } } }
-```
 
-Rendering it is one lookup — no walk, no grouping, no conflict comparison; orbital did those:
-
-```js
+# render
 const p = proposals[node.orbId]?.fields['enabled']
 ```
 
-Two rules worth copying from orbital's own UI, because the API cannot do either for you:
+- Drop no-ops. This endpoint doesn't know current values. A proposal whose `value` equals what you rendered changes nothing — hide the mark.
+- Recompute `conflicting` over the proposals you kept.
+- `status` is a display hint. Merge re-checks live intent and can still refuse with `409 MVCC_CONFLICT`.
 
-- **Suppress no-ops.** This endpoint reads PostgreSQL only, so it does not know current values.
-  A proposal whose `value` already equals what you rendered changes nothing — drop the mark
-  (keep the request in your banner; it still needs closing or merging).
-- **Recompute `conflicting` over what survives.** The flag counts every proposal. Two proposals
-  of which one is already true leave one live claim and no conflict.
+## Rules for writes
 
-`status` is derived from the approval count against the request's stored base — a display hint,
-not a merge verdict. Merge re-checks against live intent and can still refuse with
-`409 MVCC_CONFLICT`.
+1. Put `orbId` and `set` in `variables`, never inline. Inline is refused `400 VARIABLE_FORM_REQUIRED`. Reads may filter inline.
 
-Which children to ask about is **your** decision, not orbital's: ask about exactly the orbIds you
-rendered. Over 128 the request is refused (`400`), never silently truncated.
+```graphql
+# mutation
+mutation UpdateServer($orbId: String!, $set: ServerPatch!) {
+  updateServer(input: { filter: { orbId: { eq: $orbId } }, set: $set }) { numUids }
+}
+
+# variables
+{ "orbId": "colo:server-CWJHDX3", "version": 3, "set": { "hostname": "r09-u07" } }
+```
+
+2. One row per write, chosen by `orbId`. Any other filter, or none, is refused `VARIABLE_FORM_REQUIRED`.
+
+```graphql
+# refused — the filter is on hostname, not orbId
+mutation UpdateByHostname($hostname: String!, $set: ServerPatch!) {
+  updateServer(input: { filter: { hostname: { eq: $hostname } }, set: $set }) { numUids }
+}
+```
+
+3. Send `version` (the value you read) in `variables`. A concurrent edit returns `409 MVCC_CONFLICT`; without it, last writer wins. Orbital adds the version filter itself — don't write it, and don't put `version` in `set`.
+
+```graphql
+# variables
+{ "orbId": "houston:BB52FZ3-idrac", "version": 7, "set": { "sshEnabled": false } }
+```
+
+4. Never put `orbId` in `set`. It re-keys the node and orphans its children — and is not refused yet ([debt](planning/debt.md)).
+
+```graphql
+# variables — don't
+{ "orbId": "colo:server-CWJHDX3", "set": { "orbId": "colo:server-NEWTAG1", "serviceTag": "NEWTAG1" } }
+```
+
+5. Clear a field with `remove`, never `set: { field: null }` (silently ignored) or `""` (refused on typed scalars). `remove` matches on the current value, so read it first. Keep a `set` (even `{}`) alongside it.
+
+```graphql
+# query — read the current values
+query { getServerMaintenance(orbId: "colo:server-maintenance-CWJHDX3") { windowStart windowEnd } }
+
+# mutation
+mutation Clear($orbId: String!, $set: ServerMaintenancePatch!, $remove: ServerMaintenancePatch) {
+  updateServerMaintenance(input: { filter: { orbId: { eq: $orbId } }, set: $set, remove: $remove }) { numUids }
+}
+
+# variables
+{
+  "orbId": "colo:server-maintenance-CWJHDX3",
+  "version": 4,
+  "set":    {},
+  "remove": { "windowStart": "2026-08-14T18:00:00Z", "windowEnd": "2026-08-14T22:00:00Z" }
+}
+```
+
+6. Delete removes only the node you name. Delete its children first.
+
+```bash
+# curl
+curl -s -X POST $ORBITAL_URL/graphql -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{
+  "query": "mutation DeleteServer($orbId: String!) { deleteServer(filter: { orbId: { eq: $orbId } }) { numUids } }",
+  "variables": { "orbId": "colo:server-CWJHDX3" }
+}'
+```
+
+7. The response confirms the write: `version` goes up, and `updatedAt` (no milliseconds) and `updatedBy` are stamped by orbital. Ask for them in the selection to see it.
+
+```graphql
+# response
+{ "data": { "updateServer": { "numUids": 1, "server": [
+  { "orbId": "colo:server-CWJHDX3", "hostname": "r09-u07", "version": 4,
+    "updatedAt": "2026-10-27T18:02:11Z", "updatedBy": "dev@armada.ai" } ] } } }
+```
