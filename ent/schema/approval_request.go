@@ -251,6 +251,7 @@ func (ApprovalRequest) Indexes() []ent.Index {
 func (ApprovalRequest) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("approvals", Approval.Type),
+		edge.To("decisions", ApprovalDecision.Type),
 		edge.To("merge_attempts", MergeAttempt.Type),
 	}
 }

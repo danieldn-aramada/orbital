@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/armada/orbital/ent/approval"
+	"github.com/armada/orbital/ent/approvaldecision"
 	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/mergeattempt"
 	"github.com/google/uuid"
@@ -241,6 +242,21 @@ func (_c *ApprovalRequestCreate) AddApprovals(v ...*Approval) *ApprovalRequestCr
 		ids[i] = v[i].ID
 	}
 	return _c.AddApprovalIDs(ids...)
+}
+
+// AddDecisionIDs adds the "decisions" edge to the ApprovalDecision entity by IDs.
+func (_c *ApprovalRequestCreate) AddDecisionIDs(ids ...uuid.UUID) *ApprovalRequestCreate {
+	_c.mutation.AddDecisionIDs(ids...)
+	return _c
+}
+
+// AddDecisions adds the "decisions" edges to the ApprovalDecision entity.
+func (_c *ApprovalRequestCreate) AddDecisions(v ...*ApprovalDecision) *ApprovalRequestCreate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddDecisionIDs(ids...)
 }
 
 // AddMergeAttemptIDs adds the "merge_attempts" edge to the MergeAttempt entity by IDs.
@@ -507,6 +523,22 @@ func (_c *ApprovalRequestCreate) createSpec() (*ApprovalRequest, *sqlgraph.Creat
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(approval.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.DecisionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   approvalrequest.DecisionsTable,
+			Columns: []string{approvalrequest.DecisionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(approvaldecision.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

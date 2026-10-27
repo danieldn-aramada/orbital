@@ -17,6 +17,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/armada/orbital/ent/approval"
+	"github.com/armada/orbital/ent/approvaldecision"
 	"github.com/armada/orbital/ent/approvalpolicy"
 	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/auditevent"
@@ -41,6 +42,8 @@ type Client struct {
 	Schema *migrate.Schema
 	// Approval is the client for interacting with the Approval builders.
 	Approval *ApprovalClient
+	// ApprovalDecision is the client for interacting with the ApprovalDecision builders.
+	ApprovalDecision *ApprovalDecisionClient
 	// ApprovalPolicy is the client for interacting with the ApprovalPolicy builders.
 	ApprovalPolicy *ApprovalPolicyClient
 	// ApprovalRequest is the client for interacting with the ApprovalRequest builders.
@@ -83,6 +86,7 @@ func NewClient(opts ...Option) *Client {
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.Approval = NewApprovalClient(c.config)
+	c.ApprovalDecision = NewApprovalDecisionClient(c.config)
 	c.ApprovalPolicy = NewApprovalPolicyClient(c.config)
 	c.ApprovalRequest = NewApprovalRequestClient(c.config)
 	c.AuditEvent = NewAuditEventClient(c.config)
@@ -191,6 +195,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ctx:                    ctx,
 		config:                 cfg,
 		Approval:               NewApprovalClient(cfg),
+		ApprovalDecision:       NewApprovalDecisionClient(cfg),
 		ApprovalPolicy:         NewApprovalPolicyClient(cfg),
 		ApprovalRequest:        NewApprovalRequestClient(cfg),
 		AuditEvent:             NewAuditEventClient(cfg),
@@ -226,6 +231,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ctx:                    ctx,
 		config:                 cfg,
 		Approval:               NewApprovalClient(cfg),
+		ApprovalDecision:       NewApprovalDecisionClient(cfg),
 		ApprovalPolicy:         NewApprovalPolicyClient(cfg),
 		ApprovalRequest:        NewApprovalRequestClient(cfg),
 		AuditEvent:             NewAuditEventClient(cfg),
@@ -270,10 +276,10 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Approval, c.ApprovalPolicy, c.ApprovalRequest, c.AuditEvent,
-		c.AuditEventResource, c.AuditEventResourceType, c.Backup, c.DivergenceEntry,
-		c.DivergenceIngestCursor, c.DivergenceResolution, c.ExportJob, c.MergeAttempt,
-		c.Orb, c.RegistryArtifact, c.RestoreJob, c.User,
+		c.Approval, c.ApprovalDecision, c.ApprovalPolicy, c.ApprovalRequest,
+		c.AuditEvent, c.AuditEventResource, c.AuditEventResourceType, c.Backup,
+		c.DivergenceEntry, c.DivergenceIngestCursor, c.DivergenceResolution,
+		c.ExportJob, c.MergeAttempt, c.Orb, c.RegistryArtifact, c.RestoreJob, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -283,10 +289,10 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Approval, c.ApprovalPolicy, c.ApprovalRequest, c.AuditEvent,
-		c.AuditEventResource, c.AuditEventResourceType, c.Backup, c.DivergenceEntry,
-		c.DivergenceIngestCursor, c.DivergenceResolution, c.ExportJob, c.MergeAttempt,
-		c.Orb, c.RegistryArtifact, c.RestoreJob, c.User,
+		c.Approval, c.ApprovalDecision, c.ApprovalPolicy, c.ApprovalRequest,
+		c.AuditEvent, c.AuditEventResource, c.AuditEventResourceType, c.Backup,
+		c.DivergenceEntry, c.DivergenceIngestCursor, c.DivergenceResolution,
+		c.ExportJob, c.MergeAttempt, c.Orb, c.RegistryArtifact, c.RestoreJob, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -297,6 +303,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
 	case *ApprovalMutation:
 		return c.Approval.mutate(ctx, m)
+	case *ApprovalDecisionMutation:
+		return c.ApprovalDecision.mutate(ctx, m)
 	case *ApprovalPolicyMutation:
 		return c.ApprovalPolicy.mutate(ctx, m)
 	case *ApprovalRequestMutation:
@@ -478,6 +486,155 @@ func (c *ApprovalClient) mutate(ctx context.Context, m *ApprovalMutation) (Value
 		return (&ApprovalDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Approval mutation op: %q", m.Op())
+	}
+}
+
+// ApprovalDecisionClient is a client for the ApprovalDecision schema.
+type ApprovalDecisionClient struct {
+	config
+}
+
+// NewApprovalDecisionClient returns a client for the ApprovalDecision from the given config.
+func NewApprovalDecisionClient(c config) *ApprovalDecisionClient {
+	return &ApprovalDecisionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `approvaldecision.Hooks(f(g(h())))`.
+func (c *ApprovalDecisionClient) Use(hooks ...Hook) {
+	c.hooks.ApprovalDecision = append(c.hooks.ApprovalDecision, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `approvaldecision.Intercept(f(g(h())))`.
+func (c *ApprovalDecisionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ApprovalDecision = append(c.inters.ApprovalDecision, interceptors...)
+}
+
+// Create returns a builder for creating a ApprovalDecision entity.
+func (c *ApprovalDecisionClient) Create() *ApprovalDecisionCreate {
+	mutation := newApprovalDecisionMutation(c.config, OpCreate)
+	return &ApprovalDecisionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ApprovalDecision entities.
+func (c *ApprovalDecisionClient) CreateBulk(builders ...*ApprovalDecisionCreate) *ApprovalDecisionCreateBulk {
+	return &ApprovalDecisionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ApprovalDecisionClient) MapCreateBulk(slice any, setFunc func(*ApprovalDecisionCreate, int)) *ApprovalDecisionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ApprovalDecisionCreateBulk{err: fmt.Errorf("calling to ApprovalDecisionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ApprovalDecisionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ApprovalDecisionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ApprovalDecision.
+func (c *ApprovalDecisionClient) Update() *ApprovalDecisionUpdate {
+	mutation := newApprovalDecisionMutation(c.config, OpUpdate)
+	return &ApprovalDecisionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ApprovalDecisionClient) UpdateOne(_m *ApprovalDecision) *ApprovalDecisionUpdateOne {
+	mutation := newApprovalDecisionMutation(c.config, OpUpdateOne, withApprovalDecision(_m))
+	return &ApprovalDecisionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ApprovalDecisionClient) UpdateOneID(id uuid.UUID) *ApprovalDecisionUpdateOne {
+	mutation := newApprovalDecisionMutation(c.config, OpUpdateOne, withApprovalDecisionID(id))
+	return &ApprovalDecisionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ApprovalDecision.
+func (c *ApprovalDecisionClient) Delete() *ApprovalDecisionDelete {
+	mutation := newApprovalDecisionMutation(c.config, OpDelete)
+	return &ApprovalDecisionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ApprovalDecisionClient) DeleteOne(_m *ApprovalDecision) *ApprovalDecisionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ApprovalDecisionClient) DeleteOneID(id uuid.UUID) *ApprovalDecisionDeleteOne {
+	builder := c.Delete().Where(approvaldecision.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ApprovalDecisionDeleteOne{builder}
+}
+
+// Query returns a query builder for ApprovalDecision.
+func (c *ApprovalDecisionClient) Query() *ApprovalDecisionQuery {
+	return &ApprovalDecisionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeApprovalDecision},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ApprovalDecision entity by its id.
+func (c *ApprovalDecisionClient) Get(ctx context.Context, id uuid.UUID) (*ApprovalDecision, error) {
+	return c.Query().Where(approvaldecision.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ApprovalDecisionClient) GetX(ctx context.Context, id uuid.UUID) *ApprovalDecision {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryRequest queries the request edge of a ApprovalDecision.
+func (c *ApprovalDecisionClient) QueryRequest(_m *ApprovalDecision) *ApprovalRequestQuery {
+	query := (&ApprovalRequestClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(approvaldecision.Table, approvaldecision.FieldID, id),
+			sqlgraph.To(approvalrequest.Table, approvalrequest.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, approvaldecision.RequestTable, approvaldecision.RequestColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ApprovalDecisionClient) Hooks() []Hook {
+	return c.hooks.ApprovalDecision
+}
+
+// Interceptors returns the client interceptors.
+func (c *ApprovalDecisionClient) Interceptors() []Interceptor {
+	return c.inters.ApprovalDecision
+}
+
+func (c *ApprovalDecisionClient) mutate(ctx context.Context, m *ApprovalDecisionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ApprovalDecisionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ApprovalDecisionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ApprovalDecisionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ApprovalDecisionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ApprovalDecision mutation op: %q", m.Op())
 	}
 }
 
@@ -731,6 +888,22 @@ func (c *ApprovalRequestClient) QueryApprovals(_m *ApprovalRequest) *ApprovalQue
 			sqlgraph.From(approvalrequest.Table, approvalrequest.FieldID, id),
 			sqlgraph.To(approval.Table, approval.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, approvalrequest.ApprovalsTable, approvalrequest.ApprovalsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryDecisions queries the decisions edge of a ApprovalRequest.
+func (c *ApprovalRequestClient) QueryDecisions(_m *ApprovalRequest) *ApprovalDecisionQuery {
+	query := (&ApprovalDecisionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(approvalrequest.Table, approvalrequest.FieldID, id),
+			sqlgraph.To(approvaldecision.Table, approvaldecision.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, approvalrequest.DecisionsTable, approvalrequest.DecisionsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -2623,15 +2796,15 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Approval, ApprovalPolicy, ApprovalRequest, AuditEvent, AuditEventResource,
-		AuditEventResourceType, Backup, DivergenceEntry, DivergenceIngestCursor,
-		DivergenceResolution, ExportJob, MergeAttempt, Orb, RegistryArtifact,
-		RestoreJob, User []ent.Hook
+		Approval, ApprovalDecision, ApprovalPolicy, ApprovalRequest, AuditEvent,
+		AuditEventResource, AuditEventResourceType, Backup, DivergenceEntry,
+		DivergenceIngestCursor, DivergenceResolution, ExportJob, MergeAttempt, Orb,
+		RegistryArtifact, RestoreJob, User []ent.Hook
 	}
 	inters struct {
-		Approval, ApprovalPolicy, ApprovalRequest, AuditEvent, AuditEventResource,
-		AuditEventResourceType, Backup, DivergenceEntry, DivergenceIngestCursor,
-		DivergenceResolution, ExportJob, MergeAttempt, Orb, RegistryArtifact,
-		RestoreJob, User []ent.Interceptor
+		Approval, ApprovalDecision, ApprovalPolicy, ApprovalRequest, AuditEvent,
+		AuditEventResource, AuditEventResourceType, Backup, DivergenceEntry,
+		DivergenceIngestCursor, DivergenceResolution, ExportJob, MergeAttempt, Orb,
+		RegistryArtifact, RestoreJob, User []ent.Interceptor
 	}
 )

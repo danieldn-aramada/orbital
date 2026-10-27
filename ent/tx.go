@@ -14,6 +14,8 @@ type Tx struct {
 	config
 	// Approval is the client for interacting with the Approval builders.
 	Approval *ApprovalClient
+	// ApprovalDecision is the client for interacting with the ApprovalDecision builders.
+	ApprovalDecision *ApprovalDecisionClient
 	// ApprovalPolicy is the client for interacting with the ApprovalPolicy builders.
 	ApprovalPolicy *ApprovalPolicyClient
 	// ApprovalRequest is the client for interacting with the ApprovalRequest builders.
@@ -176,6 +178,7 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.Approval = NewApprovalClient(tx.config)
+	tx.ApprovalDecision = NewApprovalDecisionClient(tx.config)
 	tx.ApprovalPolicy = NewApprovalPolicyClient(tx.config)
 	tx.ApprovalRequest = NewApprovalRequestClient(tx.config)
 	tx.AuditEvent = NewAuditEventClient(tx.config)

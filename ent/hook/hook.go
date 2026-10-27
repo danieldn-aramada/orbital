@@ -21,6 +21,18 @@ func (f ApprovalFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ApprovalMutation", m)
 }
 
+// The ApprovalDecisionFunc type is an adapter to allow the use of ordinary
+// function as ApprovalDecision mutator.
+type ApprovalDecisionFunc func(context.Context, *ent.ApprovalDecisionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ApprovalDecisionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ApprovalDecisionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ApprovalDecisionMutation", m)
+}
+
 // The ApprovalPolicyFunc type is an adapter to allow the use of ordinary
 // function as ApprovalPolicy mutator.
 type ApprovalPolicyFunc func(context.Context, *ent.ApprovalPolicyMutation) (ent.Value, error)

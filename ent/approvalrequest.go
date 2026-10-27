@@ -70,11 +70,13 @@ type ApprovalRequest struct {
 type ApprovalRequestEdges struct {
 	// Approvals holds the value of the approvals edge.
 	Approvals []*Approval `json:"approvals,omitempty"`
+	// Decisions holds the value of the decisions edge.
+	Decisions []*ApprovalDecision `json:"decisions,omitempty"`
 	// MergeAttempts holds the value of the merge_attempts edge.
 	MergeAttempts []*MergeAttempt `json:"merge_attempts,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // ApprovalsOrErr returns the Approvals value or an error if the edge
@@ -86,10 +88,19 @@ func (e ApprovalRequestEdges) ApprovalsOrErr() ([]*Approval, error) {
 	return nil, &NotLoadedError{edge: "approvals"}
 }
 
+// DecisionsOrErr returns the Decisions value or an error if the edge
+// was not loaded in eager-loading.
+func (e ApprovalRequestEdges) DecisionsOrErr() ([]*ApprovalDecision, error) {
+	if e.loadedTypes[1] {
+		return e.Decisions, nil
+	}
+	return nil, &NotLoadedError{edge: "decisions"}
+}
+
 // MergeAttemptsOrErr returns the MergeAttempts value or an error if the edge
 // was not loaded in eager-loading.
 func (e ApprovalRequestEdges) MergeAttemptsOrErr() ([]*MergeAttempt, error) {
-	if e.loadedTypes[1] {
+	if e.loadedTypes[2] {
 		return e.MergeAttempts, nil
 	}
 	return nil, &NotLoadedError{edge: "merge_attempts"}
@@ -285,6 +296,11 @@ func (_m *ApprovalRequest) Value(name string) (ent.Value, error) {
 // QueryApprovals queries the "approvals" edge of the ApprovalRequest entity.
 func (_m *ApprovalRequest) QueryApprovals() *ApprovalQuery {
 	return NewApprovalRequestClient(_m.config).QueryApprovals(_m)
+}
+
+// QueryDecisions queries the "decisions" edge of the ApprovalRequest entity.
+func (_m *ApprovalRequest) QueryDecisions() *ApprovalDecisionQuery {
+	return NewApprovalRequestClient(_m.config).QueryDecisions(_m)
 }
 
 // QueryMergeAttempts queries the "merge_attempts" edge of the ApprovalRequest entity.

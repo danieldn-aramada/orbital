@@ -1063,6 +1063,29 @@ func HasApprovalsWith(preds ...predicate.Approval) predicate.ApprovalRequest {
 	})
 }
 
+// HasDecisions applies the HasEdge predicate on the "decisions" edge.
+func HasDecisions() predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, DecisionsTable, DecisionsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasDecisionsWith applies the HasEdge predicate on the "decisions" edge with a given conditions (other predicates).
+func HasDecisionsWith(preds ...predicate.ApprovalDecision) predicate.ApprovalRequest {
+	return predicate.ApprovalRequest(func(s *sql.Selector) {
+		step := newDecisionsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasMergeAttempts applies the HasEdge predicate on the "merge_attempts" edge.
 func HasMergeAttempts() predicate.ApprovalRequest {
 	return predicate.ApprovalRequest(func(s *sql.Selector) {

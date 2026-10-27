@@ -2820,11 +2820,19 @@ document.addEventListener('DOMContentLoaded', () => {
   function timelineTable(cr) {
     const rows = [{ at: cr.createdAt, who: cr.author, what: 'opened' }]
 
-    for (const r of (cr.reviews || [])) {
-      // An approval cast against an earlier version is SHOWN, not hidden.
-      const note = r.current ? '' : ' <span class="has-text-warning">(approved an earlier version)</span>'
-      rows.push({ at: r.at, who: r.approver,
-        what: esc(r.decision) + note + (r.comment ? ' — ' + esc(r.comment) : ''), raw: true })
+    // Every decision ever cast, not just each approver's latest — a reviewer who
+    // changed their mind shows both. The API marks which ones were replaced.
+    for (const r of (cr.reviewHistory || [])) {
+      const text = esc(r.decision) + (r.comment ? ' — ' + esc(r.comment) : '')
+      let what = text
+      if (r.superseded) {
+        what = '<span class="has-text-grey">' + text + ' (later replaced)</span>'
+      } else if (!r.current) {
+        // An approval cast against an earlier version is SHOWN, not hidden.
+        what = esc(r.decision) + ' <span class="has-text-warning">(approved an earlier version)</span>'
+          + (r.comment ? ' — ' + esc(r.comment) : '')
+      }
+      rows.push({ at: r.at, who: r.approver, what, raw: true })
     }
 
     for (const a of (cr.mergeAttempts || [])) {

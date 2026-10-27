@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/armada/orbital/ent/approval"
+	"github.com/armada/orbital/ent/approvaldecision"
 	"github.com/armada/orbital/ent/approvalpolicy"
 	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/auditevent"
@@ -89,6 +90,7 @@ func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			approval.Table:               approval.ValidColumn,
+			approvaldecision.Table:       approvaldecision.ValidColumn,
 			approvalpolicy.Table:         approvalpolicy.ValidColumn,
 			approvalrequest.Table:        approvalrequest.ValidColumn,
 			auditevent.Table:             auditevent.ValidColumn,

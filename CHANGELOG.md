@@ -24,6 +24,14 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ### Added
 
+- **Every change-request decision is kept.** Re-approving or rejecting used to
+  replace an approver's earlier decision, erasing it and its comment. Decisions
+  now go to an append-only `approval_decisions` table — the database refuses
+  edits and deletes — and `GET /api/v1/change-requests/:id` returns them as
+  `reviewHistory`, oldest first, each marked `superseded` and `current`; the
+  review page's timeline shows them all, a replaced one muted. Approvals that
+  existed before the upgrade are copied in at first start.
+
 - **`IdracSettings.firmwareRepository` names the firmware repository a server
   should be on.** A nullable String holding a relative path to a pinned Dell
   firmware repository (`dell/R650/2026-10-09T155510Z`), beside `firmwareVersion`
@@ -258,6 +266,10 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   needing a GraphQL call.
 
 ### Fixed
+- **`reviews[].current` agrees with the merge gate.** It compared only the
+  base hash, so after an amend that kept the same entities an approval read as
+  current — with no "approved an earlier version" warning — while the gate had
+  stopped counting it.
 - **A subgraph child whose Orb ID comes from its own field is no longer silently
   dropped from the create form.** Placeholders were filled from the parent, so
   `IPAddress`'s `{address}` resolved to nothing on a Server form and the child

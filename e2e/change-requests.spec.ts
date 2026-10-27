@@ -616,6 +616,37 @@ test('an approval cast against an earlier version is shown as such, not hidden',
   }
 })
 
+// A reviewer who changed their mind shows BOTH decisions. The timeline used to
+// render only each approver's latest, so an earlier approval vanished from the
+// page as well as from the database.
+test('the timeline keeps a replaced decision, marked as replaced', async ({ page }) => {
+  const policyId = await protect(page, NS)   // admin bypasses, so admin may approve
+  const created = await api(page, 'POST', '/api/v1/change-requests', {
+    title: 'decision history fixture', namespace: NS,
+    changes: [{ orbId: SERVER_ORB_ID, op: 'update', set: { hostname: 'history-v1' } }],
+  })
+  const cr = await created.json()
+  try {
+    expect((await api(page, 'POST', `/api/v1/change-requests/${cr.id}/approve`, { comment: 'first look' })).ok()).toBeTruthy()
+    expect((await api(page, 'PATCH', `/api/v1/change-requests/${cr.id}`, {
+      namespace: NS, changes: [{ orbId: SERVER_ORB_ID, op: 'update', set: { hostname: 'history-v2' } }],
+    })).ok()).toBeTruthy()
+    expect((await api(page, 'POST', `/api/v1/change-requests/${cr.id}/approve`, { comment: 'after the amend' })).ok()).toBeTruthy()
+
+    await page.goto(`/change-requests/${cr.id}`)
+    const timeline = page.locator('[data-testid="cr-reviews"]')
+    const first = timeline.locator('tbody tr', { hasText: 'first look' })
+    const second = timeline.locator('tbody tr', { hasText: 'after the amend' })
+    await expect(first).toHaveCount(1)
+    await expect(first).toContainText('later replaced')
+    await expect(second).toHaveCount(1)
+    await expect(second).not.toContainText('later replaced')
+  } finally {
+    await api(page, 'POST', `/api/v1/change-requests/${cr.id}/close`)
+    await unprotect(page, policyId)
+  }
+})
+
 // AC 15 — the negative. A badge that fires when nothing is pending trains
 // people to ignore it, which is worse than having no badge at all.
 test('an entity whose only requests are closed shows no pending notice', async ({ page }) => {

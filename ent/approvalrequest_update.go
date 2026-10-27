@@ -14,6 +14,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/armada/orbital/ent/approval"
+	"github.com/armada/orbital/ent/approvaldecision"
 	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/mergeattempt"
 	"github.com/armada/orbital/ent/predicate"
@@ -349,6 +350,21 @@ func (_u *ApprovalRequestUpdate) AddApprovals(v ...*Approval) *ApprovalRequestUp
 	return _u.AddApprovalIDs(ids...)
 }
 
+// AddDecisionIDs adds the "decisions" edge to the ApprovalDecision entity by IDs.
+func (_u *ApprovalRequestUpdate) AddDecisionIDs(ids ...uuid.UUID) *ApprovalRequestUpdate {
+	_u.mutation.AddDecisionIDs(ids...)
+	return _u
+}
+
+// AddDecisions adds the "decisions" edges to the ApprovalDecision entity.
+func (_u *ApprovalRequestUpdate) AddDecisions(v ...*ApprovalDecision) *ApprovalRequestUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddDecisionIDs(ids...)
+}
+
 // AddMergeAttemptIDs adds the "merge_attempts" edge to the MergeAttempt entity by IDs.
 func (_u *ApprovalRequestUpdate) AddMergeAttemptIDs(ids ...uuid.UUID) *ApprovalRequestUpdate {
 	_u.mutation.AddMergeAttemptIDs(ids...)
@@ -388,6 +404,27 @@ func (_u *ApprovalRequestUpdate) RemoveApprovals(v ...*Approval) *ApprovalReques
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveApprovalIDs(ids...)
+}
+
+// ClearDecisions clears all "decisions" edges to the ApprovalDecision entity.
+func (_u *ApprovalRequestUpdate) ClearDecisions() *ApprovalRequestUpdate {
+	_u.mutation.ClearDecisions()
+	return _u
+}
+
+// RemoveDecisionIDs removes the "decisions" edge to ApprovalDecision entities by IDs.
+func (_u *ApprovalRequestUpdate) RemoveDecisionIDs(ids ...uuid.UUID) *ApprovalRequestUpdate {
+	_u.mutation.RemoveDecisionIDs(ids...)
+	return _u
+}
+
+// RemoveDecisions removes "decisions" edges to ApprovalDecision entities.
+func (_u *ApprovalRequestUpdate) RemoveDecisions(v ...*ApprovalDecision) *ApprovalRequestUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveDecisionIDs(ids...)
 }
 
 // ClearMergeAttempts clears all "merge_attempts" edges to the MergeAttempt entity.
@@ -628,6 +665,51 @@ func (_u *ApprovalRequestUpdate) sqlSave(ctx context.Context) (_node int, err er
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(approval.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.DecisionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   approvalrequest.DecisionsTable,
+			Columns: []string{approvalrequest.DecisionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(approvaldecision.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedDecisionsIDs(); len(nodes) > 0 && !_u.mutation.DecisionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   approvalrequest.DecisionsTable,
+			Columns: []string{approvalrequest.DecisionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(approvaldecision.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.DecisionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   approvalrequest.DecisionsTable,
+			Columns: []string{approvalrequest.DecisionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(approvaldecision.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -1016,6 +1098,21 @@ func (_u *ApprovalRequestUpdateOne) AddApprovals(v ...*Approval) *ApprovalReques
 	return _u.AddApprovalIDs(ids...)
 }
 
+// AddDecisionIDs adds the "decisions" edge to the ApprovalDecision entity by IDs.
+func (_u *ApprovalRequestUpdateOne) AddDecisionIDs(ids ...uuid.UUID) *ApprovalRequestUpdateOne {
+	_u.mutation.AddDecisionIDs(ids...)
+	return _u
+}
+
+// AddDecisions adds the "decisions" edges to the ApprovalDecision entity.
+func (_u *ApprovalRequestUpdateOne) AddDecisions(v ...*ApprovalDecision) *ApprovalRequestUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddDecisionIDs(ids...)
+}
+
 // AddMergeAttemptIDs adds the "merge_attempts" edge to the MergeAttempt entity by IDs.
 func (_u *ApprovalRequestUpdateOne) AddMergeAttemptIDs(ids ...uuid.UUID) *ApprovalRequestUpdateOne {
 	_u.mutation.AddMergeAttemptIDs(ids...)
@@ -1055,6 +1152,27 @@ func (_u *ApprovalRequestUpdateOne) RemoveApprovals(v ...*Approval) *ApprovalReq
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveApprovalIDs(ids...)
+}
+
+// ClearDecisions clears all "decisions" edges to the ApprovalDecision entity.
+func (_u *ApprovalRequestUpdateOne) ClearDecisions() *ApprovalRequestUpdateOne {
+	_u.mutation.ClearDecisions()
+	return _u
+}
+
+// RemoveDecisionIDs removes the "decisions" edge to ApprovalDecision entities by IDs.
+func (_u *ApprovalRequestUpdateOne) RemoveDecisionIDs(ids ...uuid.UUID) *ApprovalRequestUpdateOne {
+	_u.mutation.RemoveDecisionIDs(ids...)
+	return _u
+}
+
+// RemoveDecisions removes "decisions" edges to ApprovalDecision entities.
+func (_u *ApprovalRequestUpdateOne) RemoveDecisions(v ...*ApprovalDecision) *ApprovalRequestUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveDecisionIDs(ids...)
 }
 
 // ClearMergeAttempts clears all "merge_attempts" edges to the MergeAttempt entity.
@@ -1325,6 +1443,51 @@ func (_u *ApprovalRequestUpdateOne) sqlSave(ctx context.Context) (_node *Approva
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(approval.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.DecisionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   approvalrequest.DecisionsTable,
+			Columns: []string{approvalrequest.DecisionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(approvaldecision.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedDecisionsIDs(); len(nodes) > 0 && !_u.mutation.DecisionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   approvalrequest.DecisionsTable,
+			Columns: []string{approvalrequest.DecisionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(approvaldecision.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.DecisionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   approvalrequest.DecisionsTable,
+			Columns: []string{approvalrequest.DecisionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(approvaldecision.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

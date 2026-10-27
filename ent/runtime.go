@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/armada/orbital/ent/approval"
+	"github.com/armada/orbital/ent/approvaldecision"
 	"github.com/armada/orbital/ent/approvalpolicy"
 	"github.com/armada/orbital/ent/approvalrequest"
 	"github.com/armada/orbital/ent/auditevent"
@@ -56,6 +57,28 @@ func init() {
 	approvalDescID := approvalFields[0].Descriptor()
 	// approval.DefaultID holds the default value on creation for the id field.
 	approval.DefaultID = approvalDescID.Default.(func() uuid.UUID)
+	approvaldecisionFields := schema.ApprovalDecision{}.Fields()
+	_ = approvaldecisionFields
+	// approvaldecisionDescApprover is the schema descriptor for approver field.
+	approvaldecisionDescApprover := approvaldecisionFields[2].Descriptor()
+	// approvaldecision.ApproverValidator is a validator for the "approver" field. It is called by the builders before save.
+	approvaldecision.ApproverValidator = approvaldecisionDescApprover.Validators[0].(func(string) error)
+	// approvaldecisionDescComment is the schema descriptor for comment field.
+	approvaldecisionDescComment := approvaldecisionFields[4].Descriptor()
+	// approvaldecision.DefaultComment holds the default value on creation for the comment field.
+	approvaldecision.DefaultComment = approvaldecisionDescComment.Default.(string)
+	// approvaldecisionDescApprovedAtHash is the schema descriptor for approved_at_hash field.
+	approvaldecisionDescApprovedAtHash := approvaldecisionFields[5].Descriptor()
+	// approvaldecision.ApprovedAtHashValidator is a validator for the "approved_at_hash" field. It is called by the builders before save.
+	approvaldecision.ApprovedAtHashValidator = approvaldecisionDescApprovedAtHash.Validators[0].(func(string) error)
+	// approvaldecisionDescApprovedAtRevision is the schema descriptor for approved_at_revision field.
+	approvaldecisionDescApprovedAtRevision := approvaldecisionFields[6].Descriptor()
+	// approvaldecision.DefaultApprovedAtRevision holds the default value on creation for the approved_at_revision field.
+	approvaldecision.DefaultApprovedAtRevision = approvaldecisionDescApprovedAtRevision.Default.(int)
+	// approvaldecisionDescCreatedAt is the schema descriptor for created_at field.
+	approvaldecisionDescCreatedAt := approvaldecisionFields[7].Descriptor()
+	// approvaldecision.DefaultCreatedAt holds the default value on creation for the created_at field.
+	approvaldecision.DefaultCreatedAt = approvaldecisionDescCreatedAt.Default.(func() time.Time)
 	approvalpolicyMixin := schema.ApprovalPolicy{}.Mixin()
 	approvalpolicyMixinFields0 := approvalpolicyMixin[0].Fields()
 	_ = approvalpolicyMixinFields0
