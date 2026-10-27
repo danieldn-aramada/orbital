@@ -403,6 +403,10 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 			if err != nil {
 				logger.Error("oidc provider init failed", "err", err)
 			} else {
+				oidc.SetIDPHint(cfg.OIDCIDPHint)
+				if cfg.OIDCIDPHint != "" {
+					logger.Info("browser login sends kc_idp_hint", "hint", cfg.OIDCIDPHint)
+				}
 				// If the browser login provider is ALSO in ORBITAL_AUTH_PROVIDERS
 				// with a roleMapping, that provider owns roles — so a session
 				// gets the same role a bearer token from the same identity would.
