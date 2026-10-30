@@ -66,14 +66,10 @@ memory. Infrahub generates its create form from the schema for the same reason.
       {{if .NamespaceInput}}
       <div class="field">
         <label class="label is-size-7">
-          Namespace <span class="has-text-danger">*</span>
+          namespace <span class="has-text-danger">*</span>
         </label>
         <input class="input is-small" type="text" data-create-namespace
                data-testid="create-namespace" value="" placeholder="e.g. houston">
-        <p class="help is-size-7">
-          One namespace holds one {{.Label}}. It prefixes every Orb ID beneath this
-          one and cannot be changed afterwards.
-        </p>
       </div>
       {{end}}
 
@@ -82,12 +78,28 @@ memory. Infrahub generates its create form from the schema for the same reason.
         <label class="label is-size-7">
           {{.Label}}{{if .Required}} <span class="has-text-danger">*</span>{{end}}
         </label>
+        {{if .KeyField}}
+        {{/* Create-or-link: the referenced node is identified by this one
+             value, so it is typed, not chosen from nodes that may not exist. */}}
+        <input class="input is-small" type="text" data-create-ref-key="{{.Field}}"
+               data-ref-type="{{.Type}}" data-key-field="{{.KeyField}}"
+               {{with .SetJSON}}data-ref-set="{{.}}"{{end}}
+               {{with .Inverse}}data-ref-inverse="{{.}}"{{end}}
+               {{if .InverseIsList}}data-ref-inverse-list="true"{{end}}
+               {{with .Pattern}}pattern="{{.}}"{{end}}
+               {{if .Required}}required{{end}}
+               data-testid="create-ref-{{.Field}}" placeholder="{{.KeyField}}">
+        <p class="help is-size-7">Links the existing {{.Type}} with this {{.KeyField}}, or creates it.</p>
+        {{else}}
         <div class="select is-small is-fullwidth">
-          <select data-create-rel="{{.Field}}" {{if .Required}}required{{end}}>
+          <select data-create-rel="{{.Field}}" {{if .Required}}required{{end}}
+                  {{if .Scoped}}data-create-scoped="true" disabled{{end}}
+                  data-testid="create-rel-{{.Field}}">
             <option value="">— choose a {{.Label}} —</option>
-            {{range .Options}}<option value="{{.OrbID}}">{{.Name}}</option>{{end}}
+            {{range .Options}}<option value="{{.OrbID}}" data-namespace="{{.Namespace}}">{{.Name}}</option>{{end}}
           </select>
         </div>
+        {{end}}
       </div>
       {{end}}
 

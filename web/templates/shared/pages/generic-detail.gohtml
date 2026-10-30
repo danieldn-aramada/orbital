@@ -151,8 +151,8 @@ where the tab's own label is the heading and the strip is the way back.
         </div>
 
         {{/*
-          Everything below the fold is ONE tabbed box: subgraph members, then
-          relationship tables, then the audit log.
+          The relationships are ONE tabbed box: subgraph members, then
+          relationship tables. The audit log is its own section below it.
 
           Ten stacked boxes made a Server page 2,854px — 3.2 screens — and you
           scrolled past Storage Controllers to reach Network Interfaces. Tabs
@@ -161,24 +161,20 @@ where the tab's own label is the heading and the strip is the way back.
           child gets one tab, a type with eight gets eight.
 
           initDetailTabs (shared.js) wires this: each <li> names its panel via
-          data-panel, the panel is a SIBLING of the tabs div, and the audit tab
-          is the one carrying data-orb-id — which also makes the audit log load
-          on CLICK rather than with every page.
+          data-panel, and the panel is a SIBLING of the tabs div.
 
           The js-tab-dot span is lit by renderTabDots for a panel holding a
           pending proposed change, so an unopened tab still says there is
           something in it. Without it, tabbing would re-hide exactly what the
           field marks exist to surface.
         */}}
-        {{if or .Tabs .Actions.ShowAuditTab}}
+        {{if .Tabs}}
         <article class="box pb-2" data-testid="generic-detail-tabs">
           {{/* Parallel with Fields and Metadata — three regions, three
                headings. "Relationships", never "Edges" — DGraph's own glossary
                calls an edge the MENTAL PICTURE ("bubbles connected by lines")
                and a relationship "a named, directed link relating one node to
-               another", which is what this is. The Audit Log tab rides at the
-               end of the same strip and is not a relationship; accepted, it is
-               always last and visually separable. */}}
+               another", which is what this is. */}}
           <p class="is-size-6 has-text-weight-semibold mb-3">Relationships</p>
           <div class="tabs is-boxed has-text-weight-medium" style="font-size:14px"
                id="generic-detail-tabs-{{.DomID}}">
@@ -186,14 +182,6 @@ where the tab's own label is the heading and the strip is the way back.
               {{range $i, $t := .Tabs}}
               <li {{if eq $i 0}}class="is-active"{{end}} data-panel="gpanel-{{$.DomID}}-tab-{{$i}}">
                 <a><span>{{$t.Label}}</span><span class="js-tab-dot"></span></a>
-              </li>
-              {{end}}
-              {{if .Actions.ShowAuditTab}}
-              <li {{if not .Tabs}}class="is-active"{{end}}
-                  data-panel="{{.AuditPanelID}}"
-                  data-orb-id="{{.OrbID}}"
-                  data-subgraph-orb-ids="{{.SubgraphOrbIDsCSV}}">
-                <a><span>Audit Log</span></a>
               </li>
               {{end}}
             </ul>
@@ -212,7 +200,7 @@ where the tab's own label is the heading and the strip is the way back.
           {{if and (not .OrbID) (not .Children)}}
           <p class="has-text-grey is-size-7">None.</p>
           {{end}}
-          {{if .Fields}}
+          {{if .OrbID}}
           {{/* Its own scroller: a panel can carry a long unbroken value (a
                jsonString field), and the PAGE must never scroll sideways. */}}
           <div class="table-container">
@@ -221,6 +209,12 @@ where the tab's own label is the heading and the strip is the way back.
             data-field-values="{{.FieldValuesJSON}}">
             <colgroup><col style="width:1%"><col style="width:40%"><col></colgroup>
             <tbody>
+              {{- /* Identity first: a reference that does not say WHICH node it
+                     points at is useless. name/orbId live on the ConfigItem
+                     interface, so they are never among the type's own fields. */}}
+              <tr data-testid="panel-name"><td style="white-space:nowrap;width:1%">name</td>
+                <td>{{if and .Slug .OrbID}}<a href="{{$.BasePath}}/{{.Slug}}?open={{.OrbID}}">{{with .Name}}{{.}}{{else}}{{.OrbID}}{{end}}</a>{{else}}{{with .Name}}{{.}}{{else}}<span class="has-text-grey">—</span>{{end}}{{end}}</td><td></td></tr>
+              <tr data-testid="panel-orbid"><td style="white-space:nowrap;width:1%">orbId</td><td>{{.OrbID}}</td><td></td></tr>
               {{range .Fields}}
               <tr {{if .Field}}data-field="{{.Field}}"{{end}}>
                 <td style="white-space:nowrap;width:1%">{{.Label}}</td>
@@ -247,6 +241,12 @@ where the tab's own label is the heading and the strip is the way back.
             data-field-values="{{.FieldValuesJSON}}">
             <colgroup><col style="width:1%"><col style="width:40%"><col></colgroup>
             <tbody>
+              {{- /* Identity first: a reference that does not say WHICH node it
+                     points at is useless. name/orbId live on the ConfigItem
+                     interface, so they are never among the type's own fields. */}}
+              <tr data-testid="panel-name"><td style="white-space:nowrap;width:1%">name</td>
+                <td>{{if and .Slug .OrbID}}<a href="{{$.BasePath}}/{{.Slug}}?open={{.OrbID}}">{{with .Name}}{{.}}{{else}}{{.OrbID}}{{end}}</a>{{else}}{{with .Name}}{{.}}{{else}}<span class="has-text-grey">—</span>{{end}}{{end}}</td><td></td></tr>
+              <tr data-testid="panel-orbid"><td style="white-space:nowrap;width:1%">orbId</td><td>{{.OrbID}}</td><td></td></tr>
               {{range .Fields}}
               <tr {{if .Field}}data-field="{{.Field}}"{{end}}>
                 <td style="white-space:nowrap;width:1%">{{.Label}}</td>
@@ -335,25 +335,29 @@ where the tab's own label is the heading and the strip is the way back.
         </div>
         {{end}}
 
-        {{/*
-          Audit Log, as the last TAB rather than a tenth box.
-          
-          No data-generic-audit here any more: that attribute drove
-          initGenericAudit, which loaded the panel with every page render
-          because a stacked box has no click to hang it on. As a tab,
-          initDetailTabs loads it when the tab is activated — one request
-          saved on every detail view nobody opens the audit for.
-
-          data-orb-id and data-subgraph-orb-ids live on the TAB (that is how
-          initDetailTabs identifies which one is the audit tab); a change to
-          a subgraph member records the CHILD's orbId, so asking about the parent
-          alone would report nothing while its settings were being rewritten.
-        */}}
-        {{if .Actions.ShowAuditTab}}
-        <div id="{{.AuditPanelID}}" {{if .Tabs}}style="display:none"{{end}}
-             data-testid="generic-audit"></div>
+        </article>
         {{end}}
 
+        {{/* The audit log is its OWN section, not a tab in Relationships: it is
+             this node's history (its subgraph's events included), a peer of
+             Attributes and Metadata, and not a relationship. Collapsed until
+             asked for, so a page view costs no audit query; whether it is
+             open is remembered per browser (initAuditSection, shared.js).
+
+             data-orb-id and data-subgraph-orb-ids live HERE: the audit fetch
+             and the pending-change lookups (subgraphOrbIds) both read them. A
+             change to a subgraph member records the CHILD's orbId, so asking
+             about the parent alone would miss it. */}}
+        {{if .Actions.ShowAuditTab}}
+        <article class="box" data-testid="generic-audit-section" data-audit-section
+                 data-orb-id="{{.OrbID}}" data-subgraph-orb-ids="{{.SubgraphOrbIDsCSV}}">
+          <a class="is-size-6 has-text-weight-semibold has-text-dark" role="button" href="#"
+             data-audit-toggle data-testid="audit-toggle"
+             aria-expanded="false" aria-controls="{{.AuditPanelID}}">
+            <span class="icon is-small"><i class="fas fa-chevron-right" data-audit-chevron></i></span>
+            <span>Audit Log</span>
+          </a>
+          <div id="{{.AuditPanelID}}" class="mt-3" style="display:none" data-testid="generic-audit"></div>
         </article>
         {{end}}
 

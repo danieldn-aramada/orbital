@@ -12,7 +12,6 @@ import (
 	"golang.org/x/oauth2"
 )
 
-
 func TestLogin_IDPHint(t *testing.T) {
 	for _, tc := range []struct {
 		name string

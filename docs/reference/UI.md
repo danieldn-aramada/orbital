@@ -76,8 +76,8 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 - **A list row's name is plain text; the row carries `data-orb-id`.** *(2026-10-05.)* Blue in a table means "you leave this page". Reference cells still link; references to pageless types are text.
 - **Detail action row sits at the top of the shared body; Edit is `is-rounded is-link`.** *(2026-10-05.)* Order: action row → pending-changes banner → Fields.
 - **One Reload button resolves page-vs-tab at click time** (inside a `.tab-content[id^="tab-content-generic-"]` ⇒ re-fetch that panel, else full reload). *(2026-10-05.)* Not a server-rendered flag. ⚠️ A full reload from inside a tab silently closes every other tab.
-- **Detail layout: Fields left, Metadata right, everything else in ONE tab strip.** *(2026-10-03.)*
-- **The audit log is the LAST tab and loads on click.** *(2026-10-03.)* `initDetailTabs` finds it as the `<li>` with `data-orb-id`.
+- **Detail layout: Attributes left, Metadata right, then the Relationships tab strip, then the Audit Log section.** *(2026-10-03; audit split out 2026-10-30.)*
+- **The audit log is its own section, collapsed, loaded on first expand, open state remembered per browser.** *(2026-10-30, replaces "the last tab".)* It is the node's history — a peer of Attributes and Metadata, not a relationship — and once the strip was titled Relationships (2026-10-15) a tab in it was mislabelled. Collapsed so a page view costs no audit query; remembered (`audit-section-open` in localStorage) so after a Save it re-renders open and fresh. `initAuditSection` wires it; `data-orb-id` and `data-subgraph-orb-ids` live on the section, where the audit fetch and `subgraphOrbIds` read them. Pinned by `e2e/audit-section.spec.ts`.
 - **A tab whose panel holds a pending change shows a dot.** *(2026-10-03.)* `panelOrbIds` derives the set from the panel's `[data-field-orbid]` elements unless `data-panel-orbids` is given; no extra request.
 - **A tab panel is not a box** — the tabbed `article.box` around it already is. *(2026-10-03.)*
 - **The tab strip wraps when tabs do not fit; it never scrolls sideways.** *(2026-10-07.)* Bulma's nowrap+scroll clipped the last tab with no affordance. Wrapping breaks the `is-boxed` underline visually; an overflow affordance is the scalable fix.
@@ -104,6 +104,7 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 - **PLACEMENT is derived; `subgraph` is SCOPE only.** *(2026-10-14.)* Attributes holds scalars; every 1-hop relationship to a ConfigItem is a tab, declared or not. `subgraph` says what the page edits, audits and deletes — never what it shows. While it decided both, placement was a 2×2 of (declared?) × (single/list) and one cell rendered **nothing**: `EksaKubernetesCluster.workloadClusters` was invisible on a cluster that had one.
   - Tab ORDER is the deployed schema's own (interface fields first, then the implementation's); `subgraph` plays no part. A deeper declared LIST keeps its own tab beside its parent (`storageControllers.storageDevices`) — a table of devices cannot nest in a table of controllers.
   - A **single** edge renders as a record panel carrying its own scalars **and the singles it OWNS**, derived one level down. Ownership is the existing test — the child declares a non-null edge back. That is why `backup.etcd` nests and `rack.dataCenter` does not: a wrapper like `ClusterBackup` has no scalars at all, so its tab would be blank without it.
+  - A panel opens with the node's `name` and `orbId` *(2026-10-27)* — the name linked when its type has a page. Not configurable: name/orbId live on the ConfigItem interface, so no `views.yaml` key could add them, and a reference that does not say which node it points at is useless on every page. Without it a server's `rack` tab showed only `uHeight`. Pinned by `TestGeneric_SingleRelationshipPanelShowsIdentity`.
   - `summary.ignoreFields` is the one opt-out and still removes a relationship entirely. `tabs:`, `summary.refs:` and `ownerReferences:` are retired and warn if present.
   - An ABSENT relationship says `None.` — the same word the list tabs use. A heading over an empty panel reads as one that failed to load. ⚠️ A panel with CHILDREN is not empty: an unconfigured `ClusterBackup` still lists Etcd/Velero/S3 Sync, each `None.` — one word for empty everywhere (2026-10-15)
   - A panel renders a `jsonString` field pretty-printed in a scrolling `<pre>`, the same as the root's field list. Panel tables also sit in a `.table-container`: the PAGE must never scroll sideways, and the Data Center panel broke that the day this landed.
@@ -116,6 +117,12 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
   ⚠️ **Lists are refused, not honoured**: `editable: true` on a list relationship logs *"editable relationship dropped"* and is dropped, because membership is add/remove, not one edge. Re-pointing one member at a time is the only shape this covers.
   - **N:M multi-select is SHELVED — no consumer.** *(2026-10-15.)* The schema's one many-to-many, `StorageDevice.storageVolumes` ↔ `StorageVolume.storageDevices`, is Redfish-reported (every scalar `editable: false`), has no page, and sits three hops from Server. Nobody has asked to hand-edit it. If one arrives: DGraph `set` on a list APPENDS, it does not replace — so a multi-select must diff (`chosen − current` → `set`, `current − chosen` → `remove`), verified against DGraph.
   - **1:N membership is edited on the SINGLE side.** `@hasInverse` makes `Rack.servers` and `Server.rack` one write, so the edit lives on `Server.rack`. "Rack these 12 servers at once" would be a bulk action on the parent's table, not an editor field.
+- **`editable: true` on a reference also puts it on the CREATE form.** *(2026-10-27.)* A select of existing nodes in the namespace being created into, disabled until a required relationship picks that namespace and cleared when it changes — so a server cannot be created in one data centre and racked in another. When the referenced type has NO page — its own or an interface's — and its orbId is exactly one of its own fields (`IPAddress`: `{address}`), it is a text input instead: the node is created when absent and linked when present (DGraph links a nested object whose orbId exists).
+  - ⚠️ Linking a node whose SINGLE back-edge is already set would MOVE it off its owner, silently. The form refuses and names the owner (`serverOobIP` set → "already belongs to …"). A list back-edge is shared and links freely.
+  - `createRequired` is form-only (Django's `blank`, not `null`): the schema stays nullable so a scan or import without the value still writes. `createSet` fills a node created this way (`role: oob`); `createPattern` checks a scalar without the form knowing what an IP is.
+  - ⚠️ The page test is what keeps `managementCluster` a select: a cluster's orbId is `{name}`, so identity alone made it a text box that would mint a whole cluster from a typed name. A type with a page is created on that page and chosen everywhere else.
+  - On every create form, all optional: Server `rack`, `oobIP` (required); NetworkDevice `rack`, `virtualChassis`; cluster `managementCluster`, `controlPlaneEndpoint`, `tinkerbellIP`. A reference declared on an INTERFACE (`controlPlaneEndpoint`) finds its back-edge through the interface.
+  - Pinned by `TestResolveViews_CreateRefs*`, `TestBuildCreateForm_EditableReferences`, `e2e/server-create-refs.spec.ts` and `e2e/create-refs-device-cluster.spec.ts`.
 - **Single subgraph members render inline (even when absent); list members are tabs.** One-hop-down singles nest inside their box (`backup` → `backup.etcd`).
 - **A multi-hop subgraph path renders the far type as one table** (`storageControllers.storageDevices`). The query is built from a path tree, so dotted names never reach GraphQL. Each relationship is selected exactly once, with the union of what the page needs.
 - **Column paths must be single-hop all the way; subgraph paths may cross lists, at any depth.** One produces a cell, the other rows. Don't harmonise.
@@ -138,7 +145,7 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 ### Detail page content
 
 - **Detail layout: link rows for single relationships outside the subgraph; boxes for single members; tables for list members.**
-- **Every detail page has a metadata box (`View.Meta`, the ConfigItem interface fields) and an audit tab.** *(2026-09-25.)* The audit tab's orbIds are `data-subgraph-orb-ids`.
+- **Every detail page has a metadata box (`View.Meta`, the ConfigItem interface fields) and an audit section.** *(2026-09-25.)* Its orbIds are `data-subgraph-orb-ids`.
 - **A relationship table drops the column pointing back at the page's entity** — only when the type matches AND every row points back. *(2026-09-26.)* A row missing the reference keeps the column; merely-empty columns are never dropped.
 - **Proposed-change marks are driven by DOM attributes** (`data-field-orbid`, `data-field-values` with RAW values, `data-field` + `.js-field-mark`; banner `[data-pending-changes-for]`). *(2026-09-26.)* Only editable rows get a slot. A member's table carries its OWN orbId.
 - **In a relationship table, marks key on the ROW** — each row is its own entity. *(2026-10-02.)* The editable set is a `map[string]bool` so the shared template can `index` it (no FuncMap).
@@ -373,19 +380,18 @@ Driven by `prefers-color-scheme` through Bulma's `--bulma-*` variables; no toggl
 
 - **Detail-tab active panel persists under `tab-active:{tabContainer.id}`**, wired by `initDetailTabs`; never written by hand.
 
-## Detail tabs with audit log — canonical pattern
+## Detail tabs and audit section — canonical pattern
 
-One function, `initDetailTabs(tabContainer, options?)` in `shared.js`; reference template `shared/pages/generic-detail.gohtml`.
+Reference template `shared/pages/generic-detail.gohtml`; both functions in `shared.js`.
 
-- Tab container: `<div class="tabs is-boxed" id="{prefix}-detail-tabs-{{.DomID}}">` — the id is the storage namespace.
-- Each tab: `<li data-panel="…">`; the first carries `is-active`. Panels are siblings; non-default ones start `display:none`.
-- **The audit `<li>` is the only one with `data-orb-id`** — that is how it is detected. It carries `data-subgraph-orb-ids`. Its panel starts empty and fills on first activation.
-- Options: `scoped` (default `true`, panel lookups scoped to the parent — keep it), `storage` (`'local'` default, or `'session'`).
-- **Audit panel row cap** — `AUDIT_PANEL_LIMIT`, from `layout.AuditPanelDefaultLimit`.
+- **Tabs — `initDetailTabs(tabContainer, options?)`.** Container `<div class="tabs is-boxed" id="{prefix}-detail-tabs-{{.DomID}}">` (the id is the storage namespace). Each tab `<li data-panel="…">`; the first carries `is-active`; panels are siblings, non-default ones start `display:none`. Options: `scoped` (default `true` — keep it), `storage` (`'local'` default, or `'session'`). A saved tab that no longer exists is ignored.
+- **Audit — `initAuditSection(section)`.** `<article data-audit-section data-orb-id data-subgraph-orb-ids>` holding a `[data-audit-toggle]` (with `aria-controls` naming the panel) and the panel, which starts hidden and empty. Row cap `AUDIT_PANEL_LIMIT`, from `layout.AuditPanelDefaultLimit`.
+- Both set `data-wired="true"` once their handlers are attached; automation waits on it, not on visibility.
 
 ```js
-const tabContainer = root.querySelector('[id^="newprefix-detail-tabs-"]')
-if (tabContainer) initDetailTabs(tabContainer)
+const tabs = root.querySelector('[id^="newprefix-detail-tabs-"]')
+if (tabs) initDetailTabs(tabs)
+initAuditSection(root.querySelector('[data-audit-section]'))
 ```
 
 ## Template conventions

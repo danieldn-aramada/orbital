@@ -20,6 +20,7 @@ async function clean(request: any) {
         a: deleteIdracSettings(filter: { orbId: { eq: "${IDRAC_ID}" } }) { numUids }
         b: deleteServer(filter: { orbId: { eq: "${ORB_ID}" } }) { numUids }
         c: deleteServerMaintenance(filter: { orbId: { eq: "colo:servermaintenance-${TAG}" } }) { numUids }
+        d: deleteIPAddress(filter: { orbId: { eq: "colo:192.0.2.21" } }) { numUids }
       }`,
     },
   });
@@ -37,6 +38,7 @@ test('a unit child whose id comes from the PARENT still resolves', async ({ page
   await modal.locator('[data-create-field="serviceTag"]:not([data-create-child])').fill(TAG);
   await modal.locator('[data-create-child="idracSettings"][data-create-field="firmwareVersion"]').fill('7.10.00.00');
 
+  await modal.getByTestId('create-ref-oobIP').fill('192.0.2.21'); // required on the form
   await modal.getByTestId('create-submit').click();
   await expect(page.locator(`#generic-table tr[data-orb-id="${ORB_ID}"]`)).toHaveCount(1, { timeout: 15_000 });
 
@@ -49,68 +51,6 @@ test('a unit child whose id comes from the PARENT still resolves', async ({ page
   expect(idrac.firmwareVersion).toBe('7.10.00.00');
 });
 
-test('a unit child whose id comes from its OWN field is offered and created', async ({ page, request }) => {
-  // IPAddress is `{address}` — a Server has no `address`, so under the old rule
-  // the placeholder resolved to nothing and the child was SILENTLY dropped.
-  // Adding oobIP to the subgraph appeared to do nothing at all.
-  const IP = 'colo:10.99.99.99';
-  const clean = () => request.post('/graphql', {
-    data: {
-      query: `mutation {
-        a: deleteIPAddress(filter: { orbId: { eq: "${IP}" } }) { numUids }
-        b: deleteIdracSettings(filter: { orbId: { eq: "${IDRAC_ID}" } }) { numUids }
-        c: deleteServer(filter: { orbId: { eq: "${ORB_ID}" } }) { numUids }
-        d: deleteServerMaintenance(filter: { orbId: { eq: "colo:servermaintenance-${TAG}" } }) { numUids }
-      }`,
-    },
-  });
-  await clean();
-
-  try {
-    await page.goto('/servers');
-    await page.getByTestId('create-open').click();
-    const modal = page.locator('.modal.is-active');
-
-    const addr = modal.locator('[data-create-child="oobIP"][data-create-field="address"]');
-    await expect(addr, 'a child whose id is its own field must be OFFERED').toHaveCount(1);
-
-    await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: 'colo:datacenter-colo-galleon' });
-    await modal.locator('[data-create-field="name"]:not([data-create-child])').fill('e2e-own-id');
-    await modal.locator('[data-create-field="serviceTag"]:not([data-create-child])').fill(TAG);
-    await addr.fill('10.99.99.99');
-    await modal.getByTestId('create-submit').click();
-    await expect(page.locator(`#generic-table tr[data-orb-id="${ORB_ID}"]`)).toHaveCount(1, { timeout: 15_000 });
-
-    const res = await request.post('/graphql', {
-      data: { query: `{ getServer(orbId: "${ORB_ID}") { oobIP { orbId address } } }` },
-    });
-    const ip = (await res.json()).data.getServer.oobIP;
-    expect(ip, 'the IP must be created with the server, in one mutation').toBeTruthy();
-    expect(ip.orbId, "its id comes from its OWN address, not the parent").toBe(IP);
-    expect(ip.address).toBe('10.99.99.99');
-  } finally {
-    await clean();
-  }
-});
-
-test('an identity field is settable at create and frozen afterwards', async ({ page }) => {
-  // `createOnly`. The orbId is `server-{serviceTag}` and orbIds are immutable,
-  // so editing the tag later leaves the id encoding the OLD one — and a scan
-  // rebuilding that id mints a SECOND server for the same machine, breaking the
-  // upsert idempotence a derivable orbId exists to give.
-  await page.goto('/servers');
-  await page.getByTestId('create-open').click();
-  await expect(page.locator('.modal.is-active [data-create-field="serviceTag"]'),
-    'settable when the server is created').toHaveCount(1);
-  await page.locator('.modal.is-active [data-modal-close]').first().click();
-
-  await page.locator('#generic-table tbody tr[data-orb-id]').first().dblclick();
-  const panel = page.locator('[id^="tab-content-generic-servers-"]').locator('visible=true');
-  await expect(panel.getByTestId('generic-fields')).toBeVisible({ timeout: 10_000 });
-  const domId = await panel.locator('[data-generic-edit-id]').getAttribute('data-generic-edit-id');
-  const tree = await page.evaluate((id) => JSON.parse(
-    document.getElementById('generic-edit-data-' + id)!.textContent!.trim()), domId);
-
-  expect(Object.keys(tree), 'and frozen once it exists').not.toContain('serviceTag');
-  expect(Object.keys(tree), 'while ordinary fields stay editable').toContain('model');
-});
+// A child whose id comes from its OWN field (IPAddress is `{address}`) used to
+// be tested here as `oobIP`, an inline subgraph child. `oobIP` is now a
+// reference the form creates or links — see server-create-refs.spec.ts.

@@ -247,7 +247,7 @@ Three values (stored as string, not enum — adding a value does not require ent
 | `"management"` | System operations: backup, restore, export, schema apply, authorizationDenied, approval-policy administration |
 | `"auth"` | Login/logout events: loginSuccess, loginFailed, logout |
 
-The audit tab query (`GET /api/v1/audit-log?orbId=...`) filters to `event_category IN ('data', 'management')`. Auth events are excluded structurally — they have no resource_ids and appear in every resource tab if included.
+The detail page's audit section query (`GET /api/v1/audit-log?orbId=...`) filters to `event_category IN ('data', 'management')`. Auth events are excluded structurally — they have no resource_ids and appear in every resource tab if included.
 
 ## Append-only is enforced by a PostgreSQL TRIGGER, not by grants
 

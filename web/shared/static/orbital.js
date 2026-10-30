@@ -48,6 +48,7 @@ import {
   showClusterSkeleton,
   fetchWithMinDelay,
   initDetailTabs,
+  initAuditSection,
   apiErrorFromBody,
   apiErrorText,
   dtWrapLengthSelect,
@@ -106,6 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // shared.js instead; both apps render this page, so both wire it.
   const detailTabs = document.querySelector('[id^="generic-detail-tabs-"]')
   if (detailTabs) initDetailTabs(detailTabs)
+  initAuditSection(document.querySelector('[data-audit-section]'))
 
   // Proposed-change marks on a FULL page load. htmx:afterSettle covers the
   // fragment a list page opens as a tab; navigating straight to /{slug}/{id}
@@ -3792,8 +3794,29 @@ function initCreateForms() {
       showTypeFields()
     }
 
-    modal.addEventListener('input', () => { refresh(); refreshRowIds() })
-    modal.addEventListener('change', () => { refresh(); refreshRowIds() })
+    // A scoped select lists only nodes in the namespace being created into, and
+    // stays disabled until that namespace is known. Changing the namespace
+    // clears it: a choice made for one data centre is wrong for another.
+    let scopedNs = null
+    const scopeRefs = () => {
+      const ns = namespace()
+      if (ns === scopedNs) return
+      scopedNs = ns
+      for (const sel of modal.querySelectorAll('[data-create-scoped]')) {
+        sel.value = ''
+        sel.disabled = !ns
+        for (const opt of sel.options) {
+          if (!opt.value) continue
+          const other = opt.dataset.namespace !== ns
+          opt.hidden = other
+          opt.disabled = other
+        }
+      }
+    }
+    scopeRefs()
+
+    modal.addEventListener('input', () => { refresh(); refreshRowIds(); scopeRefs() })
+    modal.addEventListener('change', () => { refresh(); refreshRowIds(); scopeRefs() })
 
     submitBtn.addEventListener('click', async () => {
       clearError()
@@ -3835,6 +3858,34 @@ function initCreateForms() {
         if (v !== undefined) input[el.dataset.createField] = v
       }
       for (const sel of rels()) if (sel.value) input[sel.dataset.createRel] = { orbId: sel.value }
+
+      // Create-or-link references. The node is identified by the typed value,
+      // so it is created when absent and LINKED when present — DGraph links a
+      // nested object whose orbId exists. Linking one whose single back-edge is
+      // already set would MOVE it off its current owner, so that is refused.
+      for (const el of modal.querySelectorAll('[data-create-ref-key]')) {
+        const field = el.dataset.createRefKey
+        const value = (el.value || '').trim()
+        if (!value) {
+          if (el.required) { showError('Fill ' + field + '.'); return }
+          continue
+        }
+        if (!el.checkValidity()) { showError(field + ': "' + value + '" is not a valid ' + el.dataset.keyField + '.'); return }
+        const refId = ns + ':' + value
+        const existing = await refNode(el.dataset.refType, refId, el.dataset.refInverse)
+        if (existing) {
+          const owner = el.dataset.refInverse && !el.dataset.refInverseList && existing[el.dataset.refInverse]
+          if (owner) {
+            showError(field + ' ' + value + ' already belongs to ' + (owner.name || owner.orbId) + ' (' + owner.orbId + ').')
+            return
+          }
+          input[field] = { orbId: refId }
+        } else {
+          input[field] = Object.assign(
+            { orbId: refId, namespace: ns, version: 1, [el.dataset.keyField]: value },
+            el.dataset.refSet ? JSON.parse(el.dataset.refSet) : {})
+        }
+      }
 
       // Children nest INSIDE the same input — one mutation, one transaction.
       //
@@ -4004,6 +4055,25 @@ async function namespaceOccupiedBy(kind, ns) {
 }
 
 // orbIdsInUse returns which of the given orbIds already exist.
+// refNode reads one node by orbId, with its back-edge when one is named, or
+// null when it does not exist.
+async function refNode(type, orbId, inverse) {
+  // Through ConfigItem: the back-edge can point at an INTERFACE (an IP's
+  // kubernetesClusterControlPlaneEndpoint is a KubernetesCluster), which has no
+  // orbId of its own to select.
+  const sel = inverse ? 'orbId ' + inverse + ' { ... on ConfigItem { orbId name } }' : 'orbId'
+  const r = await fetch(BASE + '/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: 'query Ref($id: String!) { n: get' + type + '(orbId: $id) { ' + sel + ' } }',
+      variables: { id: orbId },
+    }),
+  })
+  const body = await r.json()
+  return (body.data && body.data.n) || null
+}
+
 async function orbIdsInUse(ids) {
   const wanted = ids.filter(Boolean)
   if (!wanted.length) return []

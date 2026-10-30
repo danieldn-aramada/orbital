@@ -391,6 +391,21 @@ type CreateRelation struct {
 	Label    string
 	Type     string
 	Required bool
+	// Scoped limits the options to the namespace the form is creating in, and
+	// keeps the select disabled until that namespace is known. Set for an
+	// optional reference; a required relationship is what CHOOSES the namespace.
+	Scoped bool
+	// KeyField, when set, makes this a text input instead of a select: the value
+	// of the referenced node's identity field, which creates the node or links
+	// the existing one. Pattern is the input's `pattern`; SetJSON the values
+	// written onto a node created this way.
+	KeyField string
+	Pattern  string
+	SetJSON  string
+	// Inverse is the referenced node's edge back. When it is single-valued and
+	// already set, linking would move the node — the form refuses instead.
+	Inverse       string
+	InverseIsList bool
 	// Options are the existing nodes that may be chosen, as orbId + display
 	// name. Resolved server-side: a picker that yields an orbId is the whole
 	// job, and typing one from memory is the failure this avoids.
@@ -399,8 +414,9 @@ type CreateRelation struct {
 
 // CreateOption is one pickable existing node.
 type CreateOption struct {
-	OrbID string
-	Name  string
+	OrbID     string
+	Name      string
+	Namespace string
 }
 
 // CreateUnitChild is a subgraph member created alongside its parent.

@@ -44,6 +44,16 @@
 #   `editable: true` on a subgraph entry = this page's editor writes it.
 #   Single-cardinality at every hop and at most two hops; anything else is
 #   refused out loud at load and renders read-only.
+#   `types.<T>.fields.<ref>.editable: true` on a single REFERENCE = settable from
+#   the create form and the editor. A select of existing nodes in the namespace
+#   being created into — or, when the referenced type has NO page and its orbId
+#   is one of its own fields (`IPAddress` is `{address}`), a text input that
+#   creates or links. A type with a page (its own or its interface's) is
+#   created there and chosen everywhere else.
+#     createRequired: true     required on the create form only; the schema
+#                              and the API stay nullable
+#     createSet: { k: v }      written onto a node created through the reference
+#     createPattern: <regex>   on a scalar: the create form's HTML `pattern`
 #
 # COLUMNS  (types.<T>.columns — extra table columns wherever T is a row)
 #   rack            a bare SINGLE relationship: a column of links
@@ -151,7 +161,11 @@ types:
 
   IPAddress:
     fields:
-      address: { createOnly: true }
+      address:
+        createOnly: true
+        # IPv4 dotted quad, or IPv6 (hex groups and colons). An HTML pattern,
+        # so it is anchored to the whole value.
+        createPattern: '((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])|[0-9A-Fa-f]{0,4}(:[0-9A-Fa-f]{0,4}){2,7}'
       role: { editable: false }
       type: { editable: false }
 
@@ -163,8 +177,12 @@ types:
     fields:
       description: { editable: false, tableHidden: true }
       provider: { editable: false }
+      controlPlaneEndpoint: { editable: true, createSet: { role: k8s_api } }
 
   EksaKubernetesCluster:
+    fields:
+      managementCluster: { editable: true }
+      tinkerbellIP: { editable: true, createSet: { role: tinkerbell } }
 
   KubernetesNode:
     columns:
@@ -188,6 +206,8 @@ types:
       - rack
     fields:
       serial: { createOnly: true }
+      rack: { editable: true }
+      virtualChassis: { editable: true }
       networkInterfaceConnectedNetworkDevice: { label: Connections }
       networkInterfaces: { label: Ports }
       face: { tableHidden: true }
@@ -230,7 +250,7 @@ types:
     fields:
       serviceTag: { createOnly: true }
       rack: { editable: true }
-      oobIP: { editable: true }
+      oobIP: { editable: true, createRequired: true, createSet: { role: oob } }
       oobMAC: { tableHidden: true }
       manufacturer: { tableHidden: true, createDefault: Dell }
       model: { createDefault: PowerEdge R450 }

@@ -34,7 +34,7 @@ type MyNewKind implements ConfigItem {
 ```
 
 **Non-null back-edge = OWNED.** It is the whole declaration: the child is
-fetched with the parent, rolled up onto the parent's audit tab, reachable by the
+fetched with the parent, rolled up into the parent's Audit Log section, reachable by the
 parent's editor, and **deleted with it**. Make the edge **nullable** to opt out —
 that is a schema decision, not a view one (`ServerConfigurationProfile.server`
 went nullable in v13 for exactly this reason).
@@ -207,7 +207,7 @@ In the browser:
    If you did not, its rows render as plain text and clicking does nothing.
 2. On the PARENT page it appears in the tab strip, and — if `editable: true` —
    in the JSON editor under its path.
-3. Edit a field, save. The parent's Audit Log tab shows an `update<MyNewKind>`
+3. Edit a field, save. The parent's Audit Log section (expand it) shows an `update<MyNewKind>`
    row with a green/red field diff.
 4. Clear the JSON key and save, then configure it again → `add<MyNewKind>`.
 

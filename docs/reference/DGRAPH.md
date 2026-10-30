@@ -287,6 +287,14 @@ Block 1's write was staged and then discarded at commit. Rollback crosses the bl
 
 ⚠️ **Dgraph's own documentation does not state multi-block atomicity.** [Upsert](https://docs.dgraph.io/dql/upserts/) says *"The upsert block contains one query block and mutation blocks"* — plural, so the structure is documented — but its only atomicity statement is *"the upsert has to be an atomic operation such that either a new node is created, or an existing node is modified"*, which is the create-or-modify race, not N mutation blocks. `@if` semantics across blocks are undocumented too. Treat all of the above as local measurement and re-verify on a Dgraph upgrade.
 
+### Creating linked nodes — three refusals *(2026-10-27)*
+
+Found copying a cluster's subgraph between namespaces; each cost a failed run.
+
+- **Do NOT reference, by `orbId`, a node created earlier in the SAME add input** — DGraph treats the reference as a second create and refuses (`id … already exists`). Create the target in an earlier mutation, then link to it.
+- **An interface-typed edge cannot be set from the child's side, yet a non-null one is required on create** (`KubernetesNode.cluster: KubernetesCluster!` — "unknown field" from the node, "requires a value" without it). Create such children NESTED in the parent's add, which sets the edge. Nested creates are not stamped with `createdBy` (`docs/planning/debt.md`).
+- **Never send `in: []`** — an empty list errors (`eq expects atleast 1 argument`) and every later mutation in the request is skipped. Leave the field out instead.
+
 ### GraphQL get vs query
 `get{Type}(id: ID!)` — reliable for most types. For acronym-named types (e.g. `IPAddress`), prefer `query{Type}(filter: { orbId: { eq: $orbId } })` which is more reliable than `getIPAddress`.
 

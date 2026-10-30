@@ -959,3 +959,173 @@ func TestValidate_CarriesTopLevelKeysThrough(t *testing.T) {
 		t.Errorf("labels = %v after Validate, want them carried through", got.Labels)
 	}
 }
+
+// An `editable: true` reference is offered on the create form. Whether it is a
+// SELECT or a create-or-link TEXT input follows the referenced type's identity:
+// exactly one of its own fields (`{address}`) is typed; anything else
+// (`{type}-{name}`) is chosen. Regressions this catches: a key reference
+// rendered as a dropdown of IPs that may not exist yet, a rack typed by hand,
+// or the single back-edge lost — which is what lets the form refuse to MOVE an
+// IP off the server that owns it.
+func TestResolveViews_CreateRefs(t *testing.T) {
+	ip, err := ParseOrbIDPattern("{address}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rackPat, err := ParseOrbIDPattern("{type}-{name}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	types := map[string]TypeInfo{
+		"Server": {Fields: []DerivedField{
+			{Name: "hostname", Editable: true, Kind: "SCALAR"},
+			{Name: "rack", Kind: "OBJECT", TypeName: "Rack"},
+			{Name: "oobIP", Kind: "OBJECT", TypeName: "IPAddress"},
+			{Name: "idracSettings", Kind: "OBJECT", TypeName: "IdracSettings"},
+		}},
+		"Rack":          {OrbIDPattern: []OrbIDPattern{rackPat}, Fields: []DerivedField{{Name: "uHeight", Kind: "SCALAR"}}},
+		"IPAddress":     {OrbIDPattern: []OrbIDPattern{ip}, Fields: []DerivedField{{Name: "address", Kind: "SCALAR"}, {Name: "serverOobIP", Kind: "OBJECT", TypeName: "Server"}}},
+		"IdracSettings": {Fields: []DerivedField{{Name: "sshEnabled", Kind: "SCALAR"}}},
+	}
+	yes := true
+	cfg := ViewConfig{Types: map[string]TypeDecl{
+		"Server": {Fields: map[string]FieldDecl{
+			"rack":  {Editable: &yes},
+			"oobIP": {Editable: &yes, CreateRequired: true, CreateSet: map[string]string{"role": "oob"}},
+			// idracSettings is NOT editable: it must stay off the create form.
+		}},
+		"IPAddress": {Fields: map[string]FieldDecl{"address": {CreatePattern: "[0-9.]+"}}},
+	}}
+	inverse := func(typeName, field string) string {
+		if typeName == "Server" && field == "oobIP" {
+			return "serverOobIP"
+		}
+		return ""
+	}
+	validated, _ := cfg.Validate(types, "")
+	views, err := ResolveViewsFromConfig(types, nil, validated, inverse)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var server View
+	for _, v := range views {
+		if v.Type == "Server" {
+			server = v
+		}
+	}
+	got := map[string]CreateRef{}
+	for _, r := range server.CreateRefs {
+		got[r.Field] = r
+	}
+	if _, ok := got["idracSettings"]; ok || len(got) != 2 {
+		t.Fatalf("create refs = %+v, want exactly rack and oobIP", server.CreateRefs)
+	}
+	if r := got["rack"]; r.KeyField != "" || r.Required {
+		t.Errorf("rack = %+v, want an optional select (no key field)", r)
+	}
+	r := got["oobIP"]
+	if r.KeyField != "address" || !r.Required || r.Pattern != "[0-9.]+" || r.Set["role"] != "oob" {
+		t.Errorf("oobIP = %+v, want a required create-or-link on address, with its pattern and createSet", r)
+	}
+	if r.Inverse != "serverOobIP" || r.InverseIsList {
+		t.Errorf("oobIP inverse = %q (list %v), want the single serverOobIP", r.Inverse, r.InverseIsList)
+	}
+}
+
+// A reference declared on an INTERFACE resolves its back-edge on the
+// implementation too. `controlPlaneEndpoint` is declared on KubernetesCluster,
+// and the schema's @hasInverse names the interface, not EksaKubernetesCluster —
+// without the interface fallback the inverse was lost, and the cluster form
+// could not refuse an IP that is already another cluster's endpoint.
+func TestResolveViews_CreateRefs_InverseThroughInterface(t *testing.T) {
+	ip, err := ParseOrbIDPattern("{address}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cluster := []DerivedField{{Name: "controlPlaneEndpoint", Kind: "OBJECT", TypeName: "IPAddress"}}
+	types := map[string]TypeInfo{
+		"KubernetesCluster":     {IsInterface: true, Fields: cluster},
+		"EksaKubernetesCluster": {Implements: []string{"KubernetesCluster"}, Fields: cluster},
+		"IPAddress": {OrbIDPattern: []OrbIDPattern{ip}, Fields: []DerivedField{
+			{Name: "address", Kind: "SCALAR"},
+			{Name: "kubernetesClusterControlPlaneEndpoint", Kind: "INTERFACE", TypeName: "KubernetesCluster"}}},
+	}
+	yes := true
+	cfg := ViewConfig{Types: map[string]TypeDecl{
+		"KubernetesCluster": {Fields: map[string]FieldDecl{"controlPlaneEndpoint": {Editable: &yes}}},
+	}}
+	inverse := func(typeName, field string) string {
+		if typeName == "KubernetesCluster" && field == "controlPlaneEndpoint" {
+			return "kubernetesClusterControlPlaneEndpoint"
+		}
+		return ""
+	}
+	validated, _ := cfg.Validate(types, "")
+	views, err := ResolveViewsFromConfig(types, nil, validated, inverse)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range views {
+		if v.Type != "EksaKubernetesCluster" {
+			continue
+		}
+		if len(v.CreateRefs) != 1 || v.CreateRefs[0].Inverse != "kubernetesClusterControlPlaneEndpoint" || v.CreateRefs[0].InverseIsList {
+			t.Fatalf("create refs = %+v, want controlPlaneEndpoint with its single inverse found through the interface", v.CreateRefs)
+		}
+		return
+	}
+	t.Fatal("no EksaKubernetesCluster view")
+}
+
+// A referenced type that has its OWN page is chosen, never typed — even when its
+// orbId is a single field of its own. EksaKubernetesCluster is `{name}`, so the
+// identity test alone made `managementCluster` a create-or-link text box, and a
+// typed name would have minted a whole cluster from another cluster's form. A
+// type with a page is created on that page; only a pageless value-like node
+// (IPAddress) has nowhere else to be created.
+func TestResolveViews_CreateRefs_TypeWithAPageIsChosenNotTyped(t *testing.T) {
+	name, err := ParseOrbIDPattern("{name}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cluster := TypeInfo{OrbIDPattern: []OrbIDPattern{name}, Fields: []DerivedField{
+		{Name: "name", Kind: "SCALAR"},
+		{Name: "managementCluster", Kind: "OBJECT", TypeName: "Cluster"},
+	}}
+	types := map[string]TypeInfo{"Cluster": cluster}
+	yes := true
+	cfg := ViewConfig{
+		Pages: map[string]PageDecl{"Cluster": {}},
+		Types: map[string]TypeDecl{"Cluster": {Fields: map[string]FieldDecl{"managementCluster": {Editable: &yes}}}},
+	}
+	validated, _ := cfg.Validate(types, "")
+	got := resolveOne(t, types, validated, "Cluster")
+	if len(got.CreateRefs) != 1 || got.CreateRefs[0].KeyField != "" {
+		t.Errorf("create refs = %+v, want managementCluster as a select (no key field) — Cluster has a page", got.CreateRefs)
+	}
+}
+
+// The page may belong to an INTERFACE the type implements: /clusters is
+// KubernetesCluster's, and EksaKubernetesCluster nodes are created there. That
+// still counts as having a page, so a reference to one is chosen, not typed.
+func TestResolveViews_CreateRefs_InterfacePageCounts(t *testing.T) {
+	name, err := ParseOrbIDPattern("{name}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	impl := TypeInfo{Implements: []string{"ClusterIface"}, OrbIDPattern: []OrbIDPattern{name}, Fields: []DerivedField{
+		{Name: "name", Kind: "SCALAR"},
+		{Name: "managementCluster", Kind: "OBJECT", TypeName: "Cluster"},
+	}}
+	types := map[string]TypeInfo{"Cluster": impl, "ClusterIface": {IsInterface: true, Fields: []DerivedField{{Name: "name", Kind: "SCALAR"}}}}
+	yes := true
+	cfg := ViewConfig{
+		Pages: map[string]PageDecl{"ClusterIface": {}},
+		Types: map[string]TypeDecl{"Cluster": {Fields: map[string]FieldDecl{"managementCluster": {Editable: &yes}}}},
+	}
+	validated, _ := cfg.Validate(types, "")
+	got := resolveOne(t, types, validated, "Cluster")
+	if len(got.CreateRefs) != 1 || got.CreateRefs[0].KeyField != "" {
+		t.Errorf("create refs = %+v, want a select — Cluster is created on its interface's page", got.CreateRefs)
+	}
+}

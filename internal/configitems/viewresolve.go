@@ -214,6 +214,7 @@ func ResolveViewsFromConfig(types map[string]TypeInfo, ifaceFields []string, cfg
 			Fields:          editableFields(info, td, ifaceFields),
 			CreateFields:    createFields(info, td, ifaceFields),
 			EditableRefs:    editableRefs(info, td, types),
+			CreateRefs:      createRefs(name, info, td, types, cfg, inverse),
 			Subgraph:        subgraph,
 			Relations:       relationsOf(info),
 		}
@@ -430,6 +431,61 @@ func editableRefs(info TypeInfo, decl TypeDecl, types map[string]TypeInfo) []str
 	}
 	sort.Strings(out)
 	return out
+}
+
+// createRefs describes each editable reference for the create form.
+func createRefs(name string, info TypeInfo, decl TypeDecl, types map[string]TypeInfo, cfg ViewConfig, inverse func(string, string) string) []CreateRef {
+	var out []CreateRef
+	for _, f := range editableRefs(info, decl, types) {
+		fi, _ := fieldNamed(info, f)
+		rt := types[fi.TypeName]
+		fd := decl.Fields[f]
+		ref := CreateRef{Field: f, Type: fi.TypeName, Required: fd.CreateRequired, Set: fd.CreateSet}
+		// Typed (create-or-link) only for a PAGELESS type identified by one of
+		// its own fields — an IPAddress has nowhere else to be created. A type
+		// with a page is created there, and chosen everywhere else.
+		if len(rt.OrbIDPattern) == 1 && !hasPage(cfg, fi.TypeName, rt) {
+			p := rt.OrbIDPattern[0]
+			if paths := p.Paths(); len(paths) == 1 && p.Raw == "{"+paths[0]+"}" {
+				if kf, ok := fieldNamed(rt, paths[0]); ok && (kf.Kind == "SCALAR" || kf.Kind == "ENUM") {
+					ref.KeyField = paths[0]
+					ref.Pattern = cfg.TypeOf(rt, fi.TypeName).Fields[paths[0]].CreatePattern
+				}
+			}
+		}
+		back := inverse(name, f)
+		// A field declared on an interface has its @hasInverse recorded against
+		// the interface, not this implementation.
+		for _, in := range info.Implements {
+			if back != "" {
+				break
+			}
+			back = inverse(in, f)
+		}
+		if back != "" {
+			ref.Inverse = back
+			if bf, ok := fieldNamed(rt, back); ok {
+				ref.InverseIsList = bf.IsList
+			}
+		}
+		out = append(out, ref)
+	}
+	return out
+}
+
+// hasPage reports whether nodes of a type are created on a page of their own —
+// the type's, or an interface's it implements (/clusters creates
+// EksaKubernetesClusters).
+func hasPage(cfg ViewConfig, typeName string, info TypeInfo) bool {
+	if pageSlug(cfg, typeName) != "" {
+		return true
+	}
+	for _, in := range info.Implements {
+		if pageSlug(cfg, in) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // Shared so the warning and the resolver cannot disagree about what was honoured.

@@ -24,6 +24,15 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ### Added
 
+- **Create forms set references.** A reference declared `editable: true`
+  appears on its type's create form: Server `rack` and `oobIP` (required),
+  NetworkDevice `rack` and `virtualChassis`, cluster `managementCluster`,
+  `controlPlaneEndpoint` and `tinkerbellIP`. Nodes with a page are chosen from
+  the data centre's; an IP is typed and linked or created, and refused when
+  another server or cluster already owns it. New `views.yaml` field keys:
+  `createRequired` (form-only; the API stays optional), `createSet`,
+  `createPattern`.
+
 - **Every change-request decision is kept.** Re-approving or rejecting used to
   replace an approver's earlier decision, erasing it and its comment. Decisions
   now go to an append-only `approval_decisions` table — the database refuses
