@@ -192,21 +192,42 @@ test('a network device shows what its connected servers do', async ({ page }) =>
 // tabs beside it use. A heading over an empty panel reads as a panel that
 // failed to load, which is how this shipped: a list said "None." and an absent
 // single said nothing at all.
-test('an absent relationship says so, and a wrapper with children does not', async ({ page }) => {
-  await page.goto('/servers?open=' + encodeURIComponent('2f-uae:server-abc123'));
-  await openAllDetailPanels(page);
+test('an absent relationship says so, and a wrapper with children does not', async ({ page, request }) => {
+  // Its own server: unracked, no adapters. It used to open one that only an
+  // old fixture created, so the test failed on any freshly seeded stack.
+  const ID = '2f-uae:server-E2EABSENT1';
+  const remove = () => request.post('/graphql', {
+    data: { query: `mutation { deleteServer(filter: { orbId: { eq: "${ID}" } }) { numUids } }` },
+  });
+  await remove();
+  await request.post('/graphql', {
+    data: {
+      query: 'mutation($input: [AddServerInput!]!) { addServer(input: $input) { numUids } }',
+      variables: { input: [{ orbId: ID, namespace: '2f-uae', name: 'e2e-absent', serviceTag: 'E2EABSENT1', version: 1,
+        dataCenter: { orbId: '2f-uae:datacenter-2f-uae' } }] },
+    },
+  });
+  try {
+    await page.goto('/servers?open=' + encodeURIComponent(ID));
+    await openAllDetailPanels(page);
 
-  // `rack` is null on this server, and a list with no rows already said "None."
-  const rack = page.getByTestId('generic-owned').filter({ hasText: 'rack' }).first();
-  await expect(rack).toContainText('None.');
-  await expect(page.getByTestId('generic-tab').filter({ hasText: 'networkAdapters' }).first())
-    .toContainText('None.');
+    // `rack` is null on this server, and a list with no rows already said "None."
+    const rack = page.getByTestId('generic-owned').filter({ hasText: 'rack' }).first();
+    await expect(rack).toContainText('None.');
+    await expect(page.getByTestId('generic-tab').filter({ hasText: 'networkAdapters' }).first())
+      .toContainText('None.');
 
-  // A panel with CHILDREN is not empty even when the wrapper itself is unset:
-  // an unconfigured ClusterBackup still has to list what could be configured.
-  await page.goto('/clusters?open=' + encodeURIComponent('alaska-dot-cruiser:adot-m'));
-  await openAllDetailPanels(page);
-  const backup = page.getByTestId('generic-owned').filter({ hasText: 'backup' }).first();
-  await expect(backup).toContainText('etcd');
-  await expect(backup).not.toContainText('None.');
+    // A panel with CHILDREN is not empty even when the wrapper itself is unset:
+    // an unconfigured ClusterBackup still has to list what could be configured.
+    await page.goto('/clusters?open=' + encodeURIComponent('alaska-dot-cruiser:adot-m'));
+    await openAllDetailPanels(page);
+    const backup = page.getByTestId('generic-owned').filter({ hasText: 'backup' }).first();
+    await expect(backup).toContainText('etcd');
+    // Each unconfigured CHILD says "None." under its own heading; the wrapper
+    // itself must not, so only the text before the first child is checked.
+    const wrapperText = (await backup.innerText()).split('etcd')[0];
+    expect(wrapperText, 'the wrapper must not say None. — it has children').not.toContain('None.');
+  } finally {
+    await remove();
+  }
 });

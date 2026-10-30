@@ -185,6 +185,34 @@ func buildCreateForm(
 		form.NamespaceInput = true
 	}
 
+	// References declared `editable: true`: optional unless `createRequired`.
+	// One whose node is identified by a single field of its own (an IPAddress by
+	// its address) is a text input that creates or links; any other is a select
+	// of existing nodes in the namespace being created into.
+	for _, r := range v.CreateRefs {
+		rel := page.CreateRelation{
+			Field: r.Field, Label: labeller(r.Field), Type: r.Type, Required: r.Required,
+			KeyField: r.KeyField, Pattern: r.Pattern,
+			Inverse: r.Inverse, InverseIsList: r.InverseIsList,
+		}
+		if r.KeyField != "" {
+			if len(r.Set) > 0 {
+				b, _ := json.Marshal(r.Set)
+				rel.SetJSON = string(b)
+			}
+		} else {
+			opts, err := createOptions(ctx, dgraphURL, r.Type, "")
+			if err != nil {
+				form.Unavailable = "Orbital could not load the " + labeller(r.Field) +
+					" options, so it cannot offer a create form: " + err.Error()
+				return form
+			}
+			rel.Options = opts
+			rel.Scoped = true
+		}
+		form.Relations = append(form.Relations, rel)
+	}
+
 	// The TYPE picker. Rendered for an interface page ALWAYS, pre-selected when
 	// there is one implementation.
 	//
@@ -337,7 +365,7 @@ func createOptions(ctx context.Context, dgraphURL, typeName, namespace string) (
 	if namespace != "" {
 		filter = fmt.Sprintf("filter: { namespace: { eq: %q } }, ", namespace)
 	}
-	q := fmt.Sprintf("{ q: query%s(%sfirst: %d, order: { asc: orbId }) { orbId name } }", typeName, filter, cap)
+	q := fmt.Sprintf("{ q: query%s(%sfirst: %d, order: { asc: orbId }) { orbId name namespace } }", typeName, filter, cap)
 	raw, err := runGraphQL(ctx, dgraphURL, q, "q")
 	if err != nil {
 		return nil, err
@@ -350,13 +378,14 @@ func createOptions(ctx context.Context, dgraphURL, typeName, namespace string) (
 	for _, m := range rows {
 		orbID, _ := m["orbId"].(string)
 		name, _ := m["name"].(string)
+		ns, _ := m["namespace"].(string)
 		if orbID == "" {
 			continue
 		}
 		if name == "" {
 			name = orbID
 		}
-		out = append(out, page.CreateOption{OrbID: orbID, Name: name})
+		out = append(out, page.CreateOption{OrbID: orbID, Name: name, Namespace: ns})
 	}
 	return out, nil
 }

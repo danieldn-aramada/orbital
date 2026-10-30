@@ -22,6 +22,9 @@ const DC_NS = 'e2ecreatens';
 const DC_NAME = 'e2e-create-dc';
 const DC_ID = `${DC_NS}:datacenter-${DC_NAME}`;
 
+// oobIP is required on the Server create form; TEST-NET-1, so it cannot collide.
+const OOB_IP = '192.0.2.20';
+
 // Remove anything a run left behind. Deletes BY THE IDS THIS SPEC CREATES, never
 // a broad filter — the local graph is shared with whoever is developing.
 //
@@ -44,6 +47,7 @@ async function cleanup(request: any) {
         e: deleteDataCenter(filter: { orbId: { eq: "${DC_ID}" } }) { numUids }
         f: deleteNamespace(filter: { name: { eq: "${DC_NS}" } }) { numUids }
         g: deleteDataCenter(filter: { orbId: { eq: "colo:datacenter-${DC_NAME}" } }) { numUids }
+        h: deleteIPAddress(filter: { orbId: { eq: "colo:${OOB_IP}" } }) { numUids }
       }`,
     },
   });
@@ -174,6 +178,7 @@ test('creating a server with its iDRAC settings writes both, linked', async ({ p
   await modal.locator('[data-create-field="model"]:not([data-create-child])').fill('PowerEdge R650');
   await modal.locator('[data-create-child="idracSettings"][data-create-field="firmwareVersion"]').fill('7.10.00.00');
 
+  await modal.getByTestId('create-ref-oobIP').fill(OOB_IP);
   await modal.getByTestId('create-submit').click();
 
   // Success reloads the list, so the new ROW is the signal — waited for by its
@@ -314,6 +319,7 @@ test('a defaulted boolean is written as a boolean, not the string "false"', asyn
   await modal.locator('[data-create-field="serviceTag"]:not([data-create-child])').fill(TAG);
   // Touch ONE child field so the unit is created; the rest ride on their defaults.
   await modal.locator('[data-create-child="idracSettings"][data-create-field="firmwareVersion"]').fill('7.20.10.05');
+  await modal.getByTestId('create-ref-oobIP').fill(OOB_IP);
   await modal.getByTestId('create-submit').click();
 
   await expect(page.locator(`#generic-table tr[data-orb-id="${ORB_ID}"]`)).toHaveCount(1, { timeout: 15_000 });

@@ -88,7 +88,7 @@ test('a proposal whose value already matches current state is NOT marked', async
 
   // Give the overlay the same time the positive test allows, so this cannot
   // pass merely by asserting before the fetch resolved.
-  await expect(page.getByTestId('generic-owned').filter({ hasText: 'Server Maintenance' })
+  await expect(page.getByTestId('generic-owned').filter({ hasText: 'serverMaintenance' })
     .locator('table')).toBeVisible()
   await page.waitForTimeout(2_000)
   await expect(markFor(page, 'enabled')).toBeEmpty()
@@ -118,7 +118,7 @@ test('two proposals that disagree show a count and are called out as conflicting
 
 test('with nothing proposed, no field is marked', async ({ page }) => {
   await openMaintenanceTab(page)
-  await expect(page.getByTestId('generic-owned').filter({ hasText: 'Server Maintenance' })
+  await expect(page.getByTestId('generic-owned').filter({ hasText: 'serverMaintenance' })
     .locator('table')).toBeVisible()
   await page.waitForTimeout(2_000)
   for (const field of ['enabled', 'windowStart', 'windowEnd', 'reason']) {

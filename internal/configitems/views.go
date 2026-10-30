@@ -82,6 +82,11 @@ type View struct {
 	// Disjoint from Fields: these hold another entity's orbId, not a scalar.
 	EditableRefs []string `json:"editableRefs,omitempty"`
 
+	// CreateRefs are EditableRefs as the CREATE form offers them, in the same
+	// order. `editable: true` on a reference means "settable from the create
+	// form and the editor".
+	CreateRefs []CreateRef `json:"-"`
+
 	// Display are the scalars a page SHOWS, which is a superset of Fields.
 	//
 	// `editorIgnored` is editor-scoped, not display-scoped: a scanned hardware
@@ -182,6 +187,27 @@ type View struct {
 	// IP, and those live one hop away. Resolved from the bare single
 	// relationships in `types.<T>.columns`.
 	RefColumns []ViewRefColumn `json:"refColumns"`
+}
+
+// CreateRef is one reference the create form sets.
+type CreateRef struct {
+	Field    string
+	Type     string
+	Required bool // `createRequired: true`
+	// KeyField is set when the referenced type has NO page and its orbId is
+	// exactly one of its own fields (`orbIdPattern: {address}`). The form then
+	// takes that value as text and creates the node or links an existing one. A
+	// type with a page is created on that page and chosen everywhere else.
+	KeyField string
+	// Pattern is KeyField's `createPattern`, when it has one.
+	Pattern string
+	// Set is `createSet`: written onto a node created through this reference.
+	Set map[string]string
+	// Inverse is the referenced type's edge back to this one, and InverseIsList
+	// whether it holds several. A single inverse already pointing elsewhere
+	// means linking would MOVE the node off its current owner.
+	Inverse       string
+	InverseIsList bool
 }
 
 // ViewRefColumn is a single relationship rendered as a column of links.

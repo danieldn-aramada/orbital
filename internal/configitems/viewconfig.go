@@ -308,6 +308,22 @@ type FieldDecl struct {
 	//
 	// ⚠️ REFUSED on a field the orbId is built from.
 	CreateDefault string `yaml:"createDefault,omitempty"`
+
+	// CreateRequired makes an `editable: true` REFERENCE required on the create
+	// form. Form-only: the schema keeps the edge nullable, so a scan or import
+	// that does not know the value can still write the node — Django's `blank`
+	// against `null`.
+	CreateRequired bool `yaml:"createRequired,omitempty"`
+
+	// CreateSet are values written onto a node CREATED through this reference
+	// on the create form — `oobIP: { createSet: { role: oob } }`. Ignored when
+	// the reference links a node that already exists.
+	CreateSet map[string]string `yaml:"createSet,omitempty"`
+
+	// CreatePattern is the regular expression a create form holds this scalar
+	// to (an HTML `pattern`, anchored). `IPAddress.address` uses it so a typed
+	// OOB IP is checked without the form knowing what an IP address is.
+	CreatePattern string `yaml:"createPattern,omitempty"`
 	Default       string `yaml:"default,omitempty"`
 }
 

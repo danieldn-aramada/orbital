@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -546,5 +548,70 @@ func TestBuildCreateForm_AmbiguousIdentityOffersNoForm(t *testing.T) {
 	none := base
 	if f := buildCreateForm(context.Background(), "http://127.0.0.1:1/unreachable", none, byType, labels, meta); f != nil {
 		t.Error("a type with NO pattern must offer no create form")
+	}
+}
+
+// Items 1, 4, 5 and 10 of the create-form references list. An `editable: true`
+// reference reaches the create form — a SELECT scoped to the namespace being
+// created into, or a create-or-link TEXT input when its node is identified by
+// one field. The negative halves matter as much: an undeclared relationship
+// stays off, and the required relationship that picks the namespace stays an
+// unscoped, required select.
+func TestBuildCreateForm_EditableReferences(t *testing.T) {
+	dg := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"data":{"q":[{"orbId":"colo:rack-A","name":"A","namespace":"colo"},` + //nolint:errcheck
+			`{"orbId":"houston:rack-B","name":"B","namespace":"houston"}]}}`))
+	}))
+	defer dg.Close()
+
+	info := configitems.TypeInfo{Fields: []configitems.DerivedField{
+		{Name: "name", Editable: true, Kind: "SCALAR"},
+		{Name: "serviceTag", Editable: true, Kind: "SCALAR"},
+		{Name: "dataCenter", Kind: "OBJECT", TypeName: "DataCenter", NonNull: true},
+		{Name: "rack", Kind: "OBJECT", TypeName: "Rack"},
+		{Name: "oobIP", Kind: "OBJECT", TypeName: "IPAddress"},
+		{Name: "kubernetesNode", Kind: "OBJECT", TypeName: "KubernetesNode"},
+	}}
+	meta := func(string) configitems.TypeInfo { return info }
+	labels := func(string) func(string) string { return func(f string) string { return f } }
+	pat, err := configitems.ParseOrbIDPattern("{type}-{serviceTag}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := configitems.View{
+		Type: "Server", Slug: "servers", OrbIDType: "server", Fields: []string{"serviceTag"},
+		OrbIDPattern: []configitems.OrbIDPattern{pat},
+		CreateRefs: []configitems.CreateRef{
+			{Field: "oobIP", Type: "IPAddress", Required: true, KeyField: "address", Pattern: "[0-9.]+",
+				Set: map[string]string{"role": "oob"}, Inverse: "serverOobIP"},
+			{Field: "rack", Type: "Rack"},
+		},
+	}
+	byType := map[string]configitems.View{"Server": v, "DataCenter": {Type: "DataCenter"}, "Rack": {Type: "Rack"},
+		"IPAddress": {Type: "IPAddress"}, "KubernetesNode": {Type: "KubernetesNode"}}
+
+	form := buildCreateForm(context.Background(), dg.URL, v, byType, labels, meta)
+	if form == nil || form.Unavailable != "" {
+		t.Fatalf("form = %+v", form)
+	}
+	rels := map[string]page.CreateRelation{}
+	for _, r := range form.Relations {
+		rels[r.Field] = r
+	}
+	if _, ok := rels["kubernetesNode"]; ok {
+		t.Error("kubernetesNode is not editable: true, but it is on the create form")
+	}
+	if dc := rels["dataCenter"]; !dc.Required || dc.Scoped || dc.KeyField != "" {
+		t.Errorf("dataCenter = %+v, want the required, unscoped select it was", dc)
+	}
+	rack := rels["rack"]
+	if rack.Required || !rack.Scoped || rack.KeyField != "" || len(rack.Options) != 2 || rack.Options[0].Namespace != "colo" {
+		t.Errorf("rack = %+v, want an optional select scoped by namespace, options carrying theirs", rack)
+	}
+	ip := rels["oobIP"]
+	if !ip.Required || ip.KeyField != "address" || ip.Pattern != "[0-9.]+" || ip.SetJSON != `{"role":"oob"}` ||
+		ip.Inverse != "serverOobIP" || len(ip.Options) != 0 {
+		t.Errorf("oobIP = %+v, want a required create-or-link input on address", ip)
 	}
 }

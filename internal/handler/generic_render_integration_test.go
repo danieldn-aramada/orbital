@@ -251,3 +251,44 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// A single-relationship panel says WHICH node it points at. Its rows come from
+// the related type's own fields, and name/orbId live on the ConfigItem
+// interface — so a rack panel used to show only `uHeight`, and nothing on the
+// server's page said which rack it was in.
+func TestGeneric_SingleRelationshipPanelShowsIdentity(t *testing.T) {
+	ui, adminID := newGenericUI(t)
+	e := echo.New()
+
+	rack := seedGenericRack(t)
+	const server = "gen-test:server-PANEL1"
+	gqlMutate(t, `mutation($input:[AddServerInput!]!){ addServer(input:$input, upsert:true){ numUids } }`,
+		map[string]any{"input": []any{map[string]any{
+			"namespace": "gen-test", "orbId": server, "name": "panel fixture", "version": 1,
+			"serviceTag": "PANEL1",
+			"dataCenter": map[string]any{"orbId": "gen-test:datacenter-1"},
+			"rack":       map[string]any{"orbId": rack},
+		}}})
+	t.Cleanup(func() { deleteByOrbID(t, "Server", server) })
+
+	rec := renderAsFragment(t, e, "/servers/"+server, ui.Generic().Detail, adminID,
+		map[string]string{"slug": "servers", "orbId": server})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+
+	// The rack panel names its rack, as plain text — Rack has no page.
+	if !strings.Contains(body, `<td>A1</td>`) || !strings.Contains(body, `<td>`+rack+`</td>`) {
+		t.Error("the rack panel does not name the rack (name A1, orbId " + rack + ")")
+	}
+	if strings.Contains(body, `?open=gen-test%3arack-A1`) {
+		t.Error("the rack's name links somewhere, but Rack has no page")
+	}
+	// The data centre panel names its data centre and links to it — DataCenter
+	// has a page.
+	// html/template escapes the orbId's colon in a URL, as the table links do.
+	if !strings.Contains(body, `/data-centers?open=gen-test%3adatacenter-1">generic fixture dc</a>`) {
+		t.Error("the dataCenter panel does not link its data centre by name")
+	}
+}

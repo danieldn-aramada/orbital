@@ -126,17 +126,18 @@ export async function openDetailPanel(page: Page, label: string | RegExp) {
   return panel;
 }
 
-// openAuditPanel activates the detail view's audit tab and waits for its rows.
+// openAuditPanel expands the detail view's Audit Log section and waits for its
+// rows. The section's open state is remembered (localStorage), so it may
+// already be open after a reload — expand only when it is not.
 //
-// Explicit, and only in specs that read audit content. The tab's activation is
-// also remembered across a reload (localStorage), so a spec that reloads and
-// then reads the audit panel must call this AFTER the reload — relying on an
-// earlier helper having clicked it is a dependency nobody can see.
+// Explicit, and only in specs that read audit content.
 export async function openAuditPanel(page: Page) {
-  // Visible is not clickable: the strip renders before initDetailTabs attaches
-  // its handlers, and a click in between does nothing (measured: 12/15 reloads).
-  await page.locator('[id^="generic-detail-tabs-"][data-wired="true"]').first().waitFor();
-  await page.locator('[id^="generic-detail-tabs-"] li[data-orb-id]').first().click();
+  // Visible is not clickable: the section renders before initAuditSection
+  // attaches its handler, and a click in between does nothing.
+  const section = page.locator('[data-audit-section][data-wired="true"]').first();
+  await section.waitFor();
+  const toggle = section.getByTestId('audit-toggle');
+  if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
   await expect(page.getByTestId('generic-audit')).not.toBeEmpty({ timeout: 10_000 });
 }
 
@@ -156,8 +157,8 @@ export async function openAllDetailPanels(page: Page) {
   const strip = page.locator('[id^="generic-detail-tabs-"]');
   if (!await strip.count()) return;
 
-  // The audit panel is NOT loaded here. It LAZY-LOADS on activation, so
-  // un-hiding it below leaves it empty — a spec asserting audit content calls
+  // The audit log is NOT opened here — it is its own section, not a tab, and
+  // loads only when expanded. A spec asserting audit content calls
   // openAuditPanel, which pays for the fetch only where it is the thing under
   // test. Waiting on it here put a load-dependent round trip inside every spec
   // that uses this helper, and under a busy machine it outran the per-test

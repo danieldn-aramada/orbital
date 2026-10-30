@@ -346,16 +346,13 @@ export function fetchWithMinDelay(url, minMs = 500) {
   ]).then(([html]) => html)
 }
 
-// initDetailTabs wires the standard "detail-tabs with optional lazy-loaded
-// Audit Log tab" pattern used by DC, Server, and Cluster detail pages.
+// initDetailTabs wires a detail page's Relationships tab strip. (The audit log
+// is not a tab: it is its own section — see initAuditSection.)
 //
 // Conventions enforced by this function:
 //   • tabContainer is the <div class="tabs is-boxed" id="…"> element.
 //   • Each tab <li> declares its panel target via data-panel="…", and the
 //     matching <div id="…"> lives as a sibling of tabContainer.
-//   • The audit tab is identified by carrying data-orb-id (no other tab does).
-//     Optional data-subgraph-orb-ids carries a CSV of subgraph orbIds so the
-//     audit panel can aggregate events for the parent and its nested items.
 //   • Active-tab persistence is keyed off tabContainer.id, which is already
 //     unique on the page and already prefixed by page family.
 //
@@ -382,27 +379,10 @@ export function initDetailTabs(tabContainer, options = {}) {
     ? (id) => scope.querySelector('#' + CSS.escape(id))
     : (id) => document.getElementById(id)
 
-  const auditTab = [...tabs].find(t => t.dataset.orbId)
-  const auditPanelId = auditTab ? auditTab.dataset.panel : null
-
   const panelPairs = [...tabs].map(t => ({
     tab: t,
     panel: findPanel(t.dataset.panel),
   })).filter(p => p.panel)
-
-  function loadAuditPanel(before) {
-    if (!auditTab) return
-    const panel = findPanel(auditPanelId)
-    if (!panel) return
-    // Re-pin once the rows arrive: the panel is empty when the click is
-    // handled, so the height it settles at is not the height we corrected
-    // against, and the strip drifts by however many rows came back.
-    loadAuditPanelForTab(auditTab, panel, () => {
-      if (before === undefined) return
-      pinStrip(before)
-      reserveShortfall(before, tabContainer.parentElement)
-    })
-  }
 
   function activatePanel(panelId) {
     // Pin the tab strip in the viewport across the switch.
@@ -431,7 +411,6 @@ export function initDetailTabs(tabContainer, options = {}) {
         panel.style.setProperty('display', 'none')
       }
     }
-    if (panelId === auditPanelId) loadAuditPanel(before)
     storageObj.setItem(storageKey, panelId)
 
     // After the reflow, put the strip back where it was. Instant, not smooth:
@@ -503,6 +482,43 @@ export function subgraphOrbIds(orbId, scope = document) {
   return splitOrbIds(el && el.dataset.subgraphOrbIds, orbId)
 }
 
+// initAuditSection wires a detail page's Audit Log section: collapsed until
+// asked for, so a page view costs no audit query, and loaded once per render.
+// Whether it is open is remembered per browser — someone checking history
+// keeps seeing it, and after a Save the page re-renders with it still open
+// and freshly loaded. data-wired="true" is set last, for automation.
+const AUDIT_OPEN_KEY = 'audit-section-open'
+export function initAuditSection(section) {
+  if (!section || section.dataset.wired) return
+  const toggle = section.querySelector('[data-audit-toggle]')
+  const panel = toggle && section.querySelector('#' + CSS.escape(toggle.getAttribute('aria-controls')))
+  if (!panel) return
+  const chevron = section.querySelector('[data-audit-chevron]')
+  let loaded = false
+  const show = (open) => {
+    panel.style.display = open ? '' : 'none'
+    toggle.setAttribute('aria-expanded', String(open))
+    if (chevron) {
+      chevron.classList.toggle('fa-chevron-right', !open)
+      chevron.classList.toggle('fa-chevron-down', open)
+    }
+    if (open && !loaded) {
+      loaded = true
+      loadAuditPanelForTab(section, panel)
+    }
+  }
+  toggle.addEventListener('click', (e) => {
+    e.preventDefault()
+    const open = toggle.getAttribute('aria-expanded') !== 'true'
+    show(open)
+    try { localStorage.setItem(AUDIT_OPEN_KEY, open ? '1' : '0') } catch { /* private mode */ }
+  })
+  let remembered = false
+  try { remembered = localStorage.getItem(AUDIT_OPEN_KEY) === '1' } catch { /* private mode */ }
+  if (remembered) show(true)
+  section.dataset.wired = 'true'
+}
+
 function loadAuditPanelForTab(tab, panel, onLoaded) {
   // data-subgraph-orb-ids embeds the full subgraph (parent + nested ConfigItems)
   // so one fetch pulls all relevant events. Falls back to data-orb-id alone.
@@ -555,8 +571,8 @@ document.addEventListener('htmx:afterSettle', (evt) => {
   if (!target) return
   renderTimestamps(target)
 
-  // The generic detail page's tab strip — subgraph members, relationship
-  // tables, then the audit log. Wired here for a fragment opened as a tab on a
+  // The generic detail page's tab strip (subgraph members, relationship
+  // tables) and its audit section. Wired here for a fragment opened as a tab on a
   // list page, and on DOMContentLoaded in orbital.js/orb.js for a direct
   // navigation.
   //
@@ -564,6 +580,10 @@ document.addEventListener('htmx:afterSettle', (evt) => {
   // detail-tabs ids, none of which existed in any template any more: those
   // pages became schema-derived and their markup went with them, leaving the
   // handlers looking for elements that could never appear.
+  // Before the tab check: a page with no relationships has no strip, and its
+  // audit section still needs wiring.
+  initAuditSection(target.querySelector('[data-audit-section]'))
+
   const genericDetailTabs = target.querySelector('[id^="generic-detail-tabs-"]')
   if (genericDetailTabs) {
     target.dataset.loaded = 'true'

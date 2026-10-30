@@ -45,6 +45,8 @@ Every entry is **open**. Closed items are **deleted, not struck through** — `C
 | `after` is the mutation input, never a post-mutation re-read | Low | A field the server rewrote reads as the caller sent it. |
 | Out-of-band writes are invisible to API consumers | Low | restore `dropAll`, direct DQL and seeding bypass the proxy. |
 | Subtree audit scope is N calls | Low | Clients traverse Topology for descendant orbIds, then pass ≤128 repeatable params. |
+| A nested create is not stamped with `createdBy`/`createdAt` | Med | `stampMutation` stamps only top-level add inputs (`internal/handler/graphql.go:816`). Hits the create form's nested children (iDRAC, racks) and a cluster's nested nodes, which DGraph forces to be nested. The audit event still names the actor. |
+| With policies in force, an add whose input variable is not named `input` is refused | Low | The gate reads only `$input`/`$orbId` (`extractResourceIDs`, `internal/handler/graphql.go:1255`), so a multi-mutation request (`$devices`, `$servers`) gets `VARIABLE_FORM_REQUIRED`. Fails closed; error message misleads. |
 
 ---
 

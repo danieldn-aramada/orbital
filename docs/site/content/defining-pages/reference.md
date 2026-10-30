@@ -64,6 +64,9 @@ Applies wherever the type renders: its own page, and every tab and table on othe
 | `createOnly` | Settable when the node is created, fixed afterwards. Use it for every attribute the type's orbId is built from. |
 | `createHidden` | Not on the create form, but editable afterwards. |
 | `createDefault` | A value pre-filled on the create form, which the person creating the node can change. Not allowed on a field the orbId is built from. |
+| `createRequired` | On an `editable: true` reference: required on the create form. The schema and the API keep it optional, so imports without the value still work. |
+| `createSet` | On an `editable: true` reference: values written onto a node created through it, such as `{ role: oob }`. Not applied when an existing node is linked. |
+| `createPattern` | A regular expression the create form holds the field to, such as an IP address format. |
 
 `editable` decides what the **editor** offers. It does not restrict the API: a scanner can still write a field the UI never edits.
 
