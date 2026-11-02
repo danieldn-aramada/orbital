@@ -160,9 +160,14 @@ type StorageDevice implements ConfigItem {
     model: String
     serialNumber: String
     wwn: String
+    slot: Int
+    mediaType: String
+    protocol: String
+    role: String @search(by: [hash])   # unset = no opinion | ceph-osd | os | none | <other storage system>
 
     storageController: StorageController!
     storageVolumes: [StorageVolume] @hasInverse(field: storageDevices)
+    partitions: [DiskPartition] @hasInverse(field: storageDevice)
 }
 
 """orbIdPattern: {storageController.server.serviceTag}-{name}"""
@@ -175,6 +180,16 @@ type StorageVolume implements ConfigItem {
 
     storageController: StorageController!
     storageDevices: [StorageDevice] @hasInverse(field: storageVolumes)
+}
+
+"""orbIdPattern: {type}-{storageDevice.serialNumber}-{number}"""
+type DiskPartition implements ConfigItem {
+    number: Int         # partition number: the 1 in sdb1 or nvme0n1p1
+    fsType: String      # vfat | ext4 | xfs
+    mountPoint: String  # directory the filesystem is mounted at: /boot/efi | / | /var | /home; unset = not mounted
+    encrypted: Boolean  # LUKS: fsType and mountPoint describe the unlocked device
+
+    storageDevice: StorageDevice!
 }
 
 """orbIdPattern: {type}-{server.serviceTag}-{name}"""
