@@ -36,10 +36,10 @@ mutation DocsExample {
   ], upsert: true) { numUids }
 
   addIdracSettings(input: [
-    { orbId: "docs-example:DOCS001-idrac", name: "DOCS001-idrac", firmwareVersion: "7.10.50.00", sshEnabled: false, ipmiEnabled: false, dhcpEnabled: false, racadmEnabled: true, lockdownModeEnabled: false, usbManagementPortEnabled: true, osToIdracPassThroughEnabled: false,
+    { orbId: "docs-example:DOCS001-idrac", name: "DOCS001-idrac", firmwareVersion: "7.10.50.00", sshEnabled: false, ipmiEnabled: false, dhcpEnabled: false, racadmEnabled: true, lockdownModeEnabled: false, usbManagementPortEnabled: true, osToIdracPassThroughEnabled: false, snmpAgentEnabled: false,
       namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
       server: { orbId: "docs-example:server-DOCS001", version: 1 } }
-    { orbId: "docs-example:DOCS002-idrac", name: "DOCS002-idrac", firmwareVersion: "7.10.50.00", sshEnabled: false, ipmiEnabled: false, dhcpEnabled: false, racadmEnabled: true, lockdownModeEnabled: false, usbManagementPortEnabled: true, osToIdracPassThroughEnabled: false,
+    { orbId: "docs-example:DOCS002-idrac", name: "DOCS002-idrac", firmwareVersion: "7.10.50.00", sshEnabled: false, ipmiEnabled: false, dhcpEnabled: false, racadmEnabled: true, lockdownModeEnabled: false, usbManagementPortEnabled: true, osToIdracPassThroughEnabled: false, snmpAgentEnabled: false,
       namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
       server: { orbId: "docs-example:server-DOCS002", version: 1 } }
   ], upsert: true) { numUids }

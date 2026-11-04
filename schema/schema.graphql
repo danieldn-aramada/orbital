@@ -106,6 +106,7 @@ type IdracSettings implements ConfigItem {
     lockdownModeEnabled: Boolean
     dhcpEnabled: Boolean
     racadmEnabled: Boolean
+    snmpAgentEnabled: Boolean
 
     server: Server!
 }
