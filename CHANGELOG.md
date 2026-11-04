@@ -24,6 +24,12 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ### Added
 
+- **`IdracSettings.snmpAgentEnabled` sets whether a server's iDRAC SNMP agent
+  is on.** A nullable Boolean beside the other iDRAC toggles; the create form
+  defaults it to `false`. Existing servers stay null, which the edge leaves
+  unmanaged. Schema `v20`; cb-bundler picks it up by introspection once the
+  schema is applied, with no ordering constraint.
+
 - **Create forms set references.** A reference declared `editable: true`
   appears on its type's create form: Server `rack` and `oobIP` (required),
   NetworkDevice `rack` and `virtualChassis`, cluster `managementCluster`,

@@ -69,7 +69,7 @@
 # declaring only the pages or types it changes. Copying this whole file into an
 # overlay freezes that deployment at today's shape, forever.
 
-schemaVersion: v18
+schemaVersion: v20
 
 # FIELD LABELS — the stored field name on the left, the text the UI shows on
 # the right. A field NOT listed shows its RAW name (`firmwareRepository`): the
@@ -148,6 +148,7 @@ types:
       lockdownModeEnabled: { createDefault: "false" }
       osToIdracPassThroughEnabled: { createDefault: "false" }
       racadmEnabled: { createDefault: "true" }
+      snmpAgentEnabled: { createDefault: "false" }
       sshEnabled: { createDefault: "false" }
       usbManagementPortEnabled: { createDefault: "true" }
 
