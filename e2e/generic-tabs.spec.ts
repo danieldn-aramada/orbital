@@ -751,6 +751,31 @@ test('a restored tab re-reads its label, so a stale one heals', async ({ page })
   await expect(tab, 'and must not still be showing the id').not.toContainText(orbId);
 });
 
+test('a tab for a row the saved search hides still shows its name', async ({ page }) => {
+  // DataTables keeps only DRAWN rows in the DOM; a row on another page, or one
+  // the saved search filters out, is detached. The label lookup read the DOM,
+  // so it missed those rows and the tab fell back to the orbId. Arriving by a
+  // link — a rack panel's server link carries no label — with a search left
+  // in place is the common way in. Seen on /servers 2026-11-03.
+  await page.goto('/network-devices');
+  const row = listRows(page).first();
+  const orbId = (await row.getAttribute('data-orb-id'))!;
+  const name = (await row.locator('td').first().innerText()).trim();
+  expect(name).not.toBe(orbId);
+
+  // stateSave keeps the search across loads, which is what hides the row.
+  await page.locator('#generic-table_wrapper input[type="search"]').fill('zz-matches-no-row');
+  await expect(listRows(page)).toHaveCount(0);
+
+  await page.goto('/network-devices?open=' + encodeURIComponent(orbId));
+  await expect(page.locator('#generic-table_wrapper input[type="search"]')).toHaveValue('zz-matches-no-row');
+  await expect(page.locator(`#generic-table tbody tr[data-orb-id="${orbId}"]`),
+    'precondition: the row is not drawn').toHaveCount(0);
+  const tab = page.locator(`#tablist li.tab a[data-orb-id="${orbId}"]`);
+  await expect(tab).toContainText(name);
+  await expect(tab).not.toContainText(orbId);
+});
+
 test('a row with NO name says so, instead of standing in a raw Orb ID', async ({ page, request }) => {
   // `name` is nullable on the ConfigItem interface and DGraph allows no
   // per-type override, so orbital cannot refuse a nameless Server at the

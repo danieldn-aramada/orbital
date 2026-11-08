@@ -1494,8 +1494,17 @@ export function loadGenericTab(label, slug, orbId, activate = true) {
 //	a name           → the entity is called that
 //	(unnamed) <key>  → the entity exists and is MISSING a name
 //	the raw orbId    → orbital could not find the row at all
+//
+// Searches every row DataTables holds, not the DOM. DataTables detaches rows
+// on other pages and rows the saved search hides, so a DOM query missed them
+// and a tab opened by link showed the orbId whenever a search was left in place.
 function labelFromTable(slug, orbId) {
-  for (const tr of document.querySelectorAll('#generic-table tbody tr[data-orb-id]')) {
+  const el = document.getElementById('generic-table')
+  if (!el) return ''
+  const rows = $.fn.dataTable.isDataTable(el)
+    ? $(el).DataTable().rows().nodes().toArray()
+    : el.querySelectorAll('tbody tr[data-orb-id]')
+  for (const tr of rows) {
     if (tr.dataset.orbId === orbId) return labelOfRow(tr)
   }
   return ''
