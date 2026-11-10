@@ -24,6 +24,18 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ### Added
 
+- **The Schema page draws the schema as a graph, and highlights the SDL.** Each
+  ConfigItem type is a circle, laid out top-down from DataCenter;
+  `schemaGraph.order` in `views.yaml` sets the left-to-right order. Clicking a
+  type shows its definition in a draggable popup. The graph is generated from
+  the schema DGraph is running, so it replaces the hand-drawn PNG in the API
+  cheatsheet, which had drifted seven types behind. Orb's Schema page shows the
+  same. Clients draw it themselves from `GET /api/v1/schema/graph`.
+
+- **`ORBITAL_LOG_FORMAT` / `ORB_LOG_FORMAT`: `json` (default) or `text`.**
+  `make run-orbital` and `make run-orb` use `text`, so local logs read as
+  `key=value` lines rather than JSON. Deployments are unchanged.
+
 - **Create forms set references.** A reference declared `editable: true`
   appears on its type's create form: Server `rack` and `oobIP` (required),
   NetworkDevice `rack` and `virtualChassis`, cluster `managementCluster`,
@@ -192,6 +204,16 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ### Changed
 
+- **Schema v20 renames two fields — breaking.** `NetworkDevice.serial` is now
+  `serialNumber`, matching every other type, and `IPAddress.kubernetesNodeIpv4`
+  is now `kubernetesNodeIPv4`. After applying v20, run
+  `scripts/migrate-schema-v20.sh --dgraph <url>` to carry existing values
+  across; until then both read as null. Clients querying `serial` must switch.
+- **Every type and field in the schema has a description,** shown in GraphiQL
+  and returned by introspection.
+- **An unknown log level or log format now stops startup** instead of quietly
+  running at the default. Values are case-sensitive: `info`, not `INFO`.
+
 - **Deleting a server no longer deletes its OOB IP.** `oobIP` was in the Server
   page's subgraph, so a delete took the IP node with it — including one shared
   with another entity. It is now re-pointable from the editor (a select of
@@ -275,6 +297,17 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   needing a GraphQL call.
 
 ### Fixed
+- **The Schema page no longer runs stale JavaScript after an upgrade.** Its
+  page data named the schema version `Version`, which replaced the build
+  version every script URL is cache-busted with. The page loaded its scripts
+  as `?v=v19`, cached for a year, so a browser kept old code until the schema
+  version changed.
+- **Deleting a switch no longer deletes the server ports cabled to it, or its
+  virtual-chassis peers.** The NetworkDevice page listed both links as owned
+  children, so a UI delete of a colo switch also removed 35–36 server NICs. A
+  subgraph member must now depend on its parent (a required link back, or an
+  Orb ID built from it); `make test-unit` rejects one that doesn't. The switch
+  page keeps its Connections tab.
 - **`reviews[].current` agrees with the merge gate.** It compared only the
   base hash, so after an amend that kept the same entities an approval read as
   current — with no "approved an earlier version" warning — while the gate had

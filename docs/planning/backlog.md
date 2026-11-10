@@ -29,7 +29,7 @@ The definitions behind `ROADMAP.md`'s one-line entries.
 | Spike 28 — In-pod bundler service auth | Post-MVP | Should the co-located cb-bundler use AAD client-credentials (built) or loopback trust (documented)? The docs contradict each other — fix that regardless. |
 | Spike 9b — Valkey cache-aside | Not started | What caching fits read-heavy graph queries, and does orbital degrade correctly when Valkey is down? |
 | Spike 19 — `orb scan` | Post-MVP | How does an operator seed orbital from a live Galleon without hand-authoring YAML? |
-| Spike 35 — Before/after capture, undo, change feed | Not started | Should orbital persist a full per-node snapshot — and does that make undo and an intent change feed fall out? |
+| [Spike 35 — Full history, undo, change feed](../spikes/spike-35-history-and-undo.md) | Not started | Should the audit log store a full before and after per entity, giving complete per-item history and undo? Git-style versioning of the whole graph: recommended against. |
 | Network topology rollout | Data migration, not a spike | Remaining DCs need NetworkDevice/Adapter/Interface seeded from NetBox + Redfish. → [network-model.md](../network-model.md) |
 
 **Closed spikes** — decisions live in the domain docs, deliberation in git (`git log docs/spikes/`):
@@ -60,7 +60,7 @@ The definitions behind `ROADMAP.md`'s one-line entries.
 | Migrate password hashing to Argon2id | Local-auth accounts only; OIDC is unaffected. |
 | Migrate enum-like String fields to GraphQL enums | Schema change — coordinate with a `schema/VERSION` bump. |
 | Swagger response-model sweep | ~65 `{object} map[string]string` annotations render as empty objects. → [CLAUDE.md](../../CLAUDE.md) settled decision |
-| SDL syntax highlighting on the Schema page | Cosmetic. |
+| Explore instance data as a graph | Phase 2 of the Schema-page graph: start from one orbId and expand, capped, with per-type neighbour counts. |
 | Refactor bundler URL config away from the `name=url` env DSL | Also tracked in [`debt.md`](debt.md). |
 
 ---

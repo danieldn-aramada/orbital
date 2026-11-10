@@ -45,7 +45,7 @@ mutation DocsExample {
   ], upsert: true) { numUids }
 
   addNetworkDevice(input: [
-    { orbId: "docs-example:networkdevice-DOCSSW01", name: "docs-tor-01", serial: "DOCSSW01", manufacturer: "Juniper", model: "EX4650-48Y", role: "tor", platform: "Junos", rackPosition: 40, face: "front",
+    { orbId: "docs-example:networkdevice-DOCSSW01", name: "docs-tor-01", serialNumber: "DOCSSW01", manufacturer: "Juniper", model: "EX4650-48Y", role: "tor", platform: "Junos", rackPosition: 40, face: "front",
       namespace: "docs-example", version: 1, createdBy: "admin@example.com", createdAt: "2026-10-15T00:00:00Z",
       dataCenter: { orbId: "docs-example:datacenter-docs-example", version: 1 },
       rack: { orbId: "docs-example:rack-R01", version: 1 } }

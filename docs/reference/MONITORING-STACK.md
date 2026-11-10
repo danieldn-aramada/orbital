@@ -99,9 +99,10 @@ at injection time — they are, in `deploy/base/deploy.yaml`.
 `orbital-otel-collector` (`deploy/overlays/dev-netbox/otel-collector.yaml`)
 scrapes `orbital.netbox.svc:8001` **directly** via its own service-discovery
 (independent of ama-metrics and istio-merge) and remote-writes to the
-`commander-metrics` Cortex (`job=scrape-orbital`). Verified fresh (0-min
-staleness) for the live pod; the collector runs clean (0 restarts over 3d+, no
-remote-write errors). Same `otel-collector → Cortex` convention as
+`commander-metrics` Cortex (`job=scrape-orbital`) at
+`http://commander-metrics-cortex-nginx.commander-metrics:8080/api/v1/push`.
+*(2026-11-02: every push had been refused for at least 30 days, because the URL
+had no port. See "What orbital should not do".)* Same `otel-collector → Cortex` convention as
 `scrape-armada-galleon-svc`, the starlink family, etc. **This is orbital's
 reliable metrics path in devcc and must not be retired while the ama-metrics
 defect stands.** Nothing downstream consumes it (`metrics-api` does not
@@ -178,7 +179,7 @@ as-code, durable, and reading Cortex without writing to anyone else's namespace.
 **`orbital-grafana`** ([`deploy/overlays/dev-netbox/orbital-grafana.yaml`](../../deploy/overlays/dev-netbox/orbital-grafana.yaml))
 — a 1-replica Grafana in `netbox` that provisions, on every boot:
 - a **Cortex** data source pointed at the in-cluster query gateway
-  (`http://commander-metrics-cortex-nginx.commander-metrics/prometheus` — query
+  (`http://commander-metrics-cortex-nginx.commander-metrics:8080/prometheus` — query
   only; it writes nothing to `commander-metrics`), and
 - the **orbital dashboard** ([`orbital-dashboard.json`](../../deploy/overlays/dev-netbox/orbital-dashboard.json))
   via a file provider.
@@ -245,6 +246,13 @@ Given the above, the integration work on orbital's side is:
   up anywhere — there is no DaemonSet collector. All logs must flow through
   the OTLP exporter to the OTel gateway (which forwards to Loki) or directly
   to Loki's `/otlp/v1/logs`.
+- **Do not leave the port off a Cortex URL.** `commander-metrics-cortex-nginx`
+  listens on 8080 only. Without a port the request goes to port 80 and is
+  refused inside the mesh with HTTP 470, "Action: Deny. Reason: No rule matched".
+  The collector logs it as an exporter error and drops the batch; nothing else
+  fails, so it went unnoticed for at least 30 days (found 2026-11-02). A
+  port-forward goes around this path, so querying through one does not prove
+  the in-cluster URL works.
 
 ---
 

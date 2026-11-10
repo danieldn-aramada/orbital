@@ -3,6 +3,7 @@ package orbconfig
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"time"
 
@@ -124,7 +125,8 @@ type Config struct {
 	// Mirrors orbital's ORBITAL_BACKUP_SCHEDULE pattern.
 	DivergencePublishSchedule string `envconfig:"ORB_DIVERGENCE_PUBLISH_SCHEDULE" default:""`
 
-	LogLevel string `envconfig:"ORB_LOG_LEVEL" default:"info"`
+	LogLevel  string `envconfig:"ORB_LOG_LEVEL" default:"info"`
+	LogFormat string `envconfig:"ORB_LOG_FORMAT" default:"json"` // json | text
 
 	// ListMaxRows caps how many rows one generic list page fetches. Orb renders
 	// the same pages as orbital from the same code, so it needs the same lever;
@@ -146,10 +148,39 @@ func (c *Config) SlogLevel() slog.Level {
 	}
 }
 
+// LogHandler writes the process's logs at the configured level: JSON for a log
+// collector (the default), or `text` key=value lines for a terminal.
+// validateLogging refuses a log level or format it does not know, rather than
+// running with a default nobody chose. Unset means the default.
+func (c *Config) validateLogging() error {
+	switch c.LogLevel {
+	case "", "debug", "info", "warn", "error":
+	default:
+		return fmt.Errorf("ORB_LOG_LEVEL must be one of debug, info, warn, error; got %q", c.LogLevel)
+	}
+	switch c.LogFormat {
+	case "", "json", "text":
+	default:
+		return fmt.Errorf("ORB_LOG_FORMAT must be json or text; got %q", c.LogFormat)
+	}
+	return nil
+}
+
+func (c *Config) LogHandler(w io.Writer) slog.Handler {
+	opts := &slog.HandlerOptions{Level: c.SlogLevel()}
+	if c.LogFormat == "text" {
+		return slog.NewTextHandler(w, opts)
+	}
+	return slog.NewJSONHandler(w, opts)
+}
+
 // New loads Config from environment variables.
 func New() (*Config, error) {
 	var cfg Config
 	if err := envconfig.Process("", &cfg); err != nil {
+		return nil, fmt.Errorf("orb config: %w", err)
+	}
+	if err := cfg.validateLogging(); err != nil {
 		return nil, fmt.Errorf("orb config: %w", err)
 	}
 	return &cfg, nil

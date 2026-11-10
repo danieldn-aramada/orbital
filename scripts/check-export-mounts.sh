@@ -13,6 +13,9 @@
 # failed that way for at least two days, read as a code defect, and were fixed
 # by `docker compose restart`. A probe write is the cheapest thing that tells
 # the truth, so the failure says what to do instead of what went wrong.
+# Usage: scripts/check-export-mounts.sh [blue] [scratch] [test]   (default: all)
+# Silent when every mount is writable or its container is not running; prints
+# one warning per stale mount and exits 1.
 set -uo pipefail
 
 FAILED=0
@@ -20,31 +23,26 @@ check() {
   local container="$1" host_dir="$2" probe=".mount-probe-$$"
   # compose SERVICE name: strip the project prefix and the replica suffix.
   local service="${container#local-}"; service="${service%-1}"
-  if ! docker inspect "$container" >/dev/null 2>&1; then
-    echo "  SKIP $container (not running)"
-    return
-  fi
+  docker inspect "$container" >/dev/null 2>&1 || return 0
   if docker exec "$container" sh -c "touch /dgraph/export/$probe" 2>/dev/null &&
      [ -e "$host_dir/$probe" ]; then
     docker exec "$container" sh -c "rm -f /dgraph/export/$probe" 2>/dev/null
-    echo "  ok   $container -> $host_dir"
-  else
-    docker exec "$container" sh -c "rm -f /dgraph/export/$probe" 2>/dev/null
-    rm -f "$host_dir/$probe" 2>/dev/null
-    echo "  FAIL $container -> $host_dir (stale bind mount: container cannot write, or the host cannot see it)"
-    echo "       fix: docker compose -f deploy/local/docker-compose.yml restart $service"
-    FAILED=1
+    return 0
   fi
+  docker exec "$container" sh -c "rm -f /dgraph/export/$probe" 2>/dev/null
+  rm -f "$host_dir/$probe" 2>/dev/null
+  echo "warning: $service cannot write $host_dir (stale bind mount); exports and backups from it will fail."
+  echo "         fix: docker compose -f deploy/local/docker-compose.yml restart $service"
+  FAILED=1
 }
 
-echo "Checking DGraph export mounts..."
-check local-dgraph-alpha-1         .local/exports/blue
-check local-dgraph-alpha-scratch-1 .local/exports/scratch
-check local-dgraph-alpha-test-1    .local/exports/test
-
-if [ "$FAILED" -ne 0 ]; then
-  echo
-  echo "Export and backup tests WILL fail with 'resolving export failed because task failed'"
-  echo "until the affected container is restarted. Nothing is wrong with the code."
-  exit 1
-fi
+[ $# -eq 0 ] && set -- blue scratch test
+for cluster in "$@"; do
+  case "$cluster" in
+    blue)    check local-dgraph-alpha-1         .local/exports/blue ;;
+    scratch) check local-dgraph-alpha-scratch-1 .local/exports/scratch ;;
+    test)    check local-dgraph-alpha-test-1    .local/exports/test ;;
+    *)       echo "unknown cluster: $cluster (want blue, scratch or test)"; exit 2 ;;
+  esac
+done
+exit "$FAILED"

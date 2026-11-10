@@ -69,7 +69,7 @@ run-orbital: fmt ## Run orbital server (go run; fast dev iteration). Restore req
 	@# later as a backup failing with "no json.gz found after export", so check it
 	@# when a developer can still act on it. Warn rather than block: only export,
 	@# backup and restore need these mounts.
-	@bash scripts/check-export-mounts.sh || true
+	@bash scripts/check-export-mounts.sh blue scratch || true
 	@# DOCKER_CONFIG isolation: prevents cosign's go-containerregistry keychain
 	@# from spawning docker-credential-* helpers (which on macOS live inside
 	@# /Applications/Docker.app/). Spawning from iTerm's process tree triggers
@@ -96,15 +96,17 @@ run-orbital: fmt ## Run orbital server (go run; fast dev iteration). Restore req
 	@# defaults to auth ON and hot-reload OFF; this target opts into the dev
 	@# values, and deploy/local/orbital.env still wins over both (`:-` only fills
 	@# a value that is unset).
-	if [ -f deploy/local/orbital.env ]; then set -a; . ./deploy/local/orbital.env; set +a; fi; \
+	@if [ -f deploy/local/orbital.env ]; then set -a; . ./deploy/local/orbital.env; set +a; fi; \
 	export ORBITAL_TEMPLATE_HOT_RELOAD_ENABLED="$${ORBITAL_TEMPLATE_HOT_RELOAD_ENABLED:-true}"; \
 	export ORBITAL_API_AUTH_ENABLED="$${ORBITAL_API_AUTH_ENABLED:-false}"; \
+	export ORBITAL_LOG_FORMAT="$${ORBITAL_LOG_FORMAT:-text}"; \
 	export ORBITAL_SESSION_HMAC_KEY="$${ORBITAL_SESSION_HMAC_KEY:-$$(cat deploy/local/session-hmac.key)}"; \
 	DOCKER_CONFIG=$$(mktemp -d) go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orbital
 
 run-orb: fmt ## Run orb edge service (go run; fast dev iteration). Import requires dgraph in PATH
 	@# Same split as orbital: hot-reload is opted into here, not defaulted in the binary.
 	ORB_TEMPLATE_HOT_RELOAD_ENABLED="$${ORB_TEMPLATE_HOT_RELOAD_ENABLED:-true}" \
+	ORB_LOG_FORMAT="$${ORB_LOG_FORMAT:-text}" \
 	go run -ldflags "-X $(MODULE)/internal/version.Version=v0.0.0-dev" ./cmd/orb start
 
 seed: seed-orb ## Seed DGraph with example data + admin user (local), and orb's graph
@@ -122,8 +124,9 @@ seed-orb: ## Seed ORB's DGraph (:8082) with the same example data
 
 ## ── tests ─────────────────────────────────────────────────────────────────────
 
-fmt: ## Format all Go code (gofmt -w)
+fmt: ## Format Go code (gofmt) and the GraphQL schema (prettier, once npm install has run)
 	@gofmt -w -l .
+	@if [ -x node_modules/.bin/prettier ]; then node_modules/.bin/prettier --log-level warn --write 'schema/*.graphql'; fi
 
 build: fmt ## Format + compile all Go packages
 	@go build ./...
@@ -158,7 +161,7 @@ test-integration: ## Run integration tests against real services (requires: make
 	@# with "no GraphQL schema in Dgraph".
 	@curl -fsS -X POST http://localhost:8083/admin/schema \
 		-H 'Content-Type: application/graphql' --data-binary @schema/schema.graphql >/dev/null
-	@bash scripts/check-export-mounts.sh
+	@bash scripts/check-export-mounts.sh test scratch
 	@echo "Running integration tests..."
 	@go test -count=1 -tags integration -timeout 10m -p 1 $(TEST_PKGS)
 
@@ -227,7 +230,7 @@ edge-down: ## Stop the edge sim
 
 docs: ## Regenerate Swagger docs for orbital + orb (requires swag)
 	swag init -g main.go -o docs --dir cmd/orbital,internal/handler,internal/ocitype,internal/graphdiff,internal/configitems
-	swag init -g doc.go -o docs/orb --dir cmd/orb,internal/orbserver,internal/orb,internal/ocitype,internal/divergence
+	swag init -g doc.go -o docs/orb --dir cmd/orb,internal/orbserver,internal/orb,internal/ocitype,internal/divergence,internal/configitems
 
 # ── Documentation site ───────────────────────────────────────────────────────
 # Docusaurus site in website/. `url` and `baseUrl` are read from the environment

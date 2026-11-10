@@ -18,6 +18,10 @@
 #      its paths reach — no more. Another page's subgraph is not consulted.
 #      Anything left holding a NON-NULL edge into what was deleted is named in
 #      the delete preview as ORPHANED; the delete still proceeds.
+#   ⚠️ A MEMBER MUST DEPEND ON ITS PARENT: a non-null edge back to it, or an
+#      orbIdPattern built from that edge. A peer the page only links to (a
+#      cabled port, a VC member, a shared IP) stays out, and still gets a tab.
+#      `make test-unit` enforces it on this file (schema_consistency_test.go).
 #
 # TWO RULES
 #   scalars        SUBTRACTIVE — a field added to the schema shows up on its own.
@@ -69,7 +73,7 @@
 # declaring only the pages or types it changes. Copying this whole file into an
 # overlay freezes that deployment at today's shape, forever.
 
-schemaVersion: v18
+schemaVersion: v20
 
 # FIELD LABELS — the stored field name on the left, the text the UI shows on
 # the right. A field NOT listed shows its RAW name (`firmwareRepository`): the
@@ -119,9 +123,7 @@ pages:
   NetworkDevice:
     menuWeight: 40
     subgraph:
-      - virtualChassisMembers
       - networkInterfaces
-      - networkInterfaceConnectedNetworkDevice
 
 types:
 
@@ -205,7 +207,7 @@ types:
       - dataCenter
       - rack
     fields:
-      serial: { createOnly: true }
+      serialNumber: { createOnly: true }
       rack: { editable: true }
       virtualChassis: { editable: true }
       networkInterfaceConnectedNetworkDevice: { label: Connections }
@@ -286,7 +288,7 @@ types:
 canonicalParent:
   IPAddress:
     - { type: Server, field: serverOobIP, down: oobIP }
-    - { type: KubernetesNode, field: kubernetesNodeIpv4, down: ipv4 }
+    - { type: KubernetesNode, field: kubernetesNodeIPv4, down: ipv4 }
     - { type: KubernetesCluster, field: kubernetesClusterControlPlaneEndpoint, down: controlPlaneEndpoint }
     - { type: EksaKubernetesCluster, field: eksaKubernetesClusterTinkerbellIP, down: tinkerbellIP }
   NetworkInterface:
@@ -295,3 +297,8 @@ canonicalParent:
     - { type: NetworkDevice, field: networkDevice, down: networkInterfaces }
   StorageVolume:
     - { type: StorageController, field: storageController }
+
+# ── the Schema page's graph ──────────────────────────────────────────────────
+# Left to right: siblings follow this list; unlisted types come after, A–Z.
+schemaGraph:
+  order: [DataCenter, NetworkDevice, NetworkAdapter, NetworkInterface, Server, Rack, KubernetesCluster, ConfigItem]

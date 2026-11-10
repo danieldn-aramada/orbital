@@ -499,6 +499,35 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/schema/graph": {
+            "get": {
+                "description": "The GraphQL schema in orb's local DGraph, as a graph: one node per ConfigItem type or interface, one edge per relationship. Same shape as orbital's ` + "`" + `GET /api/v1/schema/graph` + "`" + ` — each node carries its ` + "`" + `level` + "`" + `, and the one edge placing a type on its level has ` + "`" + `setsLevel: true` + "`" + `.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "schema"
+                ],
+                "summary": "Schema graph",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configitems.SchemaGraph"
+                        }
+                    },
+                    "503": {
+                        "description": "The imported schema could not be read",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/graphql": {
             "post": {
                 "description": "POST: proxies GraphQL queries to orb's local DGraph instance. GET: serves the GraphiQL explorer UI.",
@@ -537,6 +566,108 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "configitems.SchemaGraph": {
+            "type": "object",
+            "properties": {
+                "edges": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configitems.SchemaGraphEdge"
+                    }
+                },
+                "nodes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configitems.SchemaGraphNode"
+                    }
+                }
+            }
+        },
+        "configitems.SchemaGraphEdge": {
+            "type": "object",
+            "properties": {
+                "cardinality": {
+                    "description": "Cardinality reads source-to-target: \"1:N\" is one source holding many\ntargets. Without an inverse it comes from the source field alone.",
+                    "type": "string",
+                    "enum": [
+                        "1:1",
+                        "1:N",
+                        "N:1",
+                        "N:M"
+                    ],
+                    "example": "1:N"
+                },
+                "field": {
+                    "description": "Field is the field on the source pointing at the target; Inverse the field\non the target pointing back, empty when the schema declares none. Both are\nempty on an implements edge.",
+                    "type": "string",
+                    "example": "networkAdapters"
+                },
+                "id": {
+                    "description": "ID is \"\u003csource\u003e.\u003cfield\u003e\" for a relationship.",
+                    "type": "string",
+                    "example": "Server.networkAdapters"
+                },
+                "inverse": {
+                    "type": "string",
+                    "example": "server"
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": [
+                        "relationship",
+                        "implements"
+                    ],
+                    "example": "relationship"
+                },
+                "setsLevel": {
+                    "description": "SetsLevel marks the one edge that places its target below its source.\nEvery type below level 0 has exactly one; every other edge is a\ncross-link and must not move a type between levels.",
+                    "type": "boolean",
+                    "example": true
+                },
+                "source": {
+                    "type": "string",
+                    "example": "Server"
+                },
+                "target": {
+                    "type": "string",
+                    "example": "NetworkAdapter"
+                }
+            }
+        },
+        "configitems.SchemaGraphNode": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "ID is the GraphQL type name, and what edges name in source/target.",
+                    "type": "string",
+                    "example": "NetworkAdapter"
+                },
+                "kind": {
+                    "description": "Kind is \"interface\" for an abstract type (ConfigItem, KubernetesCluster),\notherwise \"type\".",
+                    "type": "string",
+                    "enum": [
+                        "type",
+                        "interface"
+                    ],
+                    "example": "type"
+                },
+                "label": {
+                    "description": "Label is the type name split into words, for display.",
+                    "type": "string",
+                    "example": "Network Adapter"
+                },
+                "level": {
+                    "description": "Level is the row the type is drawn on, 0 at the top: one below the type it\nlives inside. A drawing rule, not an ownership claim — see DGRAPH.md.",
+                    "type": "integer",
+                    "example": 2
+                },
+                "order": {
+                    "description": "Order is left to right among siblings, from the views config's\nschemaGraph.order; unlisted types share the last value and go A–Z.",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
         "divergence.OverrideEntry": {
             "type": "object",
             "properties": {

@@ -1,4 +1,94 @@
 definitions:
+  configitems.SchemaGraph:
+    properties:
+      edges:
+        items:
+          $ref: '#/definitions/configitems.SchemaGraphEdge'
+        type: array
+      nodes:
+        items:
+          $ref: '#/definitions/configitems.SchemaGraphNode'
+        type: array
+    type: object
+  configitems.SchemaGraphEdge:
+    properties:
+      cardinality:
+        description: |-
+          Cardinality reads source-to-target: "1:N" is one source holding many
+          targets. Without an inverse it comes from the source field alone.
+        enum:
+        - "1:1"
+        - 1:N
+        - N:1
+        - N:M
+        example: 1:N
+        type: string
+      field:
+        description: |-
+          Field is the field on the source pointing at the target; Inverse the field
+          on the target pointing back, empty when the schema declares none. Both are
+          empty on an implements edge.
+        example: networkAdapters
+        type: string
+      id:
+        description: ID is "<source>.<field>" for a relationship.
+        example: Server.networkAdapters
+        type: string
+      inverse:
+        example: server
+        type: string
+      kind:
+        enum:
+        - relationship
+        - implements
+        example: relationship
+        type: string
+      setsLevel:
+        description: |-
+          SetsLevel marks the one edge that places its target below its source.
+          Every type below level 0 has exactly one; every other edge is a
+          cross-link and must not move a type between levels.
+        example: true
+        type: boolean
+      source:
+        example: Server
+        type: string
+      target:
+        example: NetworkAdapter
+        type: string
+    type: object
+  configitems.SchemaGraphNode:
+    properties:
+      id:
+        description: ID is the GraphQL type name, and what edges name in source/target.
+        example: NetworkAdapter
+        type: string
+      kind:
+        description: |-
+          Kind is "interface" for an abstract type (ConfigItem, KubernetesCluster),
+          otherwise "type".
+        enum:
+        - type
+        - interface
+        example: type
+        type: string
+      label:
+        description: Label is the type name split into words, for display.
+        example: Network Adapter
+        type: string
+      level:
+        description: |-
+          Level is the row the type is drawn on, 0 at the top: one below the type it
+          lives inside. A drawing rule, not an ownership claim — see DGRAPH.md.
+        example: 2
+        type: integer
+      order:
+        description: |-
+          Order is left to right among siblings, from the views config's
+          schemaGraph.order; unlisted types share the last value and go A–Z.
+        example: 1
+        type: integer
+    type: object
   graphdiff.Change:
     properties:
       change:
@@ -2681,6 +2771,28 @@ paths:
       summary: Get restore job status
       tags:
       - backup
+  /api/v1/schema/graph:
+    get:
+      description: |-
+        The GraphQL schema DGraph is running, as a graph: one node per ConfigItem type or interface, one edge per relationship. A relationship declared with `@hasInverse` is ONE edge carrying both field names (`field` on the source, `inverse` on the target) and its cardinality.
+
+        **Drawing it top-down needs no rules of your own.** Each node carries its `level` (0 at the top). A type sits one level below the type it lives inside — one it cannot exist without, or one its orbId is built from — and the single edge that places it there has `setsLevel: true`. Every other edge is a cross-link: lay out with the `setsLevel` edges only, then draw the rest on top, or a layered layout will move types between levels. Levels are a drawing rule, not an ownership claim.
+
+        `ConfigItem` is a node with no edges: every type implements it. Positions are not included; they belong to whichever library draws the graph.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/configitems.SchemaGraph'
+        "503":
+          description: The deployed schema could not be read
+          schema:
+            $ref: '#/definitions/handler.errorResponse'
+      summary: Schema graph
+      tags:
+      - schema
   /api/v1/users:
     get:
       description: Returns all users in the orbital user table. Admin only.

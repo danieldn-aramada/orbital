@@ -8,7 +8,7 @@ datasources:
     uid: cortex
     type: prometheus
     access: proxy
-    url: http://commander-metrics-cortex-nginx.commander-metrics/prometheus
+    url: http://commander-metrics-cortex-nginx.commander-metrics:8080/prometheus
     isDefault: true
     editable: false
     jsonData:

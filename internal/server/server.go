@@ -54,7 +54,7 @@ func jobLeaseFromConfig(cfg *config.Config) handler.JobLeaseConfig {
 }
 
 func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.SlogLevel()}))
+	logger := slog.New(cfg.LogHandler(os.Stdout))
 	var backupHandler *handler.BackupHandler
 
 	handler.ReconcileAdminEmails(context.Background(), db, cfg.AdminEmailSet(), logger)
@@ -436,6 +436,10 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 
 	// gql is passed for the approval gate only — this endpoint writes via DQL,
 	// so it cannot reach the check through writeToDGraph's chokepoint.
+	// Read from DGraph alone, so it needs no database. A GET, so readonly
+	// callers pass the api group's role check, as on the Schema page.
+	api.GET("/schema/graph", handler.NewSchemaGraph(fieldSource, logger).Get)
+
 	delH := handler.NewDeleteHandler(cfg.DGraphURL, db, logger, gql, handler.WithFieldSource(fieldSource))
 	// The cascade delete is a verb on the PAGE's URL — DELETE /{slug}/{orbId} —
 	// because it follows that page's declared subgraph. It is orbital's UI's

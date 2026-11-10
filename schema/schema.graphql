@@ -1,365 +1,1030 @@
-# Orbital DGraph Schema
-# Conventions, apply steps, version bumps and gotchas: docs/reference/DGRAPH.md
+# Orbital's DGraph GraphQL schema.
 #
-# Two that bite if you skip the doc:
-#   - Editing this file changes no running DGraph. Applying it is a separate deploy step.
-#   - Docstrings are machine-read, not prose — see internal/configitems/derive.go.
-type Namespace {
-    id: ID!
-    name: String! @id @search(by: [term])
-    createdBy: String
-    createdAt: DateTime
-}
-
-type User {
-    id: ID!
-    email: String! @id @search(by: [hash])
-}
-
-# ConfigItem Interface
-#  orbId is the public stable identifier
-#  version is the optimistic-concurrency counter, auto-incremented by orbital's
-#  single write path. @search makes it FILTERABLE, which is what lets the
-#  concurrency check be a compare-and-swap: orbital injects
-#  `version: { eq: $ifVersion }` into the mutation's own filter. On the interface
-#  so every implementing type gets `version: IntFilter`.
-interface ConfigItem {
-    id: ID!
-    namespace: String! @search(by: [exact])
-    orbId: String! @id(interface: true) @search(by: [hash])
-    name: String @search(by: [term])
-    createdBy: String @search(by: [hash])
-    createdAt: DateTime @search
-    updatedBy: String @search(by: [hash])
-    updatedAt: DateTime @search
-    version: Int! @search
-}
-
-########################
-# Config Items
-########################
-enum DataCenterModel {
-    Beacon
-    Cruiser
-    Triton
-    Leviathan
-}
-
-"""orbIdPattern: {type}-{name}"""
-type DataCenter implements ConfigItem {
-    """jsonString"""
-    assetDataV2: String @search(by: [regexp]) # json
-    model: DataCenterModel @search(by: [hash])
-
-    servers: [Server] @hasInverse(field: dataCenter)
-    racks: [Rack] @hasInverse(field: dataCenter)
-    kubernetesClusters: [KubernetesCluster] @hasInverse(field: dataCenter)
-    networkDevices: [NetworkDevice] @hasInverse(field: dataCenter)
-}
-
-"""orbIdPattern: {type}-{name}"""
-type Rack implements ConfigItem {
-    uHeight: Int
-    dataCenter: DataCenter!
-    servers: [Server] @hasInverse(field: rack)
-    networkDevices: [NetworkDevice] @hasInverse(field: rack)
-}
-
-"""orbIdPattern: {type}-{serviceTag}"""
-type Server implements ConfigItem {
-    hostname: String @search(by: [term])
-    model: String @search(by: [term])
-    manufacturer: String @search(by: [hash]) 
-    serviceTag: String @search(by: [hash])
-    serialNumber: String @search(by: [hash])
-    rackPosition: Int
-    uHeight: Float
-    oobMAC: String
-
-    dataCenter: DataCenter!
-    rack: Rack
-    idracSettings: IdracSettings @hasInverse(field: server)
-    serverConfigurationProfile: ServerConfigurationProfile @hasInverse(field: server)
-    serverMaintenance: ServerMaintenance @hasInverse(field: server)
-    storageControllers: [StorageController] @hasInverse(field: server)
-    networkAdapters: [NetworkAdapter] @hasInverse(field: server)
-    networkInterfaces: [NetworkInterface] @hasInverse(field: server)
-    kubernetesNode: KubernetesNode @hasInverse(field: server)
-
-    oobIP: IPAddress @hasInverse(field: serverOobIP)
-}
-
+# Conventions, apply steps and versioning: docs/reference/DGRAPH.md.
+# Editing this file changes no running DGraph; applying it is a separate deploy step.
+# Description lines such as `orbIdPattern: …` are annotations read by internal/configitems.
 
 """
+A tenancy boundary: the scope one data center's configuration items live in.
+It holds no configuration of its own.
+"""
+type Namespace {
+  """
+  DGraph's internal node ID.
+  """
+  id: ID!
+
+  """
+  The namespace's name, e.g. `colo`. Every orbId in the namespace starts with it.
+  """
+  name: String! @id @search(by: [term])
+
+  """
+  Who created the namespace.
+  """
+  createdBy: String
+
+  """
+  When the namespace was created.
+  """
+  createdAt: DateTime
+}
+
+"""
+A user known to the graph, identified by email address.
+"""
+type User {
+  """
+  DGraph's internal node ID.
+  """
+  id: ID!
+
+  """
+  The user's email address.
+  """
+  email: String! @id @search(by: [hash])
+}
+
+"""
+A configuration item: an entity orbital holds design intent for. Every item
+carries a stable identity, who changed it and when, and a version for
+optimistic concurrency.
+"""
+interface ConfigItem {
+  """
+  DGraph's internal node ID. It is not stable across export and restore; refer to
+  items by `orbId`.
+  """
+  id: ID!
+
+  """
+  The namespace the item belongs to, e.g. `colo`.
+  """
+  namespace: String! @search(by: [exact])
+
+  """
+  The item's stable identifier, in the form `<namespace>:<type>-<natural key>`.
+  For example, `colo:server-CFRHDX3`. Unique across all types and never changes.
+  """
+  orbId: String! @id(interface: true) @search(by: [hash])
+
+  """
+  The item's display name.
+  """
+  name: String @search(by: [term])
+
+  """
+  Who created the item. Set by orbital.
+  """
+  createdBy: String @search(by: [hash])
+
+  """
+  When the item was created. Set by orbital.
+  """
+  createdAt: DateTime @search
+
+  """
+  Who last changed the item. Set by orbital.
+  """
+  updatedBy: String @search(by: [hash])
+
+  """
+  When the item was last changed. Set by orbital.
+  """
+  updatedAt: DateTime @search
+
+  """
+  Optimistic-concurrency counter, incremented by orbital on every write. Send the
+  version you read with an update, and the update is refused if the item has
+  changed since.
+  """
+  version: Int! @search
+}
+
+"""
+The model of a modular data center.
+"""
+enum DataCenterModel {
+  Beacon
+  Cruiser
+  Triton
+  Leviathan
+}
+
+"""
+A modular data center, and the root of its namespace's configuration.
+
+orbIdPattern: {type}-{name}
+"""
+type DataCenter implements ConfigItem {
+  """
+  The data center's asset record, as a JSON document.
+
+  jsonString
+  """
+  assetDataV2: String @search(by: [regexp])
+
+  """
+  The data center's model.
+  """
+  model: DataCenterModel @search(by: [hash])
+
+  """
+  Servers in the data center.
+  """
+  servers: [Server] @hasInverse(field: dataCenter)
+
+  """
+  Racks in the data center.
+  """
+  racks: [Rack] @hasInverse(field: dataCenter)
+
+  """
+  Kubernetes clusters running in the data center.
+  """
+  kubernetesClusters: [KubernetesCluster] @hasInverse(field: dataCenter)
+
+  """
+  Switches, routers, firewalls and other network devices in the data center.
+  """
+  networkDevices: [NetworkDevice] @hasInverse(field: dataCenter)
+}
+
+"""
+A rack in a data center.
+
+orbIdPattern: {type}-{name}
+"""
+type Rack implements ConfigItem {
+  """
+  How many rack units (U) the rack has.
+  """
+  uHeight: Int
+
+  """
+  The data center the rack is in.
+  """
+  dataCenter: DataCenter!
+
+  """
+  Servers mounted in the rack.
+  """
+  servers: [Server] @hasInverse(field: rack)
+
+  """
+  Network devices mounted in the rack.
+  """
+  networkDevices: [NetworkDevice] @hasInverse(field: rack)
+}
+
+"""
+A physical server.
+
+orbIdPattern: {type}-{serviceTag}
+"""
+type Server implements ConfigItem {
+  """
+  The server's hostname.
+  """
+  hostname: String @search(by: [term])
+
+  """
+  The manufacturer's model name, e.g. `PowerEdge R650`.
+  """
+  model: String @search(by: [term])
+
+  """
+  The manufacturer's name.
+  """
+  manufacturer: String @search(by: [hash])
+
+  """
+  The manufacturer's stable chassis identifier, and the key in the server's orbId.
+  Dell's Service Tag (Redfish `SKU`), or Supermicro's serial number.
+  """
+  serviceTag: String @search(by: [hash])
+
+  """
+  The serial number Redfish reports. Not an identity key: on Dell 15G and later it
+  differs from the Service Tag.
+  """
+  serialNumber: String @search(by: [hash])
+
+  """
+  The server's position in its rack, in rack units.
+  """
+  rackPosition: Int
+
+  """
+  How many rack units (U) the server occupies.
+  """
+  uHeight: Float
+
+  """
+  The MAC address of the server's management controller (iDRAC or BMC).
+  """
+  oobMAC: String
+
+  """
+  The data center the server is in.
+  """
+  dataCenter: DataCenter!
+
+  """
+  The rack the server is mounted in.
+  """
+  rack: Rack
+
+  """
+  The server's iDRAC settings.
+  """
+  idracSettings: IdracSettings @hasInverse(field: server)
+
+  """
+  The server's Dell Server Configuration Profile.
+  """
+  serverConfigurationProfile: ServerConfigurationProfile @hasInverse(field: server)
+
+  """
+  Maintenance requested for the server.
+  """
+  serverMaintenance: ServerMaintenance @hasInverse(field: server)
+
+  """
+  The server's storage controllers.
+  """
+  storageControllers: [StorageController] @hasInverse(field: server)
+
+  """
+  The server's network adapters.
+  """
+  networkAdapters: [NetworkAdapter] @hasInverse(field: server)
+
+  """
+  The server's network ports, including its management port.
+  """
+  networkInterfaces: [NetworkInterface] @hasInverse(field: server)
+
+  """
+  The Kubernetes node running on the server.
+  """
+  kubernetesNode: KubernetesNode @hasInverse(field: server)
+
+  """
+  The IP address of the server's management controller.
+  """
+  oobIP: IPAddress @hasInverse(field: serverOobIP)
+}
+
+"""
+Desired settings for a Dell server's iDRAC management controller.
+
 orbIdSuffix: idrac
 orbIdPattern: {server.serviceTag}-{type}
 """
 type IdracSettings implements ConfigItem {
-    firmwareVersion: String
-    # The firmware repository this server should be on: a relative path to a
-    # pinned Dell firmware repository, e.g. `dell/R650/2026-10-09T155510Z` (v18).
-    firmwareRepository: String
-    osToIdracPassThroughEnabled: Boolean
-    sshEnabled: Boolean
-    usbManagementPortEnabled: Boolean
-    ipmiEnabled: Boolean
-    lockdownModeEnabled: Boolean
-    dhcpEnabled: Boolean
-    racadmEnabled: Boolean
+  """
+  The iDRAC firmware version.
+  """
+  firmwareVersion: String
 
-    server: Server!
+  """
+  The firmware repository the server should use: a path to a pinned Dell
+  repository, e.g. `dell/R650/2026-10-09T155510Z`.
+  """
+  firmwareRepository: String
+
+  """
+  Whether OS-to-iDRAC pass-through is enabled.
+  """
+  osToIdracPassThroughEnabled: Boolean
+
+  """
+  Whether SSH access to the iDRAC is enabled.
+  """
+  sshEnabled: Boolean
+
+  """
+  Whether the iDRAC's USB management port is enabled.
+  """
+  usbManagementPortEnabled: Boolean
+
+  """
+  Whether IPMI over LAN is enabled.
+  """
+  ipmiEnabled: Boolean
+
+  """
+  Whether system lockdown mode is enabled.
+  """
+  lockdownModeEnabled: Boolean
+
+  """
+  Whether the iDRAC gets its IP address over DHCP.
+  """
+  dhcpEnabled: Boolean
+
+  """
+  Whether remote RACADM is enabled.
+  """
+  racadmEnabled: Boolean
+
+  """
+  The server the settings apply to.
+  """
+  server: Server!
 }
 
 """
+A Dell Server Configuration Profile (SCP) for a server.
+
 orbIdSuffix: scp
 orbIdPattern: {server.serviceTag}-{type}
 """
 type ServerConfigurationProfile implements ConfigItem {
-    json: String 
+  """
+  The profile document, in JSON.
+  """
+  json: String
 
-    # NULLABLE (v13). A non-null back-edge means the child cannot outlive the
-    # parent, which forces it to be an editable member of the server's view —
-    # and an SCP is a scanned document nobody edits from the server page. Made
-    # optional so a view may legitimately leave it out. See UI.md.
-    server: Server
+  """
+  The server the profile belongs to.
+  """
+  server: Server
 }
 
-# Maintenance intent for a server — DESIRED state only (edge actuates + observes).
-#   enabled     — on/off switch: true = maintenance requested. Exit = enabled:false
-#                 (symmetric toggle), not clearing a timestamp.
-#   windowStart — optional scheduling: don't begin before this (null = begin now).
-#   windowEnd   — optional scheduling: don't begin after this (null = no deadline);
-#                 gates entry only, never exit.
-# Observed phase (Draining/Active/...) lives at the edge (serverconfig.status +
-# monitoring), NOT here.
-"""orbIdPattern: {type}-{server.serviceTag}"""
-type ServerMaintenance implements ConfigItem {
-    enabled: Boolean
-    windowStart: DateTime
-    windowEnd: DateTime
-    reason: String
-
-    server: Server!
-}
-
-"""orbIdPattern: {server.serviceTag}-{name}"""
-type StorageController implements ConfigItem {
-
-    server: Server!
-    storageDevices: [StorageDevice] @hasInverse(field: storageController)
-    # v13: the inverse of StorageVolume.storageController, which existed as a
-    # non-null edge with no way back. A volume belongs to ONE controller and may
-    # span several devices, so the controller is where it is owned.
-    storageVolumes: [StorageVolume] @hasInverse(field: storageController)
-}
-
-"""orbIdPattern: {serialNumber}"""
-type StorageDevice implements ConfigItem {
-    capacityBytes: Int
-    manufacturer: String
-    model: String
-    serialNumber: String
-    wwn: String
-    slot: Int
-    mediaType: String
-    protocol: String
-    role: String @search(by: [hash])   # unset = no opinion | ceph-osd | os | none | <other storage system>
-
-    storageController: StorageController!
-    storageVolumes: [StorageVolume] @hasInverse(field: storageDevices)
-    partitions: [DiskPartition] @hasInverse(field: storageDevice)
-}
-
-"""orbIdPattern: {storageController.server.serviceTag}-{name}"""
-type StorageVolume implements ConfigItem {
-    capacityBytes: Int
-    manufacturer: String
-    model: String
-    serialNumber: String
-    wwn: String
-
-    storageController: StorageController!
-    storageDevices: [StorageDevice] @hasInverse(field: storageVolumes)
-}
-
-"""orbIdPattern: {type}-{storageDevice.serialNumber}-{number}"""
-type DiskPartition implements ConfigItem {
-    number: Int         # partition number: the 1 in sdb1 or nvme0n1p1
-    fsType: String      # vfat | ext4 | xfs
-    mountPoint: String  # directory the filesystem is mounted at: /boot/efi | / | /var | /home; unset = not mounted
-    encrypted: Boolean  # LUKS: fsType and mountPoint describe the unlocked device
-
-    storageDevice: StorageDevice!
-}
-
-"""orbIdPattern: {type}-{server.serviceTag}-{name}"""
-type NetworkAdapter implements ConfigItem {
-    # NIC card (FRU). Redfish-authoritative; OPTIONAL (absent for flat-only sources).
-    # name = adapter FQDD, e.g. "NIC.Integrated.1"
-    model: String @search(by: [term])
-    manufacturer: String @search(by: [hash])
-    serialNumber: String @search(by: [hash])
-    partNumber: String @search(by: [hash])
-
-    server: Server!
-    networkInterfaces: [NetworkInterface] @hasInverse(field: networkAdapter)
-}
-
-# TWO patterns, because this type's identity hangs off whichever owner it
-# actually has — a server NIC's orbId is built from the SERVER's serviceTag (not
-# the adapter's, which carries the same value), and a switch port's from the
-# DEVICE's serial. That is the same XOR the owner comment below describes.
-#
-# This is the case that killed `derivesIdFrom:`: it was single-valued, so it
-# could not say "one of these". It carried `networkAdapter` briefly, which was
-# right for one of three parents and wrong for the other two, and the field it
-# populated was deleted in 2026-10 without ever having been read. Repeating
-# `orbIdPattern:` is how the alternative is expressed; first one whose
-# placeholders all resolve wins.
 """
+Maintenance requested for a server. Desired state only: the edge acts on it and
+tracks the observed phase itself.
+
+orbIdPattern: {type}-{server.serviceTag}
+"""
+type ServerMaintenance implements ConfigItem {
+  """
+  Whether maintenance is requested. Set it to false to end maintenance.
+  """
+  enabled: Boolean
+
+  """
+  The earliest time maintenance may begin. Unset means it may begin now.
+  """
+  windowStart: DateTime
+
+  """
+  The latest time maintenance may begin. Unset means there is no deadline. It
+  does not end maintenance.
+  """
+  windowEnd: DateTime
+
+  """
+  Why maintenance is requested.
+  """
+  reason: String
+
+  """
+  The server to maintain.
+  """
+  server: Server!
+}
+
+"""
+A storage controller in a server, such as a RAID controller or HBA.
+
+orbIdPattern: {server.serviceTag}-{name}
+"""
+type StorageController implements ConfigItem {
+  """
+  The server the controller is in.
+  """
+  server: Server!
+
+  """
+  Drives attached to the controller.
+  """
+  storageDevices: [StorageDevice] @hasInverse(field: storageController)
+
+  """
+  Volumes the controller presents. A volume belongs to one controller and may
+  span several drives.
+  """
+  storageVolumes: [StorageVolume] @hasInverse(field: storageController)
+}
+
+"""
+A physical drive.
+
+orbIdPattern: {serialNumber}
+"""
+type StorageDevice implements ConfigItem {
+  """
+  Capacity, in bytes.
+  """
+  capacityBytes: Int
+
+  """
+  The manufacturer's name.
+  """
+  manufacturer: String
+
+  """
+  The manufacturer's model name.
+  """
+  model: String
+
+  """
+  The drive's serial number, and the key in its orbId.
+  """
+  serialNumber: String
+
+  """
+  The drive's World Wide Name.
+  """
+  wwn: String
+
+  """
+  The bay or slot the drive is in.
+  """
+  slot: Int
+
+  """
+  The media type, e.g. `SSD` or `HDD`.
+  """
+  mediaType: String
+
+  """
+  The interface protocol, e.g. `SAS`, `SATA` or `NVMe`.
+  """
+  protocol: String
+
+  """
+  What the drive is for. One of `ceph-osd`, `os`, `none`, or the name of another
+  storage system. Unset means no preference.
+  """
+  role: String @search(by: [hash])
+
+  """
+  The controller the drive is attached to.
+  """
+  storageController: StorageController!
+
+  """
+  Volumes the drive is part of.
+  """
+  storageVolumes: [StorageVolume] @hasInverse(field: storageDevices)
+
+  """
+  The drive's partitions.
+  """
+  partitions: [DiskPartition] @hasInverse(field: storageDevice)
+}
+
+"""
+A logical volume presented by a storage controller, such as a RAID virtual disk.
+
+orbIdPattern: {storageController.server.serviceTag}-{name}
+"""
+type StorageVolume implements ConfigItem {
+  """
+  Capacity, in bytes.
+  """
+  capacityBytes: Int
+
+  """
+  The manufacturer's name.
+  """
+  manufacturer: String
+
+  """
+  The manufacturer's model name.
+  """
+  model: String
+
+  """
+  The volume's serial number.
+  """
+  serialNumber: String
+
+  """
+  The volume's World Wide Name.
+  """
+  wwn: String
+
+  """
+  The controller presenting the volume.
+  """
+  storageController: StorageController!
+
+  """
+  Drives the volume spans.
+  """
+  storageDevices: [StorageDevice] @hasInverse(field: storageVolumes)
+}
+
+"""
+A partition on a drive.
+
+orbIdPattern: {type}-{storageDevice.serialNumber}-{number}
+"""
+type DiskPartition implements ConfigItem {
+  """
+  The partition number: the `1` in `sdb1` or `nvme0n1p1`.
+  """
+  number: Int
+
+  """
+  The filesystem type, e.g. `vfat`, `ext4` or `xfs`.
+  """
+  fsType: String
+
+  """
+  Where the filesystem is mounted, e.g. `/boot/efi` or `/var`. Unset means it is
+  not mounted.
+  """
+  mountPoint: String
+
+  """
+  Whether the partition is LUKS-encrypted. If it is, `fsType` and `mountPoint`
+  describe the unlocked device.
+  """
+  encrypted: Boolean
+
+  """
+  The drive the partition is on.
+  """
+  storageDevice: StorageDevice!
+}
+
+"""
+A network interface card in a server, as Redfish reports it. Its `name` is the
+card's FQDD, e.g. `NIC.Integrated.1`.
+
 orbIdPattern: {type}-{server.serviceTag}-{name}
-orbIdPattern: {type}-{networkDevice.serial}-{name}
+"""
+type NetworkAdapter implements ConfigItem {
+  """
+  The manufacturer's model name.
+  """
+  model: String @search(by: [term])
+
+  """
+  The manufacturer's name.
+  """
+  manufacturer: String @search(by: [hash])
+
+  """
+  The card's serial number.
+  """
+  serialNumber: String @search(by: [hash])
+
+  """
+  The manufacturer's part number.
+  """
+  partNumber: String @search(by: [hash])
+
+  """
+  The server the card is installed in.
+  """
+  server: Server!
+
+  """
+  The card's ports.
+  """
+  networkInterfaces: [NetworkInterface] @hasInverse(field: networkAdapter)
+}
+
+"""
+A network port: a physical port on a server or network device, or a link
+aggregation group (LAG). Its `name` is the interface name or FQDD the source
+reports. A port belongs to exactly one of `server` or `networkDevice`; orbital
+checks this, because DGraph cannot.
+
+orbIdPattern: {type}-{server.serviceTag}-{name}
+orbIdPattern: {type}-{networkDevice.serialNumber}-{name}
 """
 type NetworkInterface implements ConfigItem {
-    # Port/interface (physical OR logical LAG). name = source ifname/FQDD.
-    macAddress: String @search(by: [hash])  # cross-source join key (MAC)
-    portType: String @search(by: [term])  # Ethernet | InfiniBand | FibreChannel | LAG
-    linkSpeedMbps: Int  # negotiated link speed (Redfish CurrentLinkSpeedMbps); null when link down
-    mgmtOnly: Boolean @search  # management-plane interface (BMC/iDRAC); mirrors NetBox interface.mgmt_only. No networkAdapter (the BMC is a Manager, not a NIC FRU — its controller identity is IdracSettings)
+  """
+  The port's MAC address, used to match the same port across sources.
+  """
+  macAddress: String @search(by: [hash])
 
-    # Owner — exactly one of {server, networkDevice} (XOR; DGraph can't enforce, app-checked).
-    server: Server                          # server NIC port (was Server!; relaxed so switches can own ports)
-    networkDevice: NetworkDevice            # switch/firewall/router port (the fabric side)
-    networkAdapter: NetworkAdapter         # physical server ports only (null for a LAG or a switch port)
-    # Cabling. connectedNetworkInterface is the canonical port↔port model (both ends real ports) — server-NIC↔switch
-    # AND switch↔switch. connectedNetworkDevice(+Port) stays transitionally (what the server-side seed sets today;
-    # derivable via connectedNetworkInterface.networkDevice). Switch ports + connectedNetworkInterface are populated by
-    # Spike 32 (docs/network-model.md §8) — until then these fabric edges are defined-but-unpopulated by design.
-    connectedNetworkInterface: NetworkInterface       # cabled far-end PORT (set on both ends)
-    connectedNetworkDevice: NetworkDevice   # intended cabling far-end (switch/router/firewall)
-    connectedNetworkDevicePort: String      # remote port label, e.g. "xe-1/0/28"
-    lag: NetworkInterface                       # link aggregation group
-    lagMembers: [NetworkInterface] @hasInverse(field: lag)
-}
+  """
+  The port type. One of `Ethernet`, `InfiniBand`, `FibreChannel` or `LAG`.
+  """
+  portType: String @search(by: [term])
 
-"""orbIdPattern: {type}-{serial}"""
-type NetworkDevice implements ConfigItem {
-    # Network gear (switch / router / firewall / sd-wan), role-differentiated. NetBox-sourced identity anchor.
-    manufacturer: String @search(by: [hash])
-    model: String @search(by: [term])
-    serial: String @search(by: [hash])
-    role: String @search(by: [term])         # tor | core | mgmt | edge | leaf | spine | router | firewall | sd-wan
-    macAddress: String @search(by: [hash])   # device MAC (identity, from NetBox)
-    platform: String @search(by: [term])     # NOS / platform (NetBox device.platform), e.g. Junos
-    rackPosition: Int                        # U-slot in the rack (NetBox device.position)
-    face: String                             # rack face: front | rear (NetBox device.face)
-    vcPosition: Int                          # Virtual Chassis member position (NetBox vc_position)
-    vcPriority: Int                          # Virtual Chassis member priority (NetBox vc_priority)
+  """
+  The negotiated link speed in Mbit/s (Redfish `CurrentLinkSpeedMbps`). Unset
+  when the link is down.
+  """
+  linkSpeedMbps: Int
 
-    dataCenter: DataCenter!
-    rack: Rack                               # physical rack (NetBox device.rack) — exposes per-rack failure domains
-    virtualChassis: NetworkDevice            # VC master this device belongs to (self-edge, member→master); null if standalone/master
-    virtualChassisMembers: [NetworkDevice] @hasInverse(field: virtualChassis)  # auto-filled on the master
-    networkInterfaces: [NetworkInterface] @hasInverse(field: networkDevice)               # ports THIS device owns (the fabric side)
-    networkInterfaceConnectedNetworkDevice: [NetworkInterface] @hasInverse(field: connectedNetworkDevice)
-}
+  """
+  Whether this is a management port, such as an iDRAC or BMC port. A management
+  port has no network adapter.
+  """
+  mgmtOnly: Boolean @search
 
-interface KubernetesCluster {
-    kubernetesVersion: String
-    controlPlaneEndpoint: IPAddress
-    cni: String @search(by: [term])         # cilium, calico, flannel
-    environment: String @search(by: [term]) # prod, staging, dev
-    description: String                     # free-text purpose ("Aramco ISV", "SpectroCloud POC")
-    provider: String @search(by: [term, hash])    # eksa, maas, metal3 — canonical token, single source for UI display + filter
+  """
+  The server that owns the port, for a server port.
+  """
+  server: Server
 
-    dataCenter: DataCenter!
-    nodes: [KubernetesNode] @hasInverse(field: cluster)
-    backup: ClusterBackup
-}
+  """
+  The network device that owns the port, for a switch, router or firewall port.
+  """
+  networkDevice: NetworkDevice
 
-"""orbIdPattern: {name}"""
-type EksaKubernetesCluster implements KubernetesCluster & ConfigItem {
-    clusterType: String @search(by: [term]) # management, standalone, workload
-    tinkerbellIP: IPAddress
+  """
+  The card the port is on. Set for physical server ports only.
+  """
+  networkAdapter: NetworkAdapter
 
-    managementCluster: EksaKubernetesCluster
-    workloadClusters: [EksaKubernetesCluster] @hasInverse(field: managementCluster)
-}
+  """
+  The port at the other end of the cable. Set on both ends.
+  """
+  connectedNetworkInterface: NetworkInterface
 
-"""orbIdPattern: {name}"""
-type KubernetesNode implements ConfigItem {
-    role: String @search(by: [term]) # control_plane, worker
-    ipv4: IPAddress                  # cluster-network IP (distinct from server.oobIP)
-    gpu: Boolean @search             # node contributes GPU resources to the cluster
-    owner: String @search(by: [term])
-    notes: String
+  """
+  The network device at the other end of the cable.
+  """
+  connectedNetworkDevice: NetworkDevice
 
-    cluster: KubernetesCluster!
-    server: Server!
+  """
+  The label of the port at the other end of the cable, e.g. `xe-1/0/28`.
+  """
+  connectedNetworkDevicePort: String
+
+  """
+  The link aggregation group this port is a member of.
+  """
+  lag: NetworkInterface
+
+  """
+  The ports in this link aggregation group.
+  """
+  lagMembers: [NetworkInterface] @hasInverse(field: lag)
 }
 
 """
+A network device: a switch, router, firewall or SD-WAN appliance.
+
+orbIdPattern: {type}-{serialNumber}
+"""
+type NetworkDevice implements ConfigItem {
+  """
+  The manufacturer's name.
+  """
+  manufacturer: String @search(by: [hash])
+
+  """
+  The manufacturer's model name.
+  """
+  model: String @search(by: [term])
+
+  """
+  The device's serial number, and the key in its orbId.
+  """
+  serialNumber: String @search(by: [hash])
+
+  """
+  The device's role. One of `tor`, `core`, `mgmt`, `edge`, `leaf`, `spine`,
+  `router`, `firewall` or `sd-wan`.
+  """
+  role: String @search(by: [term])
+
+  """
+  The device's MAC address.
+  """
+  macAddress: String @search(by: [hash])
+
+  """
+  The network operating system, e.g. `Junos`.
+  """
+  platform: String @search(by: [term])
+
+  """
+  The device's position in its rack, in rack units.
+  """
+  rackPosition: Int
+
+  """
+  The face of the rack the device is mounted on. One of `front` or `rear`.
+  """
+  face: String
+
+  """
+  The device's member position in its virtual chassis.
+  """
+  vcPosition: Int
+
+  """
+  The device's mastership priority in its virtual chassis.
+  """
+  vcPriority: Int
+
+  """
+  The data center the device is in.
+  """
+  dataCenter: DataCenter!
+
+  """
+  The rack the device is mounted in.
+  """
+  rack: Rack
+
+  """
+  The master of the virtual chassis this device is a member of. Unset for a
+  standalone device or the master itself.
+  """
+  virtualChassis: NetworkDevice
+
+  """
+  The members of this device's virtual chassis, when it is the master.
+  """
+  virtualChassisMembers: [NetworkDevice] @hasInverse(field: virtualChassis)
+
+  """
+  The ports this device owns.
+  """
+  networkInterfaces: [NetworkInterface] @hasInverse(field: networkDevice)
+
+  """
+  The ports cabled to this device, seen from their other end.
+  """
+  networkInterfaceConnectedNetworkDevice: [NetworkInterface] @hasInverse(field: connectedNetworkDevice)
+}
+
+"""
+A Kubernetes cluster running in a data center.
+"""
+interface KubernetesCluster {
+  """
+  The Kubernetes version, e.g. `v1.30.4`.
+  """
+  kubernetesVersion: String
+
+  """
+  The IP address of the cluster's API server endpoint.
+  """
+  controlPlaneEndpoint: IPAddress
+
+  """
+  The container network plugin. One of `cilium`, `calico` or `flannel`.
+  """
+  cni: String @search(by: [term])
+
+  """
+  The environment. One of `prod`, `staging` or `dev`.
+  """
+  environment: String @search(by: [term])
+
+  """
+  A free-text description of the cluster's purpose.
+  """
+  description: String
+
+  """
+  How the cluster is provisioned. One of `eksa`, `maas` or `metal3`.
+  """
+  provider: String @search(by: [term, hash])
+
+  """
+  The data center the cluster runs in.
+  """
+  dataCenter: DataCenter!
+
+  """
+  The cluster's nodes.
+  """
+  nodes: [KubernetesNode] @hasInverse(field: cluster)
+
+  """
+  The cluster's backup configuration.
+  """
+  backup: ClusterBackup
+}
+
+"""
+A Kubernetes cluster provisioned by EKS Anywhere.
+
+orbIdPattern: {name}
+"""
+type EksaKubernetesCluster implements KubernetesCluster & ConfigItem {
+  """
+  The cluster's role in EKS Anywhere. One of `management`, `standalone` or `workload`.
+  """
+  clusterType: String @search(by: [term])
+
+  """
+  The IP address of the cluster's Tinkerbell provisioning service.
+  """
+  tinkerbellIP: IPAddress
+
+  """
+  The management cluster that manages this workload cluster.
+  """
+  managementCluster: EksaKubernetesCluster
+
+  """
+  The workload clusters this management cluster manages.
+  """
+  workloadClusters: [EksaKubernetesCluster] @hasInverse(field: managementCluster)
+}
+
+"""
+A Kubernetes node: a server's membership in a cluster.
+
+orbIdPattern: {name}
+"""
+type KubernetesNode implements ConfigItem {
+  """
+  The node's role. One of `control_plane` or `worker`.
+  """
+  role: String @search(by: [term])
+
+  """
+  The node's IP address on the cluster network. Distinct from the server's
+  management address.
+  """
+  ipv4: IPAddress
+
+  """
+  Whether the node contributes GPUs to the cluster.
+  """
+  gpu: Boolean @search
+
+  """
+  Who owns the node.
+  """
+  owner: String @search(by: [term])
+
+  """
+  Free-text notes about the node.
+  """
+  notes: String
+
+  """
+  The cluster the node belongs to.
+  """
+  cluster: KubernetesCluster!
+
+  """
+  The server the node runs on.
+  """
+  server: Server!
+}
+
+"""
+A cluster's backup configuration: its etcd, Velero and S3 sync settings.
+
 orbIdSuffix: backup
 orbIdPattern: {cluster.name}-{type}
 """
 type ClusterBackup implements ConfigItem {
-    etcd: EtcdBackup
-    velero: VeleroBackup
-    s3Sync: S3Sync
+  """
+  Settings for etcd snapshots.
+  """
+  etcd: EtcdBackup
 
-    # NON-NULL (v14): a ClusterBackup has no existence without its cluster.
-    # A non-null back-edge IS the ownership declaration — see UI.md.
-    cluster: KubernetesCluster! @hasInverse(field: backup)
+  """
+  Settings for Velero backups.
+  """
+  velero: VeleroBackup
+
+  """
+  Settings for syncing backups to S3-compatible object storage.
+  """
+  s3Sync: S3Sync
+
+  """
+  The cluster the configuration belongs to.
+  """
+  cluster: KubernetesCluster! @hasInverse(field: backup)
 }
 
 """
+Settings for a cluster's etcd snapshots.
+
 orbIdSuffix: etcd-backup
 orbIdPattern: {clusterBackupEtcd.cluster.name}-{type}
 """
 type EtcdBackup implements ConfigItem {
-    enabled: Boolean @search   
-    schedule: String
-    location: String @search(by: [hash])
-    retentionDays: Int
+  """
+  Whether snapshots are taken.
+  """
+  enabled: Boolean @search
 
-    clusterBackupEtcd: ClusterBackup! @hasInverse(field: etcd)   # NON-NULL (v14)
+  """
+  When snapshots are taken, as a cron expression, e.g. `0 */6 * * *`.
+  """
+  schedule: String
+
+  """
+  Where snapshots are written.
+  """
+  location: String @search(by: [hash])
+
+  """
+  How many days snapshots are kept.
+  """
+  retentionDays: Int
+
+  """
+  The backup configuration these settings belong to.
+  """
+  clusterBackupEtcd: ClusterBackup! @hasInverse(field: etcd)
 }
 
 """
+Settings for a cluster's Velero backups.
+
 orbIdSuffix: velero-backup
 orbIdPattern: {clusterBackupVelero.cluster.name}-{type}
 """
 type VeleroBackup implements ConfigItem {
-    enabled: Boolean @search
-    schedule: String
-    location: String @search(by: [hash])
-    retentionDays: Int
+  """
+  Whether backups are taken.
+  """
+  enabled: Boolean @search
 
-    clusterBackupVelero: ClusterBackup! @hasInverse(field: velero)   # NON-NULL (v14)
+  """
+  When backups are taken, as a cron expression, e.g. `0 2 * * *`.
+  """
+  schedule: String
+
+  """
+  Where backups are written.
+  """
+  location: String @search(by: [hash])
+
+  """
+  How many days backups are kept.
+  """
+  retentionDays: Int
+
+  """
+  The backup configuration these settings belong to.
+  """
+  clusterBackupVelero: ClusterBackup! @hasInverse(field: velero)
 }
 
 """
+Settings for syncing a cluster's backups to S3-compatible object storage.
+
 orbIdSuffix: s3sync
 orbIdPattern: {clusterBackupS3Sync.cluster.name}-{type}
 """
 type S3Sync implements ConfigItem {
-    enabled: Boolean @search
+  """
+  Whether backups are synced.
+  """
+  enabled: Boolean @search
 
-    clusterBackupS3Sync: ClusterBackup! @hasInverse(field: s3Sync)   # NON-NULL (v14)
+  """
+  The backup configuration these settings belong to.
+  """
+  clusterBackupS3Sync: ClusterBackup! @hasInverse(field: s3Sync)
 }
 
+"""
+An IP address with an assigned role, such as a server's management address or a
+cluster's API endpoint.
 
-"""orbIdPattern: {address}"""
+orbIdPattern: {address}
+"""
 type IPAddress implements ConfigItem {
-    type: String # ipv4, ipv6
-    address: String! @search(by: [hash])
-    role: String @search(by: [term]) # oob, tinkerbell, k8s_api, k8s_node
+  """
+  The address family. One of `ipv4` or `ipv6`.
+  """
+  type: String
 
-    # Reverse-pointer convention: <typeName-camelCase><FieldName-PascalCase>.
-    # Long but mechanically derived from the forward edge. Re-evaluate if 
-    # audit/divergence surfaces feel noisy.
-    serverOobIP: Server
-    kubernetesClusterControlPlaneEndpoint: KubernetesCluster @hasInverse(field: controlPlaneEndpoint)
-    eksaKubernetesClusterTinkerbellIP: [EksaKubernetesCluster] @hasInverse(field: tinkerbellIP)
-    kubernetesNodeIpv4: KubernetesNode @hasInverse(field: ipv4)
+  """
+  The address, e.g. `10.0.0.12`.
+  """
+  address: String! @search(by: [hash])
+
+  """
+  What the address is for. One of `oob`, `tinkerbell`, `k8s_api` or `k8s_node`.
+  """
+  role: String @search(by: [term])
+
+  """
+  The server using this as its management address.
+  """
+  serverOobIP: Server
+
+  """
+  The cluster using this as its API server endpoint.
+  """
+  kubernetesClusterControlPlaneEndpoint: KubernetesCluster @hasInverse(field: controlPlaneEndpoint)
+
+  """
+  The EKS Anywhere clusters using this as their Tinkerbell address.
+  """
+  eksaKubernetesClusterTinkerbellIP: [EksaKubernetesCluster] @hasInverse(field: tinkerbellIP)
+
+  """
+  The Kubernetes node using this as its cluster-network address.
+  """
+  kubernetesNodeIPv4: KubernetesNode @hasInverse(field: ipv4)
 }

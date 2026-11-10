@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/url"
 	"strconv"
@@ -52,6 +53,7 @@ type Config struct {
 	// concern now has its own flag and its own safe default.
 	TemplateHotReload     bool   `envconfig:"ORBITAL_TEMPLATE_HOT_RELOAD_ENABLED" default:"false"`
 	LogLevel              string `envconfig:"ORBITAL_LOG_LEVEL"               default:"info"`
+	LogFormat             string `envconfig:"ORBITAL_LOG_FORMAT"              default:"json"` // json | text
 	DGraphScratchURL      string `envconfig:"DGRAPH_SCRATCH_URL"              default:"http://localhost:8081/graphql"`
 	DGraphScratchAdminURL string `envconfig:"DGRAPH_SCRATCH_ADMIN_URL"        default:"http://localhost:8081/admin"`
 	DGraphScratchZeroURL  string `envconfig:"DGRAPH_SCRATCH_ZERO_URL"         default:"http://localhost:6081"`
@@ -295,6 +297,9 @@ func New() (*Config, error) {
 	if err := envconfig.Process("", &cfg); err != nil {
 		return nil, err
 	}
+	if err := cfg.validateLogging(); err != nil {
+		return nil, err
+	}
 	if cfg.SessionEncryptionKey != "" && len(cfg.SessionEncryptionKey) != 32 {
 		return nil, fmt.Errorf("ORBITAL_SESSION_ENCRYPTION_KEY must be exactly 32 bytes for AES-256, got %d", len(cfg.SessionEncryptionKey))
 	}
@@ -398,6 +403,32 @@ func (c *Config) SlogLevel() slog.Level {
 	default:
 		return slog.LevelInfo
 	}
+}
+
+// LogHandler writes the process's logs at the configured level: JSON for a log
+// collector (the default), or `text` key=value lines for a terminal.
+// validateLogging refuses a log level or format it does not know, rather than
+// running with a default nobody chose. Unset means the default.
+func (c *Config) validateLogging() error {
+	switch c.LogLevel {
+	case "", "debug", "info", "warn", "error":
+	default:
+		return fmt.Errorf("ORBITAL_LOG_LEVEL must be one of debug, info, warn, error; got %q", c.LogLevel)
+	}
+	switch c.LogFormat {
+	case "", "json", "text":
+	default:
+		return fmt.Errorf("ORBITAL_LOG_FORMAT must be json or text; got %q", c.LogFormat)
+	}
+	return nil
+}
+
+func (c *Config) LogHandler(w io.Writer) slog.Handler {
+	opts := &slog.HandlerOptions{Level: c.SlogLevel()}
+	if c.LogFormat == "text" {
+		return slog.NewTextHandler(w, opts)
+	}
+	return slog.NewJSONHandler(w, opts)
 }
 
 // DatabaseDSN returns the connection string the pool is built from.

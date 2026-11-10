@@ -16,7 +16,8 @@ Stack survey: `docs/reference/MONITORING-STACK.md`.
 - **Graceful degradation to noop when `OTEL_EXPORTER_OTLP_ENDPOINT` is
   unset** — local dev must run with no observability infrastructure.
   `tracer.Start(...)` returns a non-recording span; log forwards drop.
-  Stdout JSON logging is always on regardless.
+  Stdout logging is always on regardless: JSON by default, `text` under
+  `make run-*` (`ORBITAL_LOG_FORMAT`, CONFIG.md).
 - **Standard OTel env vars, not `ORBITAL_*`** — `OTEL_EXPORTER_OTLP_ENDPOINT`,
   `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_SERVICE_NAME`, `OTEL_TRACES_SAMPLER`.
   These are community conventions and shared tooling expects them.

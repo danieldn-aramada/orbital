@@ -51,3 +51,24 @@ func TestConsumersConfig_Multiple(t *testing.T) {
 		t.Errorf("unexpected names: %v", c)
 	}
 }
+
+// A misspelt log setting must stop startup, not quietly run at a default.
+func TestLogSettings_UnknownValuesAreRefused(t *testing.T) {
+	for _, tc := range []struct {
+		name, level, format string
+		wantErr             bool
+	}{
+		{"unset uses the defaults", "", "", false},
+		{"known values are accepted", "warn", "text", false},
+		{"an unknown format is refused", "info", "jsn", true},
+		{"an unknown level is refused", "verbose", "json", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("ORB_LOG_LEVEL", tc.level)
+			t.Setenv("ORB_LOG_FORMAT", tc.format)
+			if _, err := orbconfig.New(); (err != nil) != tc.wantErr {
+				t.Errorf("New() error = %v, wantErr %v", err, tc.wantErr)
+			}
+		})
+	}
+}

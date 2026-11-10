@@ -24,7 +24,7 @@ import (
 //
 //	"""
 //	orbIdPattern: {type}-{server.serviceTag}-{fqdd}
-//	orbIdPattern: {type}-{networkDevice.serial}-{port}
+//	orbIdPattern: {type}-{networkDevice.serialNumber}-{port}
 //	"""
 //
 // This is what `derivesIdFrom:` could not express — it was single-valued, which

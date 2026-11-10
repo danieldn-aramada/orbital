@@ -1030,3 +1030,122 @@ div[id^="generic-detail-tabs-"] {
     // its bottom border draws once, beneath the last row.
   }
 }
+
+// ── Schema graph ─────────────────────────────────────────────────────────────
+// Cytoscape paints a <canvas> and cannot read CSS, so the legend swatches double
+// as its palette: initSchemaPage (shared.js) reads their computed colours. Every
+// colour stays here and follows the light/dark scheme.
+// The popup is positioned over the canvas, so both sit in one relative stage.
+.schema-graph-stage {
+  position: relative;
+}
+
+.schema-graph-canvas {
+  height: 560px;
+  // Not drawn (no border-style): read as the colour of a clicked type and its
+  // lines, the one colour with no legend swatch to carry it.
+  border-color: var(--bulma-link);
+}
+
+// A clicked type's definition, beside its circle. Placed by the JS; scrolls
+// rather than grows, so a long type never covers the whole graph.
+.schema-graph-popup {
+  position: absolute;
+  z-index: 5;
+  width: 24rem;
+  max-height: 18rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.75rem;
+
+  // Bulma's `.box` sets display:block, which beats the `hidden` attribute —
+  // the popup stayed on screen after every close.
+  &[hidden] {
+    display: none;
+  }
+
+  // Dragged by its title row, so it can be moved off what it covers.
+  .schema-graph-popup-handle {
+    cursor: move;
+    user-select: none;
+  }
+
+  pre {
+    font-size: 0.72rem;
+    padding: 0.5rem;
+    white-space: pre;
+  }
+}
+
+.schema-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1.25rem;
+}
+
+.schema-graph-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+
+  &::before {
+    content: "";
+    display: inline-block;
+  }
+
+  &.is-type::before,
+  &.is-interface::before {
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 50%;
+    border: 2px solid var(--bulma-text-weak);
+    background-color: hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) - 3%));
+  }
+
+  &.is-interface::before {
+    border-style: dashed;
+  }
+
+  &.is-relationship::before,
+  &.is-implements::before {
+    width: 1.6rem;
+    border-top: 2px solid var(--bulma-text-weak);
+  }
+
+  &.is-implements::before {
+    border-top: 2px dotted var(--bulma-text-weak);
+  }
+}
+
+.sdl-code {
+  .hljs-keyword {
+    color: hsl(var(--bulma-link-h), var(--bulma-link-s), var(--bulma-link-on-scheme-l));
+    font-weight: 600;
+  }
+
+  .hljs-symbol {
+    color: hsl(var(--bulma-info-h), var(--bulma-info-s), var(--bulma-info-on-scheme-l));
+  }
+
+  .hljs-meta {
+    color: hsl(var(--bulma-primary-h), var(--bulma-primary-s), var(--bulma-primary-on-scheme-l));
+  }
+
+  .hljs-string {
+    color: hsl(var(--bulma-success-h), var(--bulma-success-s), var(--bulma-success-on-scheme-l));
+  }
+
+  .hljs-literal {
+    color: hsl(var(--bulma-warning-h), var(--bulma-warning-s), var(--bulma-warning-on-scheme-l));
+  }
+
+  .hljs-comment,
+  .hljs-punctuation {
+    color: var(--bulma-text-weak);
+  }
+
+  .hljs-comment {
+    font-style: italic;
+  }
+}

@@ -115,6 +115,7 @@ Mirrors `internal/config/config.go`, where the struct tags are the source of tru
 | `ORBITAL_JOB_ORPHAN_GRACE` | `1h` |
 | `ORBITAL_JOB_STALE_AFTER` | `60s` |
 | `ORBITAL_LOGIN_RATE_LIMIT_RPS` | `5` |
+| `ORBITAL_LOG_FORMAT` | `json` |
 | `ORBITAL_LOG_LEVEL` | `info` |
 | `ORBITAL_MAX_REQUEST_BODY` | `10M` |
 | `ORBITAL_MIGRATION_LOCK_TIMEOUT` | `5m` |
@@ -215,6 +216,8 @@ Applying a change needs a restart. See [AUTH.md](AUTH.md) § Multiple identity
 providers for why, and for the full model.
 
 ## List pages are capped, and what that costs
+
+`ORBITAL_LOG_FORMAT` (orb: `ORB_LOG_FORMAT`) is `json` (default) or `text`; `make run-*` uses `text`. Log level and format are case-sensitive, and an unknown value **stops startup**. Do NOT add a colour logger or logrus: Kubernetes, Prometheus and Dex all print plain text, and orbital stays on `log/slog`.
 
 `ORBITAL_LIST_MAX_ROWS` (orb: `ORB_LIST_MAX_ROWS`, both default **2000**) caps how many rows one
 list page fetches. It is a tunable, not a toggle — the bar at the top of this file governs feature

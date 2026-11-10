@@ -22080,4 +22080,93 @@ div[id^=generic-detail-tabs-] ul {
   flex-shrink: 1;
 }
 
+.schema-graph-stage {
+  position: relative;
+}
+
+.schema-graph-canvas {
+  height: 560px;
+  border-color: var(--bulma-link);
+}
+
+.schema-graph-popup {
+  position: absolute;
+  z-index: 5;
+  width: 24rem;
+  max-height: 18rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.75rem;
+}
+.schema-graph-popup[hidden] {
+  display: none;
+}
+.schema-graph-popup .schema-graph-popup-handle {
+  cursor: move;
+  user-select: none;
+}
+.schema-graph-popup pre {
+  font-size: 0.72rem;
+  padding: 0.5rem;
+  white-space: pre;
+}
+
+.schema-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1.25rem;
+}
+
+.schema-graph-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.schema-graph-key::before {
+  content: "";
+  display: inline-block;
+}
+.schema-graph-key.is-type::before, .schema-graph-key.is-interface::before {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  border: 2px solid var(--bulma-text-weak);
+  background-color: hsl(var(--bulma-scheme-h), var(--bulma-scheme-s), calc(var(--bulma-scheme-main-l) - 3%));
+}
+.schema-graph-key.is-interface::before {
+  border-style: dashed;
+}
+.schema-graph-key.is-relationship::before, .schema-graph-key.is-implements::before {
+  width: 1.6rem;
+  border-top: 2px solid var(--bulma-text-weak);
+}
+.schema-graph-key.is-implements::before {
+  border-top: 2px dotted var(--bulma-text-weak);
+}
+
+.sdl-code .hljs-keyword {
+  color: hsl(var(--bulma-link-h), var(--bulma-link-s), var(--bulma-link-on-scheme-l));
+  font-weight: 600;
+}
+.sdl-code .hljs-symbol {
+  color: hsl(var(--bulma-info-h), var(--bulma-info-s), var(--bulma-info-on-scheme-l));
+}
+.sdl-code .hljs-meta {
+  color: hsl(var(--bulma-primary-h), var(--bulma-primary-s), var(--bulma-primary-on-scheme-l));
+}
+.sdl-code .hljs-string {
+  color: hsl(var(--bulma-success-h), var(--bulma-success-s), var(--bulma-success-on-scheme-l));
+}
+.sdl-code .hljs-literal {
+  color: hsl(var(--bulma-warning-h), var(--bulma-warning-s), var(--bulma-warning-on-scheme-l));
+}
+.sdl-code .hljs-comment,
+.sdl-code .hljs-punctuation {
+  color: var(--bulma-text-weak);
+}
+.sdl-code .hljs-comment {
+  font-style: italic;
+}
+
 /*# sourceMappingURL=main.css.map */

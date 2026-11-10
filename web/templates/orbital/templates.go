@@ -45,8 +45,9 @@ func Map(fsys fs.FS) map[string]*template.Template {
 		"backups":            template.Must(template.ParseFS(fsys, page("templates/orbital/pages/backups.gohtml")...)),
 		"divergence-reports": template.Must(template.ParseFS(fsys, page("templates/orbital/pages/divergence-reports.gohtml")...)),
 		"audit-log":          template.Must(template.ParseFS(fsys, page("templates/orbital/pages/audit-log.gohtml")...)),
-		"schema":             template.Must(template.ParseFS(fsys, page("templates/orbital/pages/schema.gohtml")...)),
-		"export":             template.Must(template.ParseFS(fsys, page("templates/orbital/pages/export.gohtml")...)),
+		"schema": template.Must(template.ParseFS(fsys, page("templates/orbital/pages/schema.gohtml",
+			"templates/shared/components/schema-graph.gohtml")...)),
+		"export": template.Must(template.ParseFS(fsys, page("templates/orbital/pages/export.gohtml")...)),
 		"publish-history": template.Must(template.ParseFS(fsys, page(
 			"templates/orbital/pages/publish-history.gohtml",
 			"templates/orbital/partials/publish-history-tabs.gohtml")...)),

@@ -1831,3 +1831,252 @@ export async function apiErrorText(source, fallback = 'Request failed') {
   }
   return apiErrorFromBody(body, fallback + ' (HTTP ' + status + ')')
 }
+
+
+// ─── Schema graph ───────────────────────────────────────────────────────────
+//
+// The Schema page draws GET /api/v1/schema/graph — the same response AEP or any
+// other client draws from. The server decides each type's level and marks the
+// one edge that sets it, so nothing here walks the schema: lay out on the
+// level-setting edges only (a cross-link fed to a layered layout moves types
+// between levels), then let the cross-links ride on top.
+//
+// Cytoscape is imported on first use, so no other page downloads it.
+
+let graphLibsLoaded = null
+
+let highlighterLoaded = null
+
+// Returns a function turning GraphQL SDL text into highlighted (escaped) HTML.
+function loadHighlighter() {
+  highlighterLoaded ??= Promise.all([
+    import('./highlight-11.12.0/core.min.js'),
+    import('./highlight-11.12.0/graphql.min.js'),
+  ]).then(([{ default: hljs }, { default: graphql }]) => {
+    hljs.registerLanguage('graphql', graphql)
+    return text => hljs.highlight(text, { language: 'graphql' }).value
+  })
+  return highlighterLoaded
+}
+
+function loadGraphLibs() {
+  graphLibsLoaded ??= Promise.all([
+    import('./cytoscape-3.34.4/cytoscape.esm.min.mjs'),
+    import('./d3-hierarchy-3.1.3/d3-hierarchy.min.mjs'),
+  ]).then(([{ default: cytoscape }, d3]) => ({ cytoscape, d3 }))
+  return graphLibsLoaded
+}
+
+// The level-setting edges form a tree — one parent per type — so they are laid
+// out as one: d3's tidy tree, siblings in the server's `order`. An edge that
+// spans two levels gets a placeholder between, so every row is one level.
+function layoutSchemaTree(cy, d3) {
+  const parentOf = new Map(cy.edges('.sets-level').map(e => [e.target().id(), e.source().id()]))
+  const rows = [{ id: '~root', parent: null, node: null }]
+  cy.nodes().forEach(n => {
+    let parent = parentOf.get(n.id()) ?? '~root'
+    const parentLevel = parent === '~root' ? -1 : cy.getElementById(parent).data('level')
+    for (let i = 1; i < n.data('level') - parentLevel; i++) {
+      rows.push({ id: `${n.id()}~${i}`, parent, node: n })
+      parent = `${n.id()}~${i}`
+    }
+    rows.push({ id: n.id(), parent, node: n })
+  })
+  const root = d3.stratify().id(r => r.id).parentId(r => r.parent)(rows)
+    .sort((a, b) => a.data.node.data('order') - b.data.node.data('order') || a.data.node.id().localeCompare(b.data.node.id()))
+  d3.tree().nodeSize([106, 1]).separation((a, b) => (a.parent === b.parent ? 1 : 1.25))(root)
+  root.each(d => {
+    if (d.data.node && d.id === d.data.node.id()) d.data.node.position({ x: d.x, y: d.data.node.data('level') * 142 })
+  })
+}
+
+// The legend swatches are the palette (main.scss): a canvas cannot read CSS.
+function schemaGraphPalette(box) {
+  const key = (cls, prop) => getComputedStyle(box.querySelector('.schema-graph-key.' + cls), '::before')[prop]
+  return {
+    fill: key('is-type', 'backgroundColor'),
+    outline: key('is-type', 'borderTopColor'),
+    line: key('is-relationship', 'borderTopColor'),
+    implements: key('is-implements', 'borderTopColor'),
+    highlight: getComputedStyle(box.querySelector('.schema-graph-canvas')).borderTopColor,
+    text: getComputedStyle(box).color,
+    background: getComputedStyle(box).backgroundColor,
+  }
+}
+
+function schemaGraphStyle(p) {
+  return [
+    { selector: 'node', style: {
+      shape: 'ellipse', width: 86, height: 86,
+      'background-color': p.fill, 'border-width': 2, 'border-color': p.outline,
+      label: 'data(label)', color: p.text, 'font-size': 11,
+      'text-wrap': 'wrap', 'text-max-width': 70, 'text-valign': 'center', 'text-halign': 'center',
+    } },
+    { selector: 'node.interface', style: { 'border-style': 'dashed' } },
+    { selector: 'edge', style: { width: 1.5, 'line-color': p.line, 'curve-style': 'bezier' } },
+    { selector: 'edge.implements', style: {
+      'line-color': p.implements, 'line-style': 'dotted',
+      'source-arrow-shape': 'triangle', 'source-arrow-fill': 'hollow', 'source-arrow-color': p.implements,
+    } },
+    { selector: 'edge.hovered', style: {
+      width: 3, label: 'data(title)', 'font-size': 10, color: p.text,
+      'text-background-color': p.background, 'text-background-opacity': 1, 'text-background-padding': 2,
+    } },
+    { selector: '.faded', style: { opacity: 0.15 } },
+    { selector: 'node.highlighted', style: { 'border-width': 3, 'border-color': p.highlight } },
+    { selector: 'edge.highlighted', style: { width: 2.5, 'line-color': p.highlight } },
+  ]
+}
+
+function schemaEdgeTitle(e) {
+  if (e.kind === 'implements') return `${e.target} implements ${e.source}`
+  const far = e.inverse ? ` ↔ ${e.target}.${e.inverse}` : ` → ${e.target}`
+  return `${e.source}.${e.field}${far} · ${e.cardinality}`
+}
+
+// A type's block, read from the SDL already on the page — the popup shows what
+// the panel below says, without moving the page to it.
+function sdlDefinition(typeName) {
+  const sdl = document.querySelector('[data-schema-sdl]')?.textContent || ''
+  const m = new RegExp(`^(?:type|interface)\\s+${typeName}\\b[^]*?^\\}`, 'm').exec(sdl)
+  return m ? m[0] : ''
+}
+
+async function drawSchemaGraph(box) {
+  const canvas = box.querySelector('[data-schema-graph-canvas]')
+  const fail = (msg) => {
+    const p = document.createElement('p')
+    p.className = 'is-size-7 has-text-danger'
+    p.textContent = 'Could not draw the schema graph: ' + msg
+    canvas.replaceChildren(p)
+  }
+  let graph, libs
+  try {
+    const [res, loaded] = await Promise.all([fetch(BASE + '/api/v1/schema/graph'), loadGraphLibs()])
+    if (!res.ok) return fail(await apiErrorText(res) || 'request aborted')
+    graph = await res.json()
+    libs = loaded
+  } catch (err) {
+    return fail(err.message)
+  }
+
+  canvas.replaceChildren()
+  const cy = libs.cytoscape({
+    container: canvas,
+    minZoom: 0.2,
+    maxZoom: 2.5,
+    style: schemaGraphStyle(schemaGraphPalette(box)),
+    elements: [
+      ...graph.nodes.map(n => ({ data: { id: n.id, label: n.label, level: n.level, order: n.order }, classes: n.kind })),
+      ...graph.edges.map(e => ({
+        data: { id: e.id, source: e.source, target: e.target, title: schemaEdgeTitle(e) },
+        classes: [e.kind, e.setsLevel ? 'sets-level' : 'cross-link'].join(' '),
+      })),
+    ],
+  })
+  layoutSchemaTree(cy, libs.d3)
+  cy.fit(undefined, 20)
+
+  // A clicked type's definition, beside its circle — on the right, or the left
+  // when the right would leave the canvas.
+  const popup = box.querySelector('[data-schema-graph-popup]')
+  let popupNode = null
+  // Once dragged, the popup stays where it was put — through pans and further
+  // clicks — until it is closed.
+  let popupMoved = false
+  const placePopup = () => {
+    if (!popupNode || popupMoved) return
+    const p = popupNode.renderedPosition()
+    const gap = popupNode.renderedWidth() / 2 + 8
+    let x = p.x + gap
+    if (x + popup.offsetWidth > canvas.clientWidth) x = Math.max(0, p.x - gap - popup.offsetWidth)
+    const y = Math.min(Math.max(0, p.y - popup.offsetHeight / 2), Math.max(0, canvas.clientHeight - popup.offsetHeight))
+    popup.style.left = x + 'px'
+    popup.style.top = y + 'px'
+  }
+  const highlight = await loadHighlighter().catch(() => null)
+  const showPopup = node => {
+    popupNode = node
+    popup.querySelector('[data-schema-graph-popup-title]').textContent = node.data('label')
+    const sdl = sdlDefinition(node.id())
+    const out = popup.querySelector('[data-schema-graph-popup-sdl]')
+    if (sdl && highlight) out.innerHTML = highlight(sdl)
+    else out.textContent = sdl || 'Not found in the SDL below.'
+    popup.hidden = false
+    popup.scrollTop = 0
+    placePopup()
+  }
+  const clearSelection = () => {
+    popupNode = null
+    popupMoved = false
+    popup.hidden = true
+    cy.elements().removeClass('faded highlighted')
+  }
+
+  // Reset returns to exactly this first view. Drags are throwaway, never saved.
+  const home = {
+    zoom: cy.zoom(),
+    pan: { ...cy.pan() },
+    positions: new Map(cy.nodes().map(n => [n.id(), { ...n.position() }])),
+  }
+  const reset = box.querySelector('[data-schema-graph-reset]')
+  reset.disabled = false
+  reset.addEventListener('click', () => {
+    clearSelection()
+    cy.nodes().stop(true)
+    cy.stop(true)
+    cy.nodes().forEach(n => n.animate({ position: home.positions.get(n.id()) }, { duration: 300 }))
+    cy.animate({ zoom: home.zoom, pan: home.pan }, { duration: 300 })
+  })
+
+  cy.on('mouseover', 'edge', evt => evt.target.addClass('hovered'))
+  cy.on('mouseout', 'edge', evt => evt.target.removeClass('hovered'))
+  cy.on('tap', 'node', evt => {
+    cy.elements().addClass('faded').removeClass('highlighted')
+    evt.target.closedNeighborhood().removeClass('faded').addClass('highlighted')
+    showPopup(evt.target)
+  })
+  cy.on('tap', evt => {
+    if (evt.target === cy) clearSelection()
+  })
+  // The popup rides with its circle through pans, zooms and drags.
+  cy.on('viewport', placePopup)
+  cy.on('position', 'node', evt => { if (evt.target === popupNode) placePopup() })
+  popup.querySelector('[data-schema-graph-popup-close]').addEventListener('click', clearSelection)
+  const handle = popup.querySelector('[data-schema-graph-popup-handle]')
+  handle.addEventListener('pointerdown', down => {
+    if (down.target.closest('[data-schema-graph-popup-close]')) return
+    down.preventDefault()
+    handle.setPointerCapture(down.pointerId)
+    const from = { x: down.clientX, y: down.clientY, left: popup.offsetLeft, top: popup.offsetTop }
+    const within = (v, max) => Math.min(Math.max(v, 0), Math.max(0, max))
+    const move = evt => {
+      popupMoved = true
+      popup.style.left = within(from.left + evt.clientX - from.x, canvas.clientWidth - popup.offsetWidth) + 'px'
+      popup.style.top = within(from.top + evt.clientY - from.y, canvas.clientHeight - popup.offsetHeight) + 'px'
+    }
+    const up = () => {
+      handle.removeEventListener('pointermove', move)
+      handle.removeEventListener('pointerup', up)
+      handle.removeEventListener('pointercancel', up)
+    }
+    handle.addEventListener('pointermove', move)
+    handle.addEventListener('pointerup', up)
+    handle.addEventListener('pointercancel', up)
+  })
+  document.addEventListener('keydown', evt => { if (evt.key === 'Escape' && popupNode) clearSelection() })
+  // The palette follows the OS scheme; re-read it when the scheme flips.
+  window.matchMedia('(prefers-color-scheme: dark)')
+    .addEventListener('change', () => cy.style(schemaGraphStyle(schemaGraphPalette(box))))
+}
+
+export function initSchemaPage() {
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-schema-sdl]').forEach(pre => {
+      loadHighlighter()
+        .then(highlight => { pre.innerHTML = highlight(pre.textContent) })
+        .catch(err => console.warn('SDL highlighting unavailable:', err))
+    })
+    document.querySelectorAll('[data-schema-graph]').forEach(drawSchemaGraph)
+  })
+}

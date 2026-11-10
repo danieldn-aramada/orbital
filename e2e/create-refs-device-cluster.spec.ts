@@ -73,7 +73,7 @@ test('a network device form offers rack and virtual chassis, optional and scoped
   await modal.getByTestId('create-rel-rack').selectOption(rack);
   await modal.getByTestId('create-rel-virtualChassis').selectOption(VC_MASTER);
   await modal.locator('[data-create-field="name"]:not([data-create-child])').fill('e2e-ref-switch');
-  await modal.locator('[data-create-field="serial"]:not([data-create-child])').fill('E2EREFSW1');
+  await modal.locator('[data-create-field="serialNumber"]:not([data-create-child])').fill('E2EREFSW1');
   await modal.getByTestId('create-submit').click();
   await expect(page.locator(`#generic-table tr[data-orb-id="${DEVICE}"]`)).toHaveCount(1, { timeout: 15_000 });
 

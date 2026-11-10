@@ -51,6 +51,8 @@ type Server struct {
 	// Cleared on process restart (in-memory only) and on the Refresh button
 	// via ?refresh=1. Values are bool (verified/not).
 	verifyCache sync.Map
+
+	schemaGraph *handler.SchemaGraphHandler
 }
 
 // templateMap rebuilds the template map — used in dev mode for hot reload.
@@ -60,7 +62,7 @@ func (s *Server) templateMap() map[string]*template.Template {
 
 // New creates an orb Server. All routes are registered here.
 func New(cfg *orbconfig.Config) (*Server, error) {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.SlogLevel()}))
+	logger := slog.New(cfg.LogHandler(os.Stdout))
 
 	// Hot-reload reads templates from disk on each request; otherwise the
 	// embedded FS baked into the binary is used.
@@ -235,6 +237,8 @@ func New(cfg *orbconfig.Config) (*Server, error) {
 
 	// API.
 	api := e.Group("/api/v1")
+	s.schemaGraph = handler.NewSchemaGraph(fieldSource, logger)
+	api.GET("/schema/graph", s.getSchemaGraph)
 	api.POST("/import/subgraph", s.importSubgraph)
 	api.POST("/import/artifact", s.importArtifact)
 	api.GET("/import/status", s.importStatus)

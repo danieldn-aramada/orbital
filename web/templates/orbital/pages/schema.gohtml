@@ -45,6 +45,8 @@
       </article>
       {{end}}
 
+      {{template "schema-graph.gohtml" .}}
+
       <div class="columns mt-2">
 
         <div class="column is-narrow">
@@ -61,7 +63,7 @@
                   carries colour, which here is exactly one row.
                 */}}
                 <tr><td style="width:45%">Checksum</td><td>{{.Checksum}}</td></tr>
-                <tr><td>Build ships</td><td>{{.Version}}</td></tr>
+                <tr><td>Build ships</td><td>{{.ShippedVersion}}</td></tr>
                 <tr><td>Matches build</td><td>
                   {{if .Drift}}<span class="has-text-danger">no — {{len .Drift}} missing</span>
                   {{else}}<span class="has-text-success">yes</span>{{end}}
@@ -83,7 +85,7 @@
         <div class="column">
           <article class="box">
             <p class="is-size-6 has-text-weight-semibold mb-3">Schema Definition Language (SDL)</p>
-            <pre style="font-size: 0.78rem; max-height: 600px; overflow: auto;">{{.SDL}}</pre>
+            <pre class="sdl-code" data-schema-sdl style="font-size: 0.78rem; max-height: 600px; overflow: auto;">{{.SDL}}</pre>
           </article>
         </div>
 

@@ -59,6 +59,7 @@ import {
   subgraphOrbIds,
   initListPages,
   initGenericTable,
+  initSchemaPage,
 } from './shared.js'
 
 // ─── Login modal ─────────────────────────────────────────────────────────────
@@ -101,6 +102,9 @@ initListPages()
 
 // The generic /{slug} page: one DataTable for every ConfigItem type.
 initGenericTable()
+
+// The Schema page: SDL highlighting and the graph — shared with orb.
+initSchemaPage()
 document.addEventListener('DOMContentLoaded', () => {
   // The generic detail page's tab strip, on a DIRECT navigation. A fragment
   // opened as a tab on a list page is wired by the htmx:afterSettle handler in

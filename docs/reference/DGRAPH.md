@@ -19,6 +19,9 @@ Read this before: DGraph schema changes, query/mutation work, export/import, see
 - **A DQL predicate is namespaced by the type that DECLARES the field, not by the row's concrete type.** *(Added 2026-10-04.)* `nodes` is declared on the `KubernetesCluster` INTERFACE, so the predicate is `KubernetesCluster.nodes` and **`EksaKubernetesCluster.nodes` does not exist**. Writing the wrong name removes nothing and reports nothing — the delete succeeds and the survivor is still pointing at a tombstone. Verified against the live DQL schema: of the `*.servers`/`*.nodes`/`*.kubernetesClusters` predicates, only `KubernetesCluster.nodes` is interface-namespaced, which is exactly why three hand-written edge lists got away with using the concrete type for years. Resolve it by walking the interfaces the type implements and using the first whose own field list carries the name.
 - **`!` means non-null, never ownership.** *(2026-10-07.)* What a page deletes is its `subgraph:` (UI.md). Every non-null relationship needs an `@hasInverse` partner so the delete preview can spot orphans (`TestEveryNonNullEdge_HasAnInverse`).
 - Schema changes must be **backwards compatible** — orbs may lag orbital by versions. Safe: new types, new nullable fields. Breaking: removing/renaming types or fields, adding non-null fields to existing types.
+- **v20 broke that rule deliberately** *(2026-11-08)*, renaming `NetworkDevice.serial` → `serialNumber` and `IPAddress.kubernetesNodeIpv4` → `kubernetesNodeIPv4` so the schema names things one way. ConfigBundle uses neither field.
+  - A rename is a **new DQL predicate**: apply the schema, then run `scripts/migrate-schema-v20.sh --dgraph <url>` on every DGraph. Until then the renamed fields read `null`.
+  - The old predicates are left in place, unreachable through GraphQL. `drop_attr` them once the copy is verified; that is irreversible.
 - `id: ID` must be declared on the `ConfigItem` interface — DGraph does not auto-expose internal UIDs via GraphQL without it. Without it, `getDataCenter(id: $id)` queries fail. Always keep it.
 - **`@id` on `orbId` is the API-immutability mechanism — load-bearing for external consumers.** DGraph's schema generator excludes `@id` fields from the auto-generated `XPatch` input type, so `updateServer(filter:{...}, set:{orbId:"..."})` is rejected at schema-validation time. ConfigBundle (cb-controller) uses this property as the basis for SSA list-map identity across the cloud → edge boundary — see `~/armada/configbundle/docs/plans/server-identity-orbid.md`. Do NOT remove `@id` from `orbId` and do NOT add custom mutations that bypass DGraph's auto-generated Patch by allowing `orbId` to be set on existing nodes. orbId format (`<namespace>:<entity>`) is also part of this contract — changing the separator or format forces a coordinated migration in every downstream CR.
 - Applying a GraphQL schema to DGraph is **additive at the RDF predicate layer**. Removing a field from GraphQL does NOT delete underlying RDF triples — data persists but is no longer queryable. To permanently remove a field and its data: `POST /alter {"drop_attr": "<predicate_name>"}`. This is irreversible.
@@ -40,6 +43,13 @@ power draw, weight), not before.
 Values were harvested from NetBox before its decommission; two of thirteen
 models resolved only by joining on serviceTag or interface MAC, not by model
 string, so the mapping is not reconstructible from orbital alone.
+
+## Schema style *(2026-11-08, pinned by `TestSchemaStyle`)*
+
+- **Every type, interface, enum and field has a `"""` description:** present tense, full stop; allowed values as "One of `a`, `b` or `c`." Descriptions are what GraphiQL and introspection show consumers.
+- **Annotations go last, after a blank line.** The parsers are line-based: no prose line may start with `word:` or a lone backticked token, or it reads as an annotation.
+- **`#` only in the file header.** Rationale and history go here or in git — the schema ships to every adopter and shows on the Schema page.
+- **Prettier runs at 120 columns for `.graphql`** (`.prettierrc.json`). At the default 80 it wraps `@hasInverse` onto its own line, where `InverseEdges` silently loses the pair.
 
 ## Schema annotations
 
@@ -174,6 +184,17 @@ centre by namespace filter, not by traversal, so a cross-namespace child would b
 > (a NIC nests under its adapter, not its server *and* device), which is a view
 > decision, not a derivable fact.
 
+## Schema graph levels — a drawing rule *(2026-11-08)*
+
+`GET /api/v1/schema/graph` (and the Schema page, which draws it) puts every type on a **level**. This is **a projection for drawing. It makes no ownership claim and does not affect delete scope.** It is built in `configitems.BuildSchemaGraph` from the deployed schema and the views config:
+
+- A type **lives inside** another when it cannot exist without it (a non-null edge back), or when its `orbIdPattern` is built from that edge. It sits one level below the **nearest** such parent, so shortest distance wins. Longest-path pushes KubernetesNode down through its cluster.
+- A parent typed by an interface counts as each implementor: ClusterBackup sits under EksaKubernetesCluster. An implementor sits one level below its interface.
+- **`canonicalParent:` overrides the choice**, and places a type that lives inside nothing. That is how NetworkInterface sits under NetworkAdapter, and IPAddress under Server.
+- Exactly one edge into each type has `setsLevel: true`; every other edge is a cross-link. A layered layout fed cross-links moves types between levels (19 of 21 types mis-ranked in testing), so clients lay out on the `setsLevel` edges only.
+
+The rule reproduces the hand-drawn diagram it replaced. Research and alternatives: `.local/graph-viz-research/`.
+
 ## Query patterns
 
 ### DQL tilde traversal (reverse edges)
@@ -192,6 +213,7 @@ Same pattern used for `~ConfigItem.namespace` to find all nodes in a namespace. 
 `@hasInverse` requires the back-ref target to **match the level where the forward edge is declared** — interface-level forward edge → interface back-ref; concrete-only forward edge → concrete back-ref. **Exception:** the top-level `ConfigItem` interface itself cannot be a `@hasInverse` target (too generic — DGraph can't reify a single back-edge predicate across every concrete type). For types like `IPAddress` referenced from many directions, the same rule applies per forward edge.
 
 - **Back-ref naming**: `<typeName-camelCase><FieldName-PascalCase>` — e.g. `Server.oobIP` → `IPAddress.serverOobIP`; `EksaKubernetesCluster.tinkerbellIP` → `IPAddress.eksaKubernetesClusterTinkerbellIP`; `KubernetesCluster.backup` → `ClusterBackup.kubernetesClusterBackup` (or `cluster` as a friendly alias when there's no ambiguity, as we did on `ClusterBackup.cluster`). Long but mechanically derived — never invent shorter aliases for the IPAddress hub.
+- **Acronyms stay uppercase in names:** `IP`, `MAC`, `IPv4`. *(2026-11-08.)* So `KubernetesNode.ipv4` → `IPAddress.kubernetesNodeIPv4` (it was `…Ipv4` until v20). `IdracSettings` is the exception, because Dell's brand spelling "iDRAC" cannot be written in PascalCase.
 - **Cardinality must match reality**: the back-ref field is `T` (singular) when at most one cluster/server/node can legitimately claim a given target, and `[T]` (list) when multiple can. EKS-A workload clusters reuse their management's tinkerbell stack — so `eksaKubernetesClusterTinkerbellIP` is `[EksaKubernetesCluster]`, not singular. Server OOB IPs are 1:1 per server — so `serverOobIP` stays singular. Wrong cardinality silently corrupts data (last-write-wins on the inverse); choose based on the operational relationship, not the schema's syntactic cleanliness.
 - **Interface back-refs work when forward edge is interface-level**: `IPAddress.kubernetesClusterControlPlaneEndpoint: KubernetesCluster @hasInverse(field: controlPlaneEndpoint)` works because `controlPlaneEndpoint` is on the `KubernetesCluster` interface. Likewise `ClusterBackup.cluster: KubernetesCluster @hasInverse(field: backup)` works because `backup` is on the interface. Don't fork per concrete type unless the forward edge is concrete-only (like `tinkerbellIP`, which is `EksaKubernetesCluster`-specific).
 

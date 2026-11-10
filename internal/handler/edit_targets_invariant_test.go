@@ -156,7 +156,7 @@ func testFields(typeName string) []string {
 		"EksaKubernetesCluster": {"kubernetesVersion", "cni", "environment", "clusterType"},
 		"EtcdBackup":            {"enabled", "schedule", "location", "retentionDays"},
 		"IdracSettings":         {"firmwareVersion", "sshEnabled"},
-		"NetworkDevice":         {"manufacturer", "model", "serial", "role"},
+		"NetworkDevice":         {"manufacturer", "model", "serialNumber", "role"},
 		"Rack":                  {"name", "uHeight"},
 		"S3Sync":                {"enabled"},
 		"Server":                {"hostname", "manufacturer", "model", "serviceTag"},

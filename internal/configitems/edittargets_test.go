@@ -93,7 +93,7 @@ func fixtureFields(typeName string) []string {
 		"IdracSettings":              {"firmwareVersion", "firmwareRepository", "sshEnabled", "ipmiEnabled", "lockdownModeEnabled", "osToIdracPassThroughEnabled", "usbManagementPortEnabled", "dhcpEnabled", "racadmEnabled"},
 		"KubernetesNode":             nil,
 		"NetworkAdapter":             nil,
-		"NetworkDevice":              {"manufacturer", "model", "serial", "role", "macAddress", "rackPosition", "platform", "face", "vcPosition", "vcPriority"},
+		"NetworkDevice":              {"manufacturer", "model", "serialNumber", "role", "macAddress", "rackPosition", "platform", "face", "vcPosition", "vcPriority"},
 		"NetworkInterface":           nil,
 		"Rack":                       {"name", "uHeight"},
 		"S3Sync":                     {"enabled"},

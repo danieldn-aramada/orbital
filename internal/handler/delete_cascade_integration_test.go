@@ -277,6 +277,102 @@ func TestCascade_DataCenterDeleteRemovesNetworkDevices(t *testing.T) {
 	}
 }
 
+const (
+	cascadePeerSwitch = crNS + ":netdev-peer-cascade"
+	cascadeSwitchPort = crNS + ":port-switch-cascade"
+	cascadeServerPort = crNS + ":port-server-cascade"
+)
+
+// seedSwitchFixture hangs, off the cascade fixture's switch, one of each thing a
+// switch delete reaches: a port the switch OWNS, a server port CABLED to it,
+// and a virtual-chassis PEER. Only the first is the switch's to delete.
+func seedSwitchFixture(t *testing.T) {
+	t.Helper()
+	crGQL(t, `mutation($i:[AddNetworkDeviceInput!]!){ addNetworkDevice(input:$i, upsert:true){ numUids } }`,
+		map[string]any{"i": []any{map[string]any{
+			"namespace": crNS, "orbId": cascadePeerSwitch, "name": "cascade peer switch", "version": 1,
+			"dataCenter":     map[string]any{"orbId": cascadeDC},
+			"virtualChassis": map[string]any{"orbId": cascadeNetDev}}}})
+	crGQL(t, `mutation($i:[AddNetworkInterfaceInput!]!){ addNetworkInterface(input:$i, upsert:true){ numUids } }`,
+		map[string]any{"i": []any{
+			map[string]any{
+				"namespace": crNS, "orbId": cascadeSwitchPort, "name": "cascade switch port", "version": 1,
+				"networkDevice": map[string]any{"orbId": cascadeNetDev}},
+			map[string]any{
+				"namespace": crNS, "orbId": cascadeServerPort, "name": "cascade server port", "version": 1,
+				"server":                 map[string]any{"orbId": cascadeServer},
+				"connectedNetworkDevice": map[string]any{"orbId": cascadeNetDev}},
+		}})
+	t.Cleanup(func() {
+		deleteEntity(t, "NetworkInterface", cascadeServerPort)
+		deleteEntity(t, "NetworkInterface", cascadeSwitchPort)
+		deleteEntity(t, "NetworkDevice", cascadePeerSwitch)
+	})
+}
+
+// The SHIPPED NetworkDevice page deletes the switch's own ports and nothing it
+// is merely connected to.
+//
+// Its subgraph once listed virtualChassisMembers and
+// networkInterfaceConnectedNetworkDevice, so deleting a colo switch took its
+// VC peer and the 35-36 server ports cabled to it. Both are links, not
+// children: a cabled port belongs to its server, and a peer is a switch in its
+// own right.
+func TestCascade_ShippedNetworkDevicePageSparesCablingAndPeers(t *testing.T) {
+	h, _ := deleteFixture(t)
+	seedCascadeFixture(t)
+	seedSwitchFixture(t)
+
+	plan, err := h.planFor(context.Background(), "NetworkDevice", cascadeNetDev)
+	if err != nil {
+		t.Fatalf("plan: %v", err)
+	}
+	// What will be deleted is COUNTED per type, never named (delete_cascade.go);
+	// what survives is named.
+	dying := map[string]int{}
+	for _, g := range plan.preview.Groups {
+		dying[g.Label] = g.Count
+	}
+	var preserved string
+	for _, g := range plan.preview.Preserved {
+		preserved += g.Label + ": " + strings.Join(g.Items, ",") + "; "
+	}
+	if rec := deleteReq(t, h, "NetworkDevice", cascadeNetDev, "", "admin"); rec.Code != http.StatusOK {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+
+	t.Run("a server port cabled to the switch survives, its cable edge cleared", func(t *testing.T) {
+		if !exists(t, "NetworkInterface", cascadeServerPort) {
+			t.Fatal("deleting a switch deleted a server's port; the port belongs to the server")
+		}
+		assertNoEdgeTo(t, "NetworkInterface", cascadeServerPort, "connectedNetworkDevice")
+	})
+	t.Run("a virtual-chassis peer survives, its chassis edge cleared", func(t *testing.T) {
+		if !exists(t, "NetworkDevice", cascadePeerSwitch) {
+			t.Fatal("deleting a VC master deleted its peer switch")
+		}
+		assertNoEdgeTo(t, "NetworkDevice", cascadePeerSwitch, "virtualChassis")
+	})
+	t.Run("the preview names both as preserved, not deleted", func(t *testing.T) {
+		for _, name := range []string{"cascade server port", "cascade peer switch"} {
+			if !strings.Contains(preserved, name) {
+				t.Errorf("%q must be named as preserved; got %q", name, preserved)
+			}
+		}
+		if n := dying["Network Devices"]; n != 0 {
+			t.Errorf("the preview counts %d network device(s) to delete beyond the switch itself; want 0", n)
+		}
+	})
+	t.Run("the switch's own ports are deleted with it", func(t *testing.T) {
+		if exists(t, "NetworkInterface", cascadeSwitchPort) {
+			t.Error("the switch's own port survived; its orbId is built from the switch, so it cannot outlive it")
+		}
+		if n := dying["Network Interfaces"]; n != 1 {
+			t.Errorf("the preview counts %d network interface(s) to delete; want 1, the switch's own port", n)
+		}
+	})
+}
+
 // A shared IPAddress survives every delete that reaches it.
 //
 // The same edge used to have opposite answers depending on which page you

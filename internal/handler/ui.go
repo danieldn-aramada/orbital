@@ -824,13 +824,13 @@ func (h *UI) Schema(c echo.Context) error {
 		}
 	}
 	return h.render(c, "schema", page.Schema{
-		Base:      h.base(c),
-		PageTitle: "Schema",
-		Version:   version,
-		Checksum:  fmt.Sprintf("%x", sum[:6]),
-		SDL:       sdl,
-		Drift:     drift,
-		Orphans:   orphans,
+		Base:           h.base(c),
+		PageTitle:      "Schema",
+		ShippedVersion: version,
+		Checksum:       fmt.Sprintf("%x", sum[:6]),
+		SDL:            sdl,
+		Drift:          drift,
+		Orphans:        orphans,
 	})
 }
 

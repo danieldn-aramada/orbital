@@ -791,7 +791,7 @@ test('a row with NO name says so, instead of standing in a raw Orb ID', async ({
   await request.post('/graphql', {
     data: {
       query: `mutation { addNetworkDevice(input: [{ orbId: "${ORB}", namespace: "colo", version: 1,
-        serial: "E2ENONAME", dataCenter: { orbId: "colo:datacenter-colo-galleon" } }]) { numUids } }`,
+        serialNumber: "E2ENONAME", dataCenter: { orbId: "colo:datacenter-colo-galleon" } }]) { numUids } }`,
     },
   });
 

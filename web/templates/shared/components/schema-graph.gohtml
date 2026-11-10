@@ -1,0 +1,39 @@
+{{/*
+  The schema as a graph, on both apps' Schema pages. initSchemaPage (shared.js)
+  draws it from GET /api/v1/schema/graph — the response any other client draws
+  from, levels included, so nothing here walks the schema.
+
+  The legend swatches are also the graph's palette: Cytoscape paints a canvas
+  and cannot read CSS, so it reads their computed colours (main.scss).
+
+  Levels shape the layout only and are not called out: every relationship
+  line looks the same, whichever ones the layout ranked on.
+*/}}
+<article class="box" data-schema-graph data-testid="schema-graph">
+  <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
+    <p class="is-size-6 has-text-weight-semibold">Graph</p>
+    <button type="button" class="button is-small is-light" data-schema-graph-reset data-testid="schema-graph-reset" disabled>
+      <span class="icon"><i class="fa-solid fa-rotate-left"></i></span>
+      <span>Reset</span>
+    </button>
+  </div>
+  <div class="schema-graph-stage">
+    <div class="schema-graph-canvas" data-schema-graph-canvas>
+      <p class="is-size-7 has-text-grey">Loading…</p>
+    </div>
+    <div class="schema-graph-popup box" data-schema-graph-popup data-testid="schema-graph-popup" hidden>
+      <div class="schema-graph-popup-handle is-flex is-justify-content-space-between is-align-items-center mb-2" data-schema-graph-popup-handle>
+        <p class="is-size-7 has-text-weight-semibold" data-schema-graph-popup-title></p>
+        <button type="button" class="delete is-small" aria-label="Close" data-schema-graph-popup-close></button>
+      </div>
+      <pre class="sdl-code" data-schema-graph-popup-sdl></pre>
+    </div>
+  </div>
+  <p class="schema-graph-legend is-size-7 has-text-grey mt-3">
+    <span class="schema-graph-key is-type">type</span>
+    <span class="schema-graph-key is-interface">interface</span>
+    <span class="schema-graph-key is-relationship">relationship</span>
+    <span class="schema-graph-key is-implements">implements</span>
+    <span>Click a type to see its definition.</span>
+  </p>
+</article>

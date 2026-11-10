@@ -120,6 +120,15 @@ type ViewConfig struct {
 	// It matters MORE now that pageless types have no URL: without it there is
 	// no answer at all for an IPAddress.
 	CanonicalParent map[string][]CanonicalParentDecl `yaml:"canonicalParent,omitempty"`
+
+	// SchemaGraph shapes the Schema page's graph.
+	SchemaGraph SchemaGraphDecl `yaml:"schemaGraph,omitempty"`
+}
+
+// SchemaGraphDecl is the schema graph's presentation.
+type SchemaGraphDecl struct {
+	// Order is left to right: siblings follow this list, unlisted types after.
+	Order []string `yaml:"order,omitempty"`
 }
 
 // PageDecl is one page: a URL, a place in the menu, and a detail layout.
@@ -487,6 +496,10 @@ func MergeViewConfig(base, overlay ViewConfig) ViewConfig {
 	for k, v := range overlay.CanonicalParent {
 		out.CanonicalParent[k] = v
 	}
+	out.SchemaGraph = base.SchemaGraph
+	if len(overlay.SchemaGraph.Order) > 0 {
+		out.SchemaGraph = overlay.SchemaGraph
+	}
 	return out
 }
 
@@ -522,6 +535,13 @@ func (c ViewConfig) Validate(types map[string]TypeInfo, deployedVersion string) 
 		Pages:           map[string]PageDecl{},
 		Types:           map[string]TypeDecl{},
 		CanonicalParent: map[string][]CanonicalParentDecl{},
+	}
+	for _, t := range c.SchemaGraph.Order {
+		if _, ok := types[t]; ok || t == configItemInterface {
+			out.SchemaGraph.Order = append(out.SchemaGraph.Order, t)
+			continue
+		}
+		warn = append(warn, "schemaGraph.order: "+t+": no such type in the deployed schema; ignored")
 	}
 	// An INTERFACE is a legitimate key here even though introspection returns
 	// only the types that implement it: `ConfigItem` is where `orbId: label: Orb

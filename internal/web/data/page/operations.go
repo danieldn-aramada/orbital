@@ -74,13 +74,18 @@ type AuditLog struct {
 type Schema struct {
 	layout.Base
 	PageTitle string
-	// Version is what THIS BUILD ships (schema/VERSION), not what DGraph is
-	// running — orbital does not apply the schema, so the two can differ. Drift
-	// is what actually separates them; do not label Version as "active".
-	Version  string
-	Checksum string
-	SDL      string
-	Drift    []string
+	// ShippedVersion is what THIS BUILD ships (schema/VERSION), not what DGraph
+	// is running — orbital does not apply the schema, so the two can differ.
+	// Drift is what actually separates them; do not label it as "active".
+	//
+	// NOT `Version`: that name would shadow layout.Base's, which head.gohtml
+	// cache-busts every script with. The Schema page loaded its JS as
+	// `?v=v19` — served immutable for a year — so a browser kept a stale
+	// shared.js across every deploy until the schema version changed.
+	ShippedVersion string
+	Checksum       string
+	SDL            string
+	Drift          []string
 
 	// Orphans are types the graph still holds nodes for but the shipped schema
 	// no longer declares. Separate from Drift because it is a different claim:

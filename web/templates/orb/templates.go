@@ -60,7 +60,8 @@ func Map(fsys fs.FS) map[string]*template.Template {
 		"status":    parsePage(fsys, "status", page("templates/orb/pages/status.gohtml")),
 		"import":    parsePage(fsys, "import", page("templates/orb/pages/import.gohtml")),
 		"inventory": parsePage(fsys, "inventory", page("templates/orb/pages/inventory.gohtml")),
-		"schema":    parsePage(fsys, "schema", page("templates/orb/pages/schema.gohtml")),
+		"schema": parsePage(fsys, "schema", append(page("templates/orb/pages/schema.gohtml"),
+			"templates/shared/components/schema-graph.gohtml")),
 		// Orb's OWN single-data-centre page — distinct from the shared DataCenter
 		// detail, which moved to the generic renderer.
 		"datacenter": parsePage(fsys, "datacenter", page("templates/orb/pages/datacenter.gohtml")),

@@ -34,7 +34,11 @@ import (
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	cfg, err := config.New()
+	if err != nil {
+		log.Fatalf("config: %v", err)
+	}
+	slog.SetDefault(slog.New(cfg.LogHandler(os.Stdout)))
 	slog.Info("orbital starting", "version", version.Version)
 	// FIPS-140 runtime enforcement (GODEBUG=fips140=on/only) restricts crypto to
 	// FIPS-approved algorithms. Log it prominently: fips140=only is currently
@@ -51,11 +55,6 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-
-	cfg, err := config.New()
-	if err != nil {
-		log.Fatalf("config: %v", err)
-	}
 
 	docs.SwaggerInfo.BasePath = cfg.BasePath
 	docs.SwaggerInfo.Version = version.Version

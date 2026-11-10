@@ -1,6 +1,7 @@
 package configitems
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -203,6 +204,99 @@ func TestEveryNonNullEdge_HasAnInverse(t *testing.T) {
 	}
 }
 
+// A subgraph member is DELETED with the page's root, so it must be something
+// that cannot outlive that root: it holds a non-null edge back to its parent,
+// or its orbId is built from that edge. A member with neither is a peer the
+// page merely links to, and declaring it deletes an independent entity.
+//
+// It has happened twice. Server.oobIP (2026-10-19) destroyed a shareable IP
+// with its server. NetworkDevice's virtualChassisMembers and
+// networkInterfaceConnectedNetworkDevice (2026-11-08) took every VC peer and
+// every cabled server port with a switch. Both were display-era leftovers from
+// before 2026-10-14, when the subgraph also decided placement.
+//
+// Necessary, not sufficient: passing does not make an edge ownership (`!` means
+// non-null and nothing more, DGRAPH.md). It only rules out declaring a peer.
+// Only the LAST hop of a path dies, so only the last hop is checked.
+func TestEverySubgraphMember_DependsOnItsParent(t *testing.T) {
+	src, err := os.ReadFile("../../schema/schema.graphql")
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+	parseSchemaTypes(string(src))
+	inverse := InverseEdges(string(src))
+
+	// DGraph declares an interface's field once, on the interface, so a lookup
+	// that stops at the type misses `KubernetesCluster.nodes` on an implementor.
+	onTypeOrInterfaces := func(typeName string, look func(string) bool) bool {
+		if look(typeName) {
+			return true
+		}
+		for _, in := range schemaImplements[typeName] {
+			if look(in) {
+				return true
+			}
+		}
+		return false
+	}
+	str := func(m map[string]string, typeName, field string) string {
+		var out string
+		onTypeOrInterfaces(typeName, func(n string) bool { out = m[n+"."+field]; return out != "" })
+		return out
+	}
+
+	lines := strings.Split(string(src), "\n")
+	typeRe := regexp.MustCompile(`^type\s+(\w+)\s`)
+	idFrom := map[string]map[string]bool{}
+	for i, line := range lines {
+		m := typeRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		for _, raw := range annotationValues(docstringAbove(lines, i), OrbIDPatternAnnotation) {
+			p, err := ParseOrbIDPattern(raw)
+			if err != nil || p.External {
+				continue
+			}
+			for _, path := range p.Paths() {
+				if idFrom[m[1]] == nil {
+					idFrom[m[1]] = map[string]bool{}
+				}
+				idFrom[m[1]][strings.SplitN(path, ".", 2)[0]] = true
+			}
+		}
+	}
+
+	cfg, _, _, err := LoadViewConfig("../../config/views.yaml", "")
+	if err != nil {
+		t.Fatalf("load views config: %v", err)
+	}
+	for _, root := range sortedKeys(cfg.Pages) {
+		for _, m := range cfg.Pages[root].Subgraph {
+			hops := strings.Split(m.Path, ".")
+			parent := root
+			for _, hop := range hops[:len(hops)-1] {
+				parent = str(fieldTargets, parent, hop)
+			}
+			field := hops[len(hops)-1]
+			child := str(fieldTargets, parent, field)
+			back := str(inverse, parent, field)
+			if back == "" {
+				t.Errorf("views: %s subgraph member %q — %s.%s has no @hasInverse partner, so nothing on the %s "+
+					"points back at the %s it would be deleted with", root, m.Path, parent, field, child, parent)
+				continue
+			}
+			nonNull := onTypeOrInterfaces(child, func(n string) bool { return nonNullFields[n+"."+back] })
+			if !nonNull && !idFrom[child][back] {
+				t.Errorf("views: %s subgraph member %q — a %s can outlive its %s: %s.%s is nullable and no "+
+					"orbIdPattern of %s is built from it. A subgraph member is DELETED with the page's root; "+
+					"a peer belongs outside the subgraph, where it still gets a tab",
+					root, m.Path, child, parent, child, back, child)
+			}
+		}
+	}
+}
+
 // typesFromSDL builds a minimal TypeInfo — field names, their targets and
 // their nullability — without a running DGraph, so this stays in
 // `make test-unit`.
@@ -375,4 +469,97 @@ func docstringAbove(lines []string, i int) string {
 		}
 	}
 	return ""
+}
+
+// schemaStyleViolations reports where an SDL breaks the schema's house style:
+//   - every type, interface, enum and field carries a description with prose,
+//     not only annotations — descriptions are what introspection and GraphiQL
+//     show a consumer;
+//   - no `#` comment outside the file's leading header — a `#` sits where a
+//     description belongs and is invisible to every consumer;
+//   - no line starting with a directive — the parsers here are line-based, so a
+//     formatter wrapping `@hasInverse` onto its own line would silently drop
+//     the pair.
+func schemaStyleViolations(src string) []string {
+	lines := strings.Split(src, "\n")
+	defRe := regexp.MustCompile(`^(type|interface|enum)\s+(\w+)`)
+	fieldRe := regexp.MustCompile(`^\s+(\w+)\s*:`)
+	isAnnotation := func(t string) bool {
+		return t == JSONStringAnnotation || strings.HasPrefix(t, OrbIDSuffixAnnotation) || strings.HasPrefix(t, OrbIDPatternAnnotation)
+	}
+	described := func(i int) bool {
+		for _, l := range strings.Split(docstringAbove(lines, i), "\n") {
+			if t := strings.TrimSpace(l); t != "" && !isAnnotation(t) {
+				return true
+			}
+		}
+		return false
+	}
+
+	var out []string
+	header, inDoc, inEnum := true, false, false
+	for i, line := range lines {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "#") && header {
+			continue
+		}
+		if t != "" {
+			header = false
+		}
+		if t == `"""` {
+			inDoc = !inDoc
+			continue
+		}
+		if inDoc || (strings.HasPrefix(t, `"""`) && strings.HasSuffix(t, `"""`) && len(t) > 6) {
+			continue
+		}
+		if strings.Contains(line, "#") {
+			out = append(out, fmt.Sprintf("line %d: a # comment outside the header; write a description instead", i+1))
+		}
+		if strings.HasPrefix(t, "@") {
+			out = append(out, fmt.Sprintf("line %d: a directive on its own line; keep it on its field's line", i+1))
+		}
+		if m := defRe.FindStringSubmatch(line); m != nil {
+			inEnum = m[1] == "enum"
+			if !described(i) {
+				out = append(out, fmt.Sprintf("line %d: %s %s has no description", i+1, m[1], m[2]))
+			}
+			continue
+		}
+		if t == "}" {
+			inEnum = false
+			continue
+		}
+		if m := fieldRe.FindStringSubmatch(line); m != nil && !inEnum && !described(i) {
+			out = append(out, fmt.Sprintf("line %d: field %s has no description", i+1, m[1]))
+		}
+	}
+	return out
+}
+
+func TestSchemaStyle(t *testing.T) {
+	src, err := os.ReadFile("../../schema/schema.graphql")
+	if err != nil {
+		t.Fatalf("read schema: %v", err)
+	}
+	t.Run("the shipped schema follows it", func(t *testing.T) {
+		for _, v := range schemaStyleViolations(string(src)) {
+			t.Error(v)
+		}
+	})
+
+	for _, tc := range []struct{ name, sdl, want string }{
+		{"a type without a description is refused", "type A {\n  \"\"\"\n  Described.\n  \"\"\"\n  f: String\n}\n", "type A has no description"},
+		{"an annotation alone is not a description", "\"\"\"\norbIdPattern: {name}\n\"\"\"\ntype A {\n  \"\"\"\n  Described.\n  \"\"\"\n  f: String\n}\n", "type A has no description"},
+		{"a field without a description is refused", "\"\"\"\nAn A.\n\"\"\"\ntype A {\n  f: String\n}\n", "field f has no description"},
+		{"a # comment where a description belongs is refused", "\"\"\"\nAn A.\n\"\"\"\ntype A {\n  # Explained here instead.\n  \"\"\"\n  Described.\n  \"\"\"\n  f: String\n}\n", "a # comment outside the header"},
+		{"a directive wrapped onto its own line is refused", "\"\"\"\nAn A.\n\"\"\"\ntype A {\n  \"\"\"\n  Described.\n  \"\"\"\n  f: [A]\n    @hasInverse(field: g)\n}\n", "a directive on its own line"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := strings.Join(schemaStyleViolations(tc.sdl), "; ")
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("want a violation containing %q, got %q", tc.want, got)
+			}
+		})
+	}
 }

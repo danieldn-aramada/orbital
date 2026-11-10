@@ -93,7 +93,7 @@ func TestOrbIDTypeFor_DefaultsToLowercaseNotKebab(t *testing.T) {
 func TestConstructOrbID_FirstResolvablePatternWins(t *testing.T) {
 	patterns := mustParse(t,
 		"{type}-{server.serviceTag}-{name}",
-		"{type}-{networkDevice.serial}-{name}")
+		"{type}-{networkDevice.serialNumber}-{name}")
 
 	t.Run("server-owned", func(t *testing.T) {
 		got, err := ConstructOrbID("colo", "network-interface", patterns, fromMap(map[string]string{
@@ -110,8 +110,8 @@ func TestConstructOrbID_FirstResolvablePatternWins(t *testing.T) {
 
 	t.Run("device-owned falls through to the second pattern", func(t *testing.T) {
 		got, err := ConstructOrbID("colo", "network-interface", patterns, fromMap(map[string]string{
-			"networkDevice.serial": "JX3623130496",
-			"name":                 "ge-0/0/0",
+			"networkDevice.serialNumber": "JX3623130496",
+			"name":                       "ge-0/0/0",
 		}))
 		if err != nil {
 			t.Fatalf("construct: %v", err)
@@ -185,8 +185,8 @@ func TestShippedPatterns_ReproduceStoredOrbIDs(t *testing.T) {
 			map[string]string{"storageController.server.serviceTag": "JT36XB4", "name": "VirtualDisk-2"}},
 		{"NetworkAdapter", "network-adapter", "{type}-{server.serviceTag}-{name}", "colo", "colo:network-adapter-BFRHDX3-NIC.Slot.1",
 			map[string]string{"server.serviceTag": "BFRHDX3", "name": "NIC.Slot.1"}},
-		{"NetworkDevice", "network-device", "{type}-{serial}", "colo", "colo:network-device-JX3623130496",
-			map[string]string{"serial": "JX3623130496"}},
+		{"NetworkDevice", "network-device", "{type}-{serialNumber}", "colo", "colo:network-device-JX3623130496",
+			map[string]string{"serialNumber": "JX3623130496"}},
 		{"NetworkInterface", "network-interface", "{type}-{server.serviceTag}-{name}", "colo", "colo:network-interface-BMP6K74-NIC.Integrated.1-1",
 			map[string]string{"server.serviceTag": "BMP6K74", "name": "NIC.Integrated.1-1"}},
 		{"EksaKubernetesCluster", "eksa-kubernetes-cluster", "{name}", "alaska-dot-cruiser", "alaska-dot-cruiser:adot-m",

@@ -207,6 +207,18 @@ func (s *Server) inventoryPage(c echo.Context) error {
 	})
 }
 
+// getSchemaGraph serves orb's imported schema as a graph — orbital's handler,
+// pointed at orb's DGraph. Declared here so orb's swagger documents it.
+//
+// @Summary     Schema graph
+// @Description The GraphQL schema in orb's local DGraph, as a graph: one node per ConfigItem type or interface, one edge per relationship. Same shape as orbital's `GET /api/v1/schema/graph` — each node carries its `level`, and the one edge placing a type on its level has `setsLevel: true`.
+// @Tags        schema
+// @Produce     json
+// @Success     200 {object} configitems.SchemaGraph
+// @Failure     503 {object} map[string]string "The imported schema could not be read"
+// @Router      /api/v1/schema/graph [get]
+func (s *Server) getSchemaGraph(c echo.Context) error { return s.schemaGraph.Get(c) }
+
 // schemaPage queries orb's local DGraph for the active GraphQL schema and
 // renders it. Single source of truth — if DGraph was wiped, the page
 // correctly shows "no schema" instead of a stale sidecar copy.

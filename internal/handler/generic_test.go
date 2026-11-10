@@ -515,7 +515,7 @@ func TestBuildCreateForm_AmbiguousIdentityOffersNoForm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	two, err := configitems.ParseOrbIDPattern("{type}-{networkDevice.serial}-{name}")
+	two, err := configitems.ParseOrbIDPattern("{type}-{networkDevice.serialNumber}-{name}")
 	if err != nil {
 		t.Fatal(err)
 	}

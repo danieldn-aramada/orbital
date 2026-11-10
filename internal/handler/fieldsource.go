@@ -251,6 +251,14 @@ func (s *SharedFields) InverseOf(ctx context.Context, typeName, field string) st
 // CurrentViewsHash is ViewsHash after a rate-limited re-check — what a WRITE
 // compares against, where the cached value would accept a page composed before
 // the views moved.
+// SchemaGraph is the deployed schema as nodes and edges, levels included.
+func (s *SharedFields) SchemaGraph(ctx context.Context) (configitems.SchemaGraph, error) {
+	if s.st.resolver == nil {
+		return configitems.SchemaGraph{}, errNoFieldSource
+	}
+	return s.st.resolver.SchemaGraph(ctx)
+}
+
 func (s *SharedFields) CurrentViewsHash(ctx context.Context) string {
 	if s.st.resolver == nil {
 		return ""

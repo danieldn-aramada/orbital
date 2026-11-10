@@ -10,9 +10,10 @@
 
       <div class="tab-content">
         {{if .SDL}}
+        {{template "schema-graph.gohtml" .}}
         <article class="box">
           <p class="is-size-6 has-text-weight-semibold mb-3">Schema Definition Language (SDL)</p>
-          <pre style="font-size: 0.78rem; max-height: 600px; overflow-y: auto;">{{.SDL}}</pre>
+          <pre class="sdl-code" data-schema-sdl style="font-size: 0.78rem; max-height: 600px; overflow-y: auto;">{{.SDL}}</pre>
         </article>
         {{else}}
         <div class="notification is-light mt-4" style="max-width: 560px;">

@@ -46,7 +46,7 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
   in JS.
 
 - **`createOnly: true` is the third field axis: settable at CREATE, frozen after.** *(2026-10-13.)* For
-  every orbId-source field — `Server.serviceTag`, `DataCenter.name`, `Rack.name`, `NetworkDevice.serial`,
+  every orbId-source field — `Server.serviceTag`, `DataCenter.name`, `Rack.name`, `NetworkDevice.serialNumber`,
   `IPAddress.address`. orbIds are immutable, so editing one later leaves the entity disagreeing with its
   own id, and a scan rebuilding `server-<serviceTag>` then mints a SECOND node for the same machine.
   ⚠️ **Do NOT derive it from the orbIdPattern** — that would silently override an `editable: true` someone
@@ -91,6 +91,7 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 - **The schema keeps only data annotations (`jsonString`, `orbIdSuffix:`); everything about a page lives in views.yaml.** *(2026-10-04.)* DGraph rejects unknown directives, so view config in docstrings was a smuggle.
 - **A page DECLARES its subgraph (`pages.<T>.subgraph:`): what it shows, edits, audits and deletes.** *(Settled 2026-10-07.)* Nothing is derived from the schema; `!` means non-null, not ownership. Unlisted = not in it, including intermediate hops.
 - **Delete is literal: the root plus its declared paths, never another page's.** Survivors' edges are cleared (from `@hasInverse`); a survivor left with a broken non-null edge is shown as **orphaned**, and the delete proceeds.
+- **A subgraph member must DEPEND on its parent: a non-null edge back, or an `orbIdPattern` built from that edge.** *(2026-11-08.)* Membership is delete scope, so declaring a peer deletes an independent entity — it happened with `Server.oobIP` (below) and with a switch taking its cabled server NICs and VC peers. A rule against peers, not a claim that `!` is ownership. Pinned by `TestEverySubgraphMember_DependsOnItsParent` (shipped file only; overlays are not checked).
 - **Delete lives on the page URL: `DELETE /{slug}/{orbId}`, preview at `.../delete-preview`.** UI-only, not `/api/v1`, not in swagger; API clients delete via `/graphql`. Auth is applied explicitly in `server.go` — the root group has none.
 - **VOCABULARY: a detail page has `Attributes`, `Metadata`, `Relationships`.** *(2026-10-15.)* This is **DGraph's own conceptual vocabulary**, not a UI invention — its overview states the model as "nodes and relationships", with "attributes that describe [a node's] properties", and uses "edge" nowhere. Its glossary defines an edge as the MENTAL PICTURE ("bubbles connected by lines") and a relationship as "a named, directed link relating one node to another" — the latter is what `Server.rack` is, so "relationship" is the more precise of DGraph's two terms, not merely the friendlier one. It is also the CMDB pair (orbital calls itself a CMDB) and CLAUDE.md's own wording. Not "Fields" — in GraphQL a relationship IS a field, so a box excluding them cannot be called Fields. Not "Connections" — already a tab label on NetworkDevice. The published view field is `relationships`; `data-testid="generic-fields"` stays, a test handle rather than copy.
   ⚠️ An earlier draft of this entry claimed "edge" was DGraph's word and "relationship" the operator's. That is backwards and was corrected 2026-10-15 against `docs.dgraph.io` — the storage layer and the UI agree; neither is accommodating the other.
@@ -190,6 +191,13 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 - **Go template `range` does not propagate assignments outward** — compute aggregates server-side.
 - **JS module cache-busting lives in `head.gohtml`'s import map; every cross-file import needs an entry.** `TestImportMapCoversAllModuleImports` enforces it.
 - **Vendor libraries live in named subdirectories of `web/shared/static/`**, browser files only.
+- **The schema graph: Cytoscape.js draws it, d3-hierarchy lays it out, highlight.js colours the SDL.** *(2026-11-08.)* Open-source licences only; dagre was removed (it orders a tree's siblings arbitrarily, with no way to fix it) and ELK deferred (EPL-2.0, 477 KB). Evidence: `.local/graph-viz-research/`.
+  - **Never compute levels or order in JS.** `GET /api/v1/schema/graph` carries both; the page lays out the level-setting edges as a tree (DGRAPH.md § Schema graph levels).
+  - **Left-to-right order is `schemaGraph.order` in `views.yaml`.** A listed type always sorts before an unlisted one, so to move a type right, list what should sit to its left.
+  - **Colours live in `main.scss` only:** the canvas reads them from the legend swatches (`schemaGraphPalette`). Do not hardcode colours in the JS.
+  - **Every relationship line looks the same; levels are never named in the UI.** A level is a drawing preference, not a property in DGraph. *(User call.)*
+  - **Clicking a type opens a draggable popup with its definition; do NOT scroll the page to the SDL** — too jarring. *(User call.)*
+  - ⚠️ **A Bulma `.box` beats the `hidden` attribute** (`display: block`), so the popup needs `.schema-graph-popup[hidden] { display: none }`. Assert computed display in checks, not `hidden === true`.
 
 ### Copy and visual style
 

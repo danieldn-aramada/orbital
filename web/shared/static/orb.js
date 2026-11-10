@@ -6,6 +6,7 @@ import {
   INVENTORY_CACHE_KEY,
   initListPages,
   initGenericTable,
+  initSchemaPage,
   clearAllTabState,
 } from './shared.js'
 
@@ -247,6 +248,9 @@ initListPages()
 // because the four orb specs that exercise it skipped themselves whenever
 // orb's graph was empty, which `make up` always left it.
 initGenericTable()
+
+// The Schema page: SDL highlighting and the graph — shared with orbital.
+initSchemaPage()
 
 // The generic detail page's tab strip, on a DIRECT navigation. A fragment
 // opened as a tab on a list page is wired by the htmx:afterSettle handler in

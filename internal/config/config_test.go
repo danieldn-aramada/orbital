@@ -201,3 +201,27 @@ func TestAPIAuthResolution_NonBooleanIsRefused(t *testing.T) {
 		t.Fatal("expected an error for a non-boolean ORBITAL_API_AUTH_ENABLED, got nil")
 	}
 }
+
+// A misspelt log setting must stop startup, not quietly run at a default.
+func TestLogSettings_UnknownValuesAreRefused(t *testing.T) {
+	for _, tc := range []struct {
+		name, level, format string
+		wantErr             bool
+	}{
+		{"unset uses the defaults", "", "", false},
+		{"known values are accepted", "debug", "text", false},
+		{"an unknown format is refused", "info", "jsn", true},
+		{"format is case-sensitive", "info", "JSON", true},
+		{"an unknown level is refused", "verbose", "json", true},
+		{"level is case-sensitive", "INFO", "json", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("ORBITAL_SESSION_HMAC_KEY", "test-hmac-key-not-the-placeholder")
+			t.Setenv("ORBITAL_LOG_LEVEL", tc.level)
+			t.Setenv("ORBITAL_LOG_FORMAT", tc.format)
+			if _, err := New(); (err != nil) != tc.wantErr {
+				t.Errorf("New() error = %v, wantErr %v", err, tc.wantErr)
+			}
+		})
+	}
+}

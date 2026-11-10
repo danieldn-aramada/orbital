@@ -23,9 +23,13 @@ curl -s -X POST $ORBITAL_URL/graphql -H "Authorization: Bearer $TOKEN" -H "Conte
 
 ## Schema
 
-Example visual reference. For complete schema, see [schema.graphql](/schema/schema.graphql).
+See it drawn on orbital's **Schema** page (`$ORBITAL_URL/schema`): every ConfigItem type on its level, generated from the schema DGraph is running. The source is [schema.graphql](/schema/schema.graphql).
 
-<p align="center"><img src="example-schema.png"/></p>
+To draw it yourself, `GET /api/v1/schema/graph` returns the same graph as JSON. Each node carries its `level`, and the one edge placing a type on that level has `setsLevel: true`:
+
+```bash
+curl -s $ORBITAL_URL/api/v1/schema/graph -H "Authorization: Bearer $TOKEN" | jq '.nodes[] | {id, level}'
+```
 
 ## Data centers
 
