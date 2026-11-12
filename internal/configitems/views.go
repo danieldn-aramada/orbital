@@ -509,17 +509,14 @@ func displayScalars(info TypeInfo, ifaceFields []string, ignore map[string]bool)
 // every hand-written detail page showed them. Interface fields outside this
 // list are appended, so adding one to the ConfigItem interface surfaces it
 // without a code change here.
-var metaOrder = []string{"namespace", "orbId", "version", "createdBy", "createdAt", "updatedAt", "updatedBy"}
+var metaOrder = []string{"name", "namespace", "orbId", "version", "createdBy", "createdAt", "updatedAt", "updatedBy"}
 
 // metaFields returns the ConfigItem interface fields a detail page shows, in
 // display order.
-//
-// `name` is excluded: it is the page's heading, and repeating it as a row is
-// the kind of duplication that makes a provenance box look like filler.
 func metaFields(ifaceFields []string) []string {
 	have := make(map[string]bool, len(ifaceFields))
 	for _, f := range ifaceFields {
-		if f != "name" && f != "id" {
+		if f != "id" {
 			have[f] = true
 		}
 	}

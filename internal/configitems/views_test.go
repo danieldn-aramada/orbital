@@ -35,7 +35,7 @@ func TestMetaFields(t *testing.T) {
 		{
 			name:  "canonical ConfigItem interface, in display order",
 			iface: []string{"id", "namespace", "orbId", "name", "createdBy", "createdAt", "updatedBy", "updatedAt", "version"},
-			want:  []string{"namespace", "orbId", "version", "createdBy", "createdAt", "updatedAt", "updatedBy"},
+			want:  []string{"name", "namespace", "orbId", "version", "createdBy", "createdAt", "updatedAt", "updatedBy"},
 		},
 		{
 			// A field added to the interface must appear without a code change

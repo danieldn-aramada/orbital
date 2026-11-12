@@ -517,6 +517,7 @@ func (g *GenericRenderer) Detail(c echo.Context) error {
 	}
 
 	data.DomID = SafeDomID(orbID)
+	data.NaturalKey = naturalKeyOf(orbID, v.OrbIDType)
 	data.Entity = stringifyRow(entity)
 	if n, ok := entity["name"].(string); ok && n != "" {
 		data.PageTitle = n

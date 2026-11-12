@@ -99,10 +99,12 @@ type GenericDetail struct {
 	// CanDelete gates the Delete button. Same permission as editing: the delete
 	// machinery itself (button attributes, global handler, modal) is already
 	// generic, so only the markup was missing.
-	CanDelete   bool
-	EditModal   component.EditModal
-	View        configitems.View
-	OrbID       string
+	CanDelete bool
+	EditModal component.EditModal
+	View      configitems.View
+	OrbID     string
+	// NaturalKey labels an unnamed entity's tab: `(unnamed) <key>`.
+	NaturalKey  string
 	Entity      map[string]any
 	Tabs        []GenericTab
 	Unavailable string

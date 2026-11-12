@@ -583,6 +583,7 @@ document.addEventListener('htmx:afterSettle', (evt) => {
   // Before the tab check: a page with no relationships has no strip, and its
   // audit section still needs wiring.
   initAuditSection(target.querySelector('[data-audit-section]'))
+  syncGenericTabLabel(target)
 
   const genericDetailTabs = target.querySelector('[id^="generic-detail-tabs-"]')
   if (genericDetailTabs) {
@@ -1317,6 +1318,39 @@ function touchGenericTab(slug, orbId) {
   localStorage.genericTabs = JSON.stringify(tabs)
 }
 
+function relabelGenericTab(slug, orbId, label) {
+  const key = genericTabKey(slug, orbId)
+  const tabs = readGenericTabs()
+  const hit = tabs.find(t => genericTabKey(t.slug, t.orbId) === key)
+  if (!hit || hit.label === label) return
+  hit.label = label
+  localStorage.genericTabs = JSON.stringify(tabs)
+}
+
+// syncGenericTabLabel makes a detail tab's label, its saved label and its list
+// row show the name the fragment just loaded — the name changes on edit.
+function syncGenericTabLabel(panel) {
+  const frag = panel.querySelector('[data-natural-key]')
+  const tabLink = document.querySelector(`#tablist a[data-target="${panel.id}"]`)
+  if (!frag || !tabLink || !tabLink.dataset.orbId) return
+  const name = frag.dataset.entityName || ''
+  const label = name || unnamedLabel(frag.dataset.naturalKey)
+  tabLink.querySelector('.tab-label').textContent = label
+  relabelGenericTab(tabLink.dataset.slug, tabLink.dataset.orbId, label)
+
+  const el = document.getElementById('generic-table')
+  if (!el || !$.fn.dataTable.isDataTable(el)) return
+  const dt = $(el).DataTable()
+  dt.rows().every(function () {
+    const tr = this.node()
+    if (tr.dataset.orbId !== tabLink.dataset.orbId || !tr.cells[0]) return
+    if (tr.cells[0].textContent.trim() !== name) {
+      tr.cells[0].textContent = name
+      this.invalidate('dom')
+    }
+  })
+}
+
 export function deleteGenericTab(slug, orbId) {
   const tabs = readGenericTabs().filter(t => genericTabKey(t.slug, t.orbId) !== genericTabKey(slug, orbId))
   localStorage.genericTabs = JSON.stringify(tabs)
@@ -1397,7 +1431,7 @@ export function loadGenericTab(label, slug, orbId, activate = true) {
 
   $('#tablist').append(`<li class="tab">
     <a id="${tabId}" data-target="${contentId}" role="tab" aria-selected="false" tabindex="-1">
-      ${label}
+      <span class="tab-label"></span>
       <span class="pl-2">
         <button id="tab-close-generic-${domId}">
           <i class="fa-solid fa-xmark" style="font-size: 0.8em;"></i>
@@ -1409,9 +1443,11 @@ export function loadGenericTab(label, slug, orbId, activate = true) {
 
   const tabLink = document.getElementById(tabId)
   const tabContent = document.getElementById(contentId)
-  // Set as a property, not interpolated into the markup above: an orbId is
-  // caller-supplied and would otherwise need escaping to sit in an attribute.
+  // Set as properties, not interpolated into the markup above: a name or orbId
+  // is user-supplied, and in markup it would run as HTML.
+  tabLink.querySelector('.tab-label').textContent = label
   tabLink.dataset.orbId = orbId
+  tabLink.dataset.slug = slug
 
   // The SAME url the row links to. HX-Request makes the handler return the body
   // alone; there is no second endpoint that could drift from the page. Stashed

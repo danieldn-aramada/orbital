@@ -17,7 +17,7 @@ a tab. Its heading and breadcrumb lived here; both are redundant inside a tab,
 where the tab's own label is the heading and the strip is the way back.
 */}}
 {{define "generic-detail-content"}}
-      <div class="tab-content">
+      <div class="tab-content" data-entity-name="{{.PageTitle}}" data-natural-key="{{.NaturalKey}}">
         {{if .Unavailable}}
         <div class="notification is-warning is-light" data-testid="view-unavailable">
           <p class="has-text-weight-semibold mb-2">This page is unavailable.</p>
