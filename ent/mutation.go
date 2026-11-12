@@ -4970,6 +4970,7 @@ type AuditEventMutation struct {
 	event_category        *string
 	event_source          *string
 	acting_client         *string
+	actor_issuer          *string
 	source_ip_address     *string
 	request_id            *string
 	authorization_type    *string
@@ -5426,6 +5427,55 @@ func (m *AuditEventMutation) ResetActingClient() {
 	delete(m.clearedFields, auditevent.FieldActingClient)
 }
 
+// SetActorIssuer sets the "actor_issuer" field.
+func (m *AuditEventMutation) SetActorIssuer(s string) {
+	m.actor_issuer = &s
+}
+
+// ActorIssuer returns the value of the "actor_issuer" field in the mutation.
+func (m *AuditEventMutation) ActorIssuer() (r string, exists bool) {
+	v := m.actor_issuer
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActorIssuer returns the old "actor_issuer" field's value of the AuditEvent entity.
+// If the AuditEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditEventMutation) OldActorIssuer(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActorIssuer is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActorIssuer requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActorIssuer: %w", err)
+	}
+	return oldValue.ActorIssuer, nil
+}
+
+// ClearActorIssuer clears the value of the "actor_issuer" field.
+func (m *AuditEventMutation) ClearActorIssuer() {
+	m.actor_issuer = nil
+	m.clearedFields[auditevent.FieldActorIssuer] = struct{}{}
+}
+
+// ActorIssuerCleared returns if the "actor_issuer" field was cleared in this mutation.
+func (m *AuditEventMutation) ActorIssuerCleared() bool {
+	_, ok := m.clearedFields[auditevent.FieldActorIssuer]
+	return ok
+}
+
+// ResetActorIssuer resets all changes to the "actor_issuer" field.
+func (m *AuditEventMutation) ResetActorIssuer() {
+	m.actor_issuer = nil
+	delete(m.clearedFields, auditevent.FieldActorIssuer)
+}
+
 // SetSourceIPAddress sets the "source_ip_address" field.
 func (m *AuditEventMutation) SetSourceIPAddress(s string) {
 	m.source_ip_address = &s
@@ -5764,7 +5814,7 @@ func (m *AuditEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuditEventMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 12)
 	if m.operations != nil {
 		fields = append(fields, auditevent.FieldOperations)
 	}
@@ -5785,6 +5835,9 @@ func (m *AuditEventMutation) Fields() []string {
 	}
 	if m.acting_client != nil {
 		fields = append(fields, auditevent.FieldActingClient)
+	}
+	if m.actor_issuer != nil {
+		fields = append(fields, auditevent.FieldActorIssuer)
 	}
 	if m.source_ip_address != nil {
 		fields = append(fields, auditevent.FieldSourceIPAddress)
@@ -5820,6 +5873,8 @@ func (m *AuditEventMutation) Field(name string) (ent.Value, bool) {
 		return m.EventSource()
 	case auditevent.FieldActingClient:
 		return m.ActingClient()
+	case auditevent.FieldActorIssuer:
+		return m.ActorIssuer()
 	case auditevent.FieldSourceIPAddress:
 		return m.SourceIPAddress()
 	case auditevent.FieldRequestID:
@@ -5851,6 +5906,8 @@ func (m *AuditEventMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldEventSource(ctx)
 	case auditevent.FieldActingClient:
 		return m.OldActingClient(ctx)
+	case auditevent.FieldActorIssuer:
+		return m.OldActorIssuer(ctx)
 	case auditevent.FieldSourceIPAddress:
 		return m.OldSourceIPAddress(ctx)
 	case auditevent.FieldRequestID:
@@ -5916,6 +5973,13 @@ func (m *AuditEventMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetActingClient(v)
+		return nil
+	case auditevent.FieldActorIssuer:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActorIssuer(v)
 		return nil
 	case auditevent.FieldSourceIPAddress:
 		v, ok := value.(string)
@@ -5987,6 +6051,9 @@ func (m *AuditEventMutation) ClearedFields() []string {
 	if m.FieldCleared(auditevent.FieldActingClient) {
 		fields = append(fields, auditevent.FieldActingClient)
 	}
+	if m.FieldCleared(auditevent.FieldActorIssuer) {
+		fields = append(fields, auditevent.FieldActorIssuer)
+	}
 	if m.FieldCleared(auditevent.FieldSourceIPAddress) {
 		fields = append(fields, auditevent.FieldSourceIPAddress)
 	}
@@ -6024,6 +6091,9 @@ func (m *AuditEventMutation) ClearField(name string) error {
 		return nil
 	case auditevent.FieldActingClient:
 		m.ClearActingClient()
+		return nil
+	case auditevent.FieldActorIssuer:
+		m.ClearActorIssuer()
 		return nil
 	case auditevent.FieldSourceIPAddress:
 		m.ClearSourceIPAddress()
@@ -6065,6 +6135,9 @@ func (m *AuditEventMutation) ResetField(name string) error {
 		return nil
 	case auditevent.FieldActingClient:
 		m.ResetActingClient()
+		return nil
+	case auditevent.FieldActorIssuer:
+		m.ResetActorIssuer()
 		return nil
 	case auditevent.FieldSourceIPAddress:
 		m.ResetSourceIPAddress()

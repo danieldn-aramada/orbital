@@ -75,13 +75,13 @@ RFC 8252, the correct native-app pattern. It never called orbital's device endpo
 
 An **app-only** (client-credentials) caller carries a client identity
 (`azp`/`appid`) and no `email`. The in-pod cb-bundler is the worked example: it
-mints a token to call `/graphql` during publish. Such a caller gets no user row
-and `dev`-equivalent access at `RequireRole`.
+mints a token to call `/graphql` during publish. Such a caller gets no user row,
+and its role comes from its provider entry (see below).
 
 **Whether a caller is an app principal is a fact the verifier records, never
 something derived from its name.** `auth.MarkAppPrincipal` sets it on the request
 context and `auth.IsAppPrincipal` is the single definition of the question, used
-by both `ResolveUser` (skip provisioning) and `RequireRole` (grant the tier).
+by `ResolveUser` (skip provisioning). It grants nothing.
 `AppPrincipalPrefix` ("app:") is the **display label only** — it gives the audit
 record something to show when there is no email.
 
@@ -112,15 +112,31 @@ identity.
 **A deployment whose services authenticate with client credentials MUST list
 those clients**, or publish 401s. There is no wildcard and no default.
 
-**An app caller is `dev`-equivalent, and that is the whole of its authorization.**
-`RequireRole` grants dev to any app principal, so **listing a client in
-`ORBITAL_AUTH_PROVIDERS` grants it write access to everything a dev can write** —
-there is no per-client scoping. cb-bundler needs far less than that. Decided
-2026-09-22 to keep it and say so rather than build scoping nobody has asked for:
-the alternative is a role on the provider entry for app callers (the shape
-`delegatedAuthorization.role` already uses for user-bearing tokens), which is
-cheap to add when a second machine caller needs something narrower. **Treat the
-client list as a privilege grant, not an identity list.**
+**An app caller's role comes from its provider entry, and nothing else.** *(2026-11-11.)*
+The order is `delegatedAuthorization.role`, then the `roleMapping` match, then
+`defaultRole`, then 401. **Do NOT derive a role from the principal kind.** The
+2026-09-22 "app principal ⇒ dev" grant let `armada-firmware-svc`
+(`delegatedAuthorization: readonly`) call `POST /api/v1/restore`. Pinned by
+`TestServiceCaller_DelegatedReadonlyClientIsRefusedEveryWriteAndCanRead` and
+`TestServiceCaller_GetsExactlyTheRoleItsEntryConfiguresOrIsRefused`.
+
+**`principalType: "app"` declares that an entry's callers are services. Kubernetes
+ServiceAccount tokens use it.** *(2026-11-11.)*
+- **Declared app entries:** every caller through one is an app principal, whatever
+  its claims, named `app:<username claim>`.
+- **Other entries** keep the inference above (no `email` plus a client claim). It
+  now decides only "no user row".
+- **In-cluster services** send a projected SA token with a dedicated audience.
+  Orbital trusts each cluster's issuer through one app entry with `username` and
+  `groups` claims set to `sub`, and a strict `roleMapping` per SA.
+- **Precedent:** Apache Pulsar, Grafana (operator), Argo CD 3.6, Zot.
+- **No early revocation:** remove the mapping row, or let the token expire.
+- Pinned by the `TestAppEntry_*` tests.
+
+**Machines are never users.** *(2026-11-11.)* They are stateless and declared in
+config (the Argo CD/Backstage pattern). Making them user rows is the pattern behind
+documented Keycloak and GitLab CVEs. If orbital ever has to list or disable
+machines itself, add a separate service principal, not user rows.
 
 *This replaced `ORBITAL_APP_TOKEN_ALLOWED_APPIDS`, a global list of application
 ids on the removed single-issuer path. Its one lasting rule is kept here: "I have
@@ -484,7 +500,8 @@ this way — but there is no human behind it, so it must not land in the users t
 with a role. Detected as **carries a client identity (`azp`/`appid`) and no
 `email` claim**. Such a caller is marked an app principal by the verifier
 (`auth.MarkAppPrincipal`), gets `AppPrincipalPrefix + appid` as its **display**
-name, an empty email, and no provisioning.
+name, an empty email, no provisioning, and its provider entry's role. A
+`principalType: "app"` entry makes every caller through it an app principal.
 
 **The gate is the provider entry's `clientID`.** A token whose `azp` matches no
 entry is refused before any of this runs, so listing the client IS the

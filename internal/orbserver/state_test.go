@@ -63,7 +63,7 @@ func TestState_DoneTransition(t *testing.T) {
 func TestState_FailedTransition(t *testing.T) {
 	s := newImportState()
 	s.setRunning()
-	s.setFailed("pull: connection refused")
+	s.setFailed("v1", "pull: connection refused")
 	snap := s.snapshot()
 	if snap.Status != "failed" {
 		t.Errorf("Status: got %q, want %q", snap.Status, "failed")

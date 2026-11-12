@@ -310,10 +310,11 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 	ui.SetOCIConfig(ociConfigured, cfg.OCIRegistry, cfg.OCIRepo)
 	ui.SetExportDir(cfg.ExportDir)
 	ui.SetSchemaPath(cfg.SchemaPath)
-	// Users whose role comes from a provider's groups render read-only.
+	// Users whose role comes from a provider's groups render read-only. An app
+	// entry's mapping covers services, which are never users.
 	roleOwning := map[string]struct{}{}
 	for _, p := range cfg.AuthProviders {
-		if len(p.RoleMapping) > 0 {
+		if len(p.RoleMapping) > 0 && !p.IsApp() {
 			roleOwning[p.Issuer.URL] = struct{}{}
 		}
 	}
@@ -411,9 +412,10 @@ func New(cfg *config.Config, db *ent.Client, rawDB *sql.DB) (*Server, error) {
 				// with a roleMapping, that provider owns roles — so a session
 				// gets the same role a bearer token from the same identity would.
 				// Without this, one person from one provider ends up with two
-				// different roles depending on how they arrived.
+				// different roles depending on how they arrived. An app entry
+				// describes services, which never sign in.
 				for _, p := range cfg.AuthProviders {
-					if p.Issuer.URL != cfg.OIDCIssuerURL || len(p.RoleMapping) == 0 {
+					if p.Issuer.URL != cfg.OIDCIssuerURL || len(p.RoleMapping) == 0 || p.IsApp() {
 						continue
 					}
 					rules := make([]struct{ Group, Role string }, 0, len(p.RoleMapping))
@@ -762,6 +764,7 @@ func authProviderSpecs(cfg *config.Config) []auth.ProviderSpec {
 		s := auth.ProviderSpec{
 			IssuerURL:            p.Issuer.URL,
 			ClientID:             p.ClientID,
+			App:                  p.IsApp(),
 			Audiences:            p.Issuer.Audiences,
 			CertificateAuthority: p.Issuer.CertificateAuthority,
 			SelfClientID:         cfg.OIDCClientID,

@@ -191,3 +191,56 @@ func TestAuthProviders_DefaultRoleAlongsideRoleMappingIsTheFloor(t *testing.T) {
 		t.Errorf("both survived decode? defaultRole=%q rules=%d", a[0].DefaultRole, len(a[0].RoleMapping))
 	}
 }
+
+// Declared app principals: item 1 of the declared-app-principal acceptance list.
+
+func TestAuthProviders_PrincipalTypeAppIsAcceptedAndOmittedMeansUser(t *testing.T) {
+	const cfg = `[
+	  {"issuer":{"url":"https://oidc.cluster-a.example.com","audiences":["orbital"]},
+	   "principalType":"app",
+	   "claimMappings":{"username":{"claim":"sub"},"groups":{"claim":"sub"}},
+	   "roleMapping":[{"group":"system:serviceaccount:firmware:firmware-svc","role":"readonly"}]},
+	  {"issuer":{"url":"https://kc.example.com/realms/armada","audiences":["armada-orbital"]},
+	   "principalType":"user",
+	   "clientID":"aep-fleet-commander",
+	   "claimMappings":{"username":{"claim":"email"}},
+	   "delegatedAuthorization":{"role":"admin"}},
+	  {"issuer":{"url":"https://kc.example.com/realms/armada","audiences":["armada-orbital"]},
+	   "claimMappings":{"username":{"claim":"email"}},
+	   "defaultRole":"readonly"}
+	]`
+	var a AuthProviders
+	if err := a.Decode(cfg); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if err := a.Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	for i, want := range []bool{true, false, false} {
+		if got := a[i].IsApp(); got != want {
+			t.Errorf("provider %d (principalType %q): IsApp = %v, want %v", i, a[i].PrincipalType, got, want)
+		}
+	}
+}
+
+func TestAuthProviders_UnknownPrincipalTypeIsRefusedAtLoad(t *testing.T) {
+	// Every one of these is a plausible way to mean "app" or "service". Read as
+	// "user", each would provision its callers into the users table.
+	for _, v := range []string{"service", "App", "machine", "serviceAccount"} {
+		t.Run(v, func(t *testing.T) {
+			cfg := `[{"issuer":{"url":"https://a.example.com","audiences":["x"]},"principalType":"` + v + `",` +
+				`"claimMappings":{"username":{"claim":"sub"}},"defaultRole":"readonly"}]`
+			var a AuthProviders
+			err := a.Decode(cfg)
+			if err == nil {
+				err = a.Validate()
+			}
+			if err == nil {
+				t.Fatalf("principalType %q was accepted", v)
+			}
+			if !contains(err.Error(), "principalType must be user or app") {
+				t.Errorf("error does not name the problem: %v", err)
+			}
+		})
+	}
+}

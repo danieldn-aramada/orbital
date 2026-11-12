@@ -296,8 +296,8 @@ type FieldDecl struct {
 	//
 	// ⚠️ Not derived from the orbIdPattern, deliberately. Deriving it would
 	// silently override an `editable: true` someone wrote, and this file is
-	// emphatic that a refused flag is SAID rather than quietly cleared. The
-	// load-time warning names any identity field missing this.
+	// emphatic that a refused flag is SAID rather than quietly cleared.
+	// TestShippedViews_NoOrbIDSourceFieldIsEditable enforces it.
 	CreateOnly bool `yaml:"createOnly,omitempty"`
 
 	// CreateDefault pre-fills this field on the CREATE form. A suggestion a

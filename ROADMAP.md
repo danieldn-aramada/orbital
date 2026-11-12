@@ -75,6 +75,7 @@ selection, and the architecture design that became the SDD.*
 
 | | |
 |---|---|
+| **Apply the DGraph schema on deploy** | Rollouts don't apply `schema.graphql` or its migrations. Make the deploy do it (Helm hook + kustomize Job). → [`debt.md`](docs/planning/debt.md) |
 | **Spike 27 — Atlas Postgres migrations** | Versioned migrations; ends the crashloop-on-deploy class. → [`spike-27-atlas-migrations.md`](docs/spikes/spike-27-atlas-migrations.md) |
 | **Spike 23 — Audit existing tests** | Which tests guard real regressions vs which are theatre. |
 | **CLI authentication, redesigned** | `orbctl` login is Entra-locked and unused; decide between a public IdP client, orbital issuing its own credential, or personal access tokens. |

@@ -35,6 +35,10 @@ type AuthProvider struct {
 	ClientID      string        `json:"clientID,omitempty"`
 	ClaimMappings ClaimMappings `json:"claimMappings"`
 
+	// PrincipalType is "user" (default) or "app". Every caller through an app
+	// entry is an app principal: never a users-table row; role from this entry.
+	PrincipalType string `json:"principalType,omitempty"`
+
 	// Where this caller's role comes from. DefaultRole alone means orbital's
 	// users table owns it and this is what a NEW user is created with.
 	// RoleMapping alone means the provider's groups own it, re-derived at every
@@ -52,6 +56,15 @@ type AuthProvider struct {
 	RoleMapping            []RoleRule              `json:"roleMapping,omitempty"`
 	DelegatedAuthorization *DelegatedAuthorization `json:"delegatedAuthorization,omitempty"`
 }
+
+// PrincipalType values for AuthProvider.PrincipalType.
+const (
+	PrincipalTypeUser = "user"
+	PrincipalTypeApp  = "app"
+)
+
+// IsApp reports whether this entry declares every caller an app principal.
+func (p AuthProvider) IsApp() bool { return p.PrincipalType == PrincipalTypeApp }
 
 // DelegatedAuthorization marks a caller whose authorization happens upstream.
 // Every valid token from it receives Role, and NO user row is provisioned — the
@@ -179,6 +192,11 @@ func (a AuthProviders) Validate() error {
 		}
 		if p.ClaimMappings.Username.Claim == "" {
 			return fmt.Errorf("%s: claimMappings.username.claim is required", where)
+		}
+		switch p.PrincipalType {
+		case "", PrincipalTypeUser, PrincipalTypeApp:
+		default:
+			return fmt.Errorf("%s: principalType must be user or app, got %q", where, p.PrincipalType)
 		}
 
 		hasDefault, hasMapping := p.DefaultRole != "", len(p.RoleMapping) > 0

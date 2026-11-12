@@ -71,6 +71,7 @@ func providerKey(issuer, clientID string) string { return issuer + "\x00" + clie
 type provider struct {
 	issuer        string
 	clientID      string
+	app           bool
 	delegatedRole string
 	verifier      *gooidc.IDTokenVerifier
 	audiences     []string
@@ -93,6 +94,8 @@ type ProviderSpec struct {
 	IssuerURL string
 	// ClientID is the azp this entry matches; empty means any client of the issuer.
 	ClientID string
+	// App is config principalType "app": every caller is an app principal.
+	App bool
 	// DelegatedRole is set for a provider with delegatedAuthorization: every
 	// valid token gets this role and no user row is provisioned.
 	DelegatedRole        string
@@ -134,6 +137,7 @@ func NewProviderSet(ctx context.Context, specs []ProviderSpec, logger *slog.Logg
 		p := &provider{
 			issuer:        s.IssuerURL,
 			clientID:      s.ClientID,
+			app:           s.App,
 			delegatedRole: s.DelegatedRole,
 			selfClientID:  s.SelfClientID,
 			usernameClaim: s.UsernameClaim,
@@ -246,11 +250,25 @@ func (ps *ProviderSet) verify(c echo.Context, next echo.HandlerFunc, raw string)
 	c.Set("auth_issuer", p.issuer)
 	c.Set("is_authn", true)
 
+	// principalType "app": every caller is an app principal, named by its
+	// username claim (an SA token has no email or client claim to infer from).
+	if p.app {
+		name := claimString(claims[p.usernameClaim])
+		if name == "" {
+			ps.logger.Warn("bearer token rejected — username claim is absent",
+				"issuer", p.issuer, "claim", p.usernameClaim, "request.id", requestID(c))
+			return ps.deny(c, oauthErrInvalidToken, "token carries no usable identity", "no_usable_identity")
+		}
+		return ps.admitApp(c, next, p, claims, name)
+	}
+
 	// App principal: a client-credentials caller with no human behind it — the
 	// in-pod cb-bundler is the worked example. Valid, but not a user: it must
 	// not land in the users table with a role. Detected as "carries a client
 	// identity and no email" (email == "" && appID != ""), the test the removed
 	// single-issuer verifier applied, generalised across providers.
+	//
+	// An app principal's role comes from its entry alone; none means refused.
 	//
 	// This is not hypothetical. Keycloak creates a real user object for a
 	// service-enabled client, so `preferred_username` is populated while `email`
@@ -277,10 +295,7 @@ func (ps *ProviderSet) verify(c echo.Context, next echo.HandlerFunc, raw string)
 		appID = claimString(claims["appid"])
 	}
 	if claimString(claims["email"]) == "" && appID != "" {
-		MarkAppPrincipal(c)
-		c.Set("user_name", AppPrincipalPrefix+appID)
-		c.Set("user_email", "")
-		return next(c)
+		return ps.admitApp(c, next, p, claims, appID)
 	}
 
 	username := claimString(claims[p.usernameClaim])
@@ -338,6 +353,36 @@ func (ps *ProviderSet) verify(c echo.Context, next echo.HandlerFunc, raw string)
 		c.Set("provider_default_role", p.defaultRole)
 	}
 	return next(c)
+}
+
+// admitApp admits an app principal as `app:<name>` with its entry's role, or
+// refuses it; the name is set first so a refusal is attributed to it.
+func (ps *ProviderSet) admitApp(c echo.Context, next echo.HandlerFunc, p *provider, claims map[string]any, name string) error {
+	MarkAppPrincipal(c)
+	c.Set("user_name", AppPrincipalPrefix+name)
+	c.Set("user_email", "")
+	role := p.appRole(claims)
+	if role == "" {
+		ps.logger.Warn("bearer token rejected — this provider assigns no role to this app principal",
+			"issuer", p.issuer, "groups_claim", p.groupsClaim, "request.id", requestID(c))
+		return ps.deny(c, oauthErrInvalidToken, "no group in this token maps to a role on this server", "no_role_mapping")
+	}
+	c.Set("role", role)
+	return next(c)
+}
+
+// appRole is an app principal's role: the delegated role, else the mapping's
+// match, else defaultRole. Empty means this entry gives it none.
+func (p *provider) appRole(claims map[string]any) string {
+	if p.delegatedRole != "" {
+		return p.delegatedRole
+	}
+	if p.mapper != nil {
+		if role, _, ok := p.mapper.RoleFor(claims); ok {
+			return role
+		}
+	}
+	return p.defaultRole
 }
 
 // rolePrecedence orders orbital's roles so the most privileged match wins when

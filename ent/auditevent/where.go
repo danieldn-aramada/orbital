@@ -81,6 +81,11 @@ func ActingClient(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldActingClient, v))
 }
 
+// ActorIssuer applies equality check predicate on the "actor_issuer" field. It's identical to ActorIssuerEQ.
+func ActorIssuer(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldActorIssuer, v))
+}
+
 // SourceIPAddress applies equality check predicate on the "source_ip_address" field. It's identical to SourceIPAddressEQ.
 func SourceIPAddress(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldEQ(FieldSourceIPAddress, v))
@@ -439,6 +444,81 @@ func ActingClientEqualFold(v string) predicate.AuditEvent {
 // ActingClientContainsFold applies the ContainsFold predicate on the "acting_client" field.
 func ActingClientContainsFold(v string) predicate.AuditEvent {
 	return predicate.AuditEvent(sql.FieldContainsFold(FieldActingClient, v))
+}
+
+// ActorIssuerEQ applies the EQ predicate on the "actor_issuer" field.
+func ActorIssuerEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEQ(FieldActorIssuer, v))
+}
+
+// ActorIssuerNEQ applies the NEQ predicate on the "actor_issuer" field.
+func ActorIssuerNEQ(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNEQ(FieldActorIssuer, v))
+}
+
+// ActorIssuerIn applies the In predicate on the "actor_issuer" field.
+func ActorIssuerIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIn(FieldActorIssuer, vs...))
+}
+
+// ActorIssuerNotIn applies the NotIn predicate on the "actor_issuer" field.
+func ActorIssuerNotIn(vs ...string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotIn(FieldActorIssuer, vs...))
+}
+
+// ActorIssuerGT applies the GT predicate on the "actor_issuer" field.
+func ActorIssuerGT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGT(FieldActorIssuer, v))
+}
+
+// ActorIssuerGTE applies the GTE predicate on the "actor_issuer" field.
+func ActorIssuerGTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldGTE(FieldActorIssuer, v))
+}
+
+// ActorIssuerLT applies the LT predicate on the "actor_issuer" field.
+func ActorIssuerLT(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLT(FieldActorIssuer, v))
+}
+
+// ActorIssuerLTE applies the LTE predicate on the "actor_issuer" field.
+func ActorIssuerLTE(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldLTE(FieldActorIssuer, v))
+}
+
+// ActorIssuerContains applies the Contains predicate on the "actor_issuer" field.
+func ActorIssuerContains(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContains(FieldActorIssuer, v))
+}
+
+// ActorIssuerHasPrefix applies the HasPrefix predicate on the "actor_issuer" field.
+func ActorIssuerHasPrefix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasPrefix(FieldActorIssuer, v))
+}
+
+// ActorIssuerHasSuffix applies the HasSuffix predicate on the "actor_issuer" field.
+func ActorIssuerHasSuffix(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldHasSuffix(FieldActorIssuer, v))
+}
+
+// ActorIssuerIsNil applies the IsNil predicate on the "actor_issuer" field.
+func ActorIssuerIsNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldIsNull(FieldActorIssuer))
+}
+
+// ActorIssuerNotNil applies the NotNil predicate on the "actor_issuer" field.
+func ActorIssuerNotNil() predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldNotNull(FieldActorIssuer))
+}
+
+// ActorIssuerEqualFold applies the EqualFold predicate on the "actor_issuer" field.
+func ActorIssuerEqualFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldEqualFold(FieldActorIssuer, v))
+}
+
+// ActorIssuerContainsFold applies the ContainsFold predicate on the "actor_issuer" field.
+func ActorIssuerContainsFold(v string) predicate.AuditEvent {
+	return predicate.AuditEvent(sql.FieldContainsFold(FieldActorIssuer, v))
 }
 
 // SourceIPAddressEQ applies the EQ predicate on the "source_ip_address" field.

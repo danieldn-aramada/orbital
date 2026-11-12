@@ -66,6 +66,10 @@ func (s *Server) startImport(tag, initiatedBy string) bool {
 
 	go func() {
 		ctx := context.Background()
+		fail := func(stage string, err error) {
+			orbmetrics.IncImport("failed", initiatedBy)
+			s.importFailed(tag, initiatedBy, stage, err)
+		}
 
 		pullCfg := oci.PullConfig{
 			Registry:  s.cfg.OCIRegistry,
@@ -77,7 +81,7 @@ func (s *Server) startImport(tag, initiatedBy string) bool {
 
 		artifact, err := oci.Pull(ctx, pullCfg, tag)
 		if err != nil {
-			s.state.setFailed("pull: " + err.Error())
+			fail("pull", err)
 			return
 		}
 
@@ -88,7 +92,7 @@ func (s *Server) startImport(tag, initiatedBy string) bool {
 		repoRef := s.cfg.OCIRegistry + "/" + s.cfg.OCIRepo
 		result, err := oci.Verify(ctx, verifyCfg, repoRef, artifact.Digest, s.logger)
 		if err != nil {
-			s.state.setFailed("verify: " + err.Error())
+			fail("verify", err)
 			return
 		}
 		s.logger.Info("cosign verification", "result", result.Message)
@@ -124,8 +128,7 @@ func (s *Server) startImport(tag, initiatedBy string) bool {
 		}
 
 		if err := s.imp.Import(ctx, artifact.DataGZ, artifact.SchemaGZ, meta); err != nil {
-			orbmetrics.IncImport("failed", initiatedBy)
-			s.state.setFailed("import: " + err.Error())
+			fail("import", err)
 			return
 		}
 		importAt := time.Now().UTC()
@@ -207,6 +210,13 @@ func (s *Server) startImport(tag, initiatedBy string) bool {
 	}()
 
 	return true
+}
+
+// importFailed records a failed import attempt in the log and in the status
+// endpoint's lastError.
+func (s *Server) importFailed(tag, initiatedBy, stage string, err error) {
+	s.logger.Error("import failed", "tag", tag, "stage", stage, "initiated_by", initiatedBy, "err", err)
+	s.state.setFailed(tag, stage+": "+err.Error())
 }
 
 // @Summary     Import status
@@ -717,7 +727,7 @@ func (s *Server) importArtifact(c echo.Context) error {
 			Verification: orb.VerificationNotApplicable,
 		}
 		if err := s.imp.Import(ctx, dataGZ, schemaGZ, meta); err != nil {
-			s.state.setFailed("artifact import: " + err.Error())
+			s.importFailed(tag, orb.InitiatedByManual, "artifact import", err)
 			return
 		}
 
@@ -846,7 +856,7 @@ func (s *Server) importSubgraph(c echo.Context) error {
 			Verification: orb.VerificationNotApplicable,
 		}
 		if err := s.imp.Import(context.Background(), dataGZ, schemaGZ, meta); err != nil {
-			s.state.setFailed("courier import: " + err.Error())
+			s.importFailed(tag, orb.InitiatedByManual, "courier import", err)
 			return
 		}
 

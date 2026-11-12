@@ -203,7 +203,7 @@ make release-check     # pre-release: build images, start containers, full publi
 
 ## Working Style
 
-- Don't add comments that just restate what the code does
+- Don't add comments that just restate what the code does. A doc comment is 1–2 sentences saying what something is (Go convention), plus a *why* only where the code can't say it (a constraint or a trap). History and rationale go in the commit or `docs/reference/`, never in code. Don't copy the essay-length comments in older files.
 - Don't refactor code that wasn't part of the request — ask first
 - Don't add third-party packages without asking first
 - Only touch files relevant to the task
@@ -252,7 +252,6 @@ These are cross-cutting platform decisions. Domain-specific decisions live in th
 - **Do not use `schollz/progressbar` alone for spinners** — indeterminate mode causes terminal jitter; use `briandowns/spinner` for spinners and `schollz/progressbar` for determinate progress bars
 - **Do not prescribe a data transport mechanism** — orbital's contract ends at the export API (`json.gz` + `schema.gz`). How that payload is transported, packaged, or stored is the consumer's concern.
 - **Report intake API is transport-agnostic** — how reports travel from edge to orbital is the deployment layer's concern. Do not couple the intake API to any specific transport.
-- **Schema migration automation is out of MVP scope** — a runbook is sufficient for MVP. Do not build a custom migration tool until explicitly scoped.
 - **Do not proxy Ratel through orbital** — Ratel is a React SPA with `PUBLIC_URL=/`; webpack bakes absolute paths that bypass any sub-path reverse proxy. Correct solution: dedicated DNS hostname with its own Istio VirtualService. Until then, show a todo toast when the link is clicked.
 - **PLM and ITSM integrations are out of v1 scope** — vendor selection in progress. Design behind Go interfaces when the time comes.
 - **Network infrastructure config items are out of v1 scope** — VLANs and general network IPs are owned by an external system. Functional IPs tied to specific workloads (Tinkerbell, K8s control plane) are in scope as properties or dedicated nodes — discuss before adding.

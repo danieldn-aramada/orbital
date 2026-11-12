@@ -33,9 +33,8 @@ func MarkAppPrincipal(c echo.Context) { c.Set(principalKindKey, principalKindApp
 
 // IsAppPrincipal reports whether this request was authenticated as an app
 // principal. The single definition of that question: ResolveUser uses it to skip
-// provisioning (an app principal must never become a row in the users table) and
-// RequireRole uses it to grant dev-equivalent access, and two copies of the test
-// is how they would drift.
+// provisioning (an app principal must never become a row in the users table).
+// It grants nothing — the role is whatever the provider entry assigned.
 func IsAppPrincipal(c echo.Context) bool {
 	kind, _ := c.Get(principalKindKey).(string)
 	return kind == principalKindApp

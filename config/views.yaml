@@ -181,8 +181,13 @@ types:
       provider: { editable: false }
       controlPlaneEndpoint: { editable: true, createSet: { role: k8s_api } }
 
+  DiskPartition:
+    fields:
+      number: { createOnly: true }
+
   EksaKubernetesCluster:
     fields:
+      name: { createOnly: true }
       managementCluster: { editable: true }
       tinkerbellIP: { editable: true, createSet: { role: tinkerbell } }
 
@@ -190,6 +195,7 @@ types:
     columns:
       - server
     fields:
+      name: { createOnly: true }
       gpu: { editable: false, tableHidden: true }
       notes: { editable: false, tableHidden: true }
       owner: { editable: false, tableHidden: true }
@@ -197,6 +203,7 @@ types:
 
   NetworkAdapter:
     fields:
+      name: { createOnly: true }
       manufacturer: { editable: false }
       model: { editable: false }
       partNumber: { editable: false }
@@ -227,6 +234,7 @@ types:
       - server.kubernetesNode.role
       - server.kubernetesNode.gpu
     fields:
+      name: { createOnly: true }
       connectedNetworkDevicePort: { editable: false }
       linkSpeedMbps: { editable: false }
       macAddress: { editable: false }
@@ -263,6 +271,10 @@ types:
     fields:
       json: { editable: false }
 
+  StorageController:
+    fields:
+      name: { createOnly: true }
+
   StorageDevice:
     columns:
       - storageController
@@ -275,6 +287,7 @@ types:
 
   StorageVolume:
     fields:
+      name: { createOnly: true }
       capacityBytes: { editable: false }
       manufacturer: { editable: false }
       model: { editable: false }

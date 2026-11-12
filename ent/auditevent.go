@@ -33,6 +33,8 @@ type AuditEvent struct {
 	EventSource string `json:"event_source,omitempty"`
 	// ActingClient holds the value of the "acting_client" field.
 	ActingClient string `json:"acting_client,omitempty"`
+	// ActorIssuer holds the value of the "actor_issuer" field.
+	ActorIssuer string `json:"actor_issuer,omitempty"`
 	// SourceIPAddress holds the value of the "source_ip_address" field.
 	SourceIPAddress string `json:"source_ip_address,omitempty"`
 	// RequestID holds the value of the "request_id" field.
@@ -83,7 +85,7 @@ func (*AuditEvent) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case auditevent.FieldOperations, auditevent.FieldDetails:
 			values[i] = new([]byte)
-		case auditevent.FieldActor, auditevent.FieldEventCategory, auditevent.FieldEventSource, auditevent.FieldActingClient, auditevent.FieldSourceIPAddress, auditevent.FieldRequestID, auditevent.FieldAuthorizationType, auditevent.FieldAuthorizationID:
+		case auditevent.FieldActor, auditevent.FieldEventCategory, auditevent.FieldEventSource, auditevent.FieldActingClient, auditevent.FieldActorIssuer, auditevent.FieldSourceIPAddress, auditevent.FieldRequestID, auditevent.FieldAuthorizationType, auditevent.FieldAuthorizationID:
 			values[i] = new(sql.NullString)
 		case auditevent.FieldTimestamp:
 			values[i] = new(sql.NullTime)
@@ -155,6 +157,12 @@ func (_m *AuditEvent) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field acting_client", values[i])
 			} else if value.Valid {
 				_m.ActingClient = value.String
+			}
+		case auditevent.FieldActorIssuer:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field actor_issuer", values[i])
+			} else if value.Valid {
+				_m.ActorIssuer = value.String
 			}
 		case auditevent.FieldSourceIPAddress:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -246,6 +254,9 @@ func (_m *AuditEvent) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("acting_client=")
 	builder.WriteString(_m.ActingClient)
+	builder.WriteString(", ")
+	builder.WriteString("actor_issuer=")
+	builder.WriteString(_m.ActorIssuer)
 	builder.WriteString(", ")
 	builder.WriteString("source_ip_address=")
 	builder.WriteString(_m.SourceIPAddress)

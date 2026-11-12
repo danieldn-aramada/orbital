@@ -52,8 +52,13 @@ Standard OIDC against the operator's IdP. Any conformant library works; orbital
 never sees the exchange, only the resulting token.
 
 - **A service with no user behind it** — client credentials. Orbital treats it as
-  an *app principal*: no user row, no group mapping, and **dev-equivalent access
-  on every mutating route**. Your client id must be listed, which is the gate.
+  an *app principal*: no user row, and **the role your provider entry configures**.
+  Your client id must be listed, which is the gate.
+- **A service in the same Kubernetes cluster** — send your pod's projected
+  ServiceAccount token (`audience: armada-orbital`). The operator lists the
+  cluster's issuer as a `principalType: "app"` entry with your
+  `system:serviceaccount:<ns>:<name>` mapped to a role. Unlisted service accounts
+  are refused.
 - **Your backend acting for its own users** — the operator can mark your entry as
   delegated: every valid token receives one configured role and no user row is
   created. Orbital records your client as `acting_client` on audit events, so the

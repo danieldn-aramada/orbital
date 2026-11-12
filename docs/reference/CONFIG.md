@@ -191,6 +191,7 @@ In a manifest this is a block scalar, which reviews fine in a diff:
 | `defaultRole` | `readonly`/`dev`/`admin` | one of the three role settings | See the table below. |
 | `roleMapping[].group`, `.role` | string, role | one of the three | Maps one group value to one orbital role. Most privileged match wins. |
 | `delegatedAuthorization.role` | `readonly`/`dev`/`admin` | one of the three | See the table below. |
+| `principalType` | `user`/`app` | no (default `user`) | `app`: every caller through this entry is a service. It is never a users-table row, it is named `app:<username claim>`, and its role comes from this entry alone. Use it for a Kubernetes cluster's ServiceAccount issuer, with `username` and `groups` claims set to `sub` and a strict `roleMapping`. Unknown values are refused at startup. |
 
 **Unrecognised fields fail startup**, rather than being silently ignored — a
 dropped field in an auth config is a constraint the operator wrote that never

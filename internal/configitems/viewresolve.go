@@ -363,14 +363,8 @@ func walkMemberPath(types map[string]TypeInfo, info TypeInfo, path string) (targ
 	return target, isList, target != ""
 }
 
-// editableFields is the set the EDITOR may write.
-//
-// One rule with one override, where there used to be two annotations pointing in
-// opposite directions. A type's own plain scalars are editable; the ConfigItem
-// interface's are not, because they are identity and provenance that orbital
-// writes. `editable:` on a field says otherwise in either direction — false for
-// a scanned hardware fact a human should not type, true to re-admit `name` on
-// the pages that have always offered it.
+// editableFields is the set the editor may write: the type's own scalars plus
+// ConfigItem's `name`, minus fields declared `editable: false` or `createOnly`.
 func editableFields(info TypeInfo, decl TypeDecl, ifaceFields []string) []string {
 	iface := make(map[string]bool, len(ifaceFields))
 	for _, f := range ifaceFields {
@@ -395,7 +389,7 @@ func editableFields(info TypeInfo, decl TypeDecl, ifaceFields []string) []string
 			}
 			continue
 		}
-		if iface[f.Name] {
+		if iface[f.Name] && f.Name != "name" {
 			continue
 		}
 		out = append(out, f.Name)

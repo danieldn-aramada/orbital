@@ -68,6 +68,7 @@ several resources attached.
 | `timestamp` | When it happened, UTC |
 | `actor` | Who — email where known, else display name, else `app:<client-id>` for a service principal, or a `system:*` label for background work |
 | `acting_client` | The OAuth client that made the call, recorded **only when it differs from the subject** — i.e. a trusted upstream service acting for a human |
+| `actor_issuer` | The token issuer of a **service** actor (`app:…`), returned as `actorIssuer`. Absent for people. It distinguishes the same service name coming from two clusters. |
 | `event_category` | `data` (intent changed), `management` (system operation), `auth` (login/logout/failure) |
 | `event_source` | Where it entered — `graphql`, `rest`, `internal`, and for some auth paths `bearer` / `oidc` |
 | `source_ip_address` | Caller address; absent for background jobs, which have no request |
@@ -109,7 +110,7 @@ will be. An absence on an older event means "unknown", not "not reviewed".
 | a. What type of event occurred | `operations` + `event_category` | ✅ |
 | b. When the event occurred | `timestamp` | 🟡 see §7 — the API emits second granularity |
 | c. Where the event occurred | `source_ip_address`, `event_source`, `resource_ids` | ✅ |
-| d. Source of the event | `actor`, `acting_client` | ✅ |
+| d. Source of the event | `actor`, `acting_client`, `actor_issuer` | ✅ |
 | e. Outcome of the event | **Implicit.** A `data` or `management` row exists only on success; `auth` rows and authorization refusals carry a `reason` in `details` | 🟡 |
 | f. Identity of individuals/entities involved | `actor` + `resource_ids` | ✅ |
 

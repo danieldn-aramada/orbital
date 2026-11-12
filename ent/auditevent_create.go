@@ -98,6 +98,20 @@ func (_c *AuditEventCreate) SetNillableActingClient(v *string) *AuditEventCreate
 	return _c
 }
 
+// SetActorIssuer sets the "actor_issuer" field.
+func (_c *AuditEventCreate) SetActorIssuer(v string) *AuditEventCreate {
+	_c.mutation.SetActorIssuer(v)
+	return _c
+}
+
+// SetNillableActorIssuer sets the "actor_issuer" field if the given value is not nil.
+func (_c *AuditEventCreate) SetNillableActorIssuer(v *string) *AuditEventCreate {
+	if v != nil {
+		_c.SetActorIssuer(*v)
+	}
+	return _c
+}
+
 // SetSourceIPAddress sets the "source_ip_address" field.
 func (_c *AuditEventCreate) SetSourceIPAddress(v string) *AuditEventCreate {
 	_c.mutation.SetSourceIPAddress(v)
@@ -320,6 +334,10 @@ func (_c *AuditEventCreate) createSpec() (*AuditEvent, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ActingClient(); ok {
 		_spec.SetField(auditevent.FieldActingClient, field.TypeString, value)
 		_node.ActingClient = value
+	}
+	if value, ok := _c.mutation.ActorIssuer(); ok {
+		_spec.SetField(auditevent.FieldActorIssuer, field.TypeString, value)
+		_node.ActorIssuer = value
 	}
 	if value, ok := _c.mutation.SourceIPAddress(); ok {
 		_spec.SetField(auditevent.FieldSourceIPAddress, field.TypeString, value)

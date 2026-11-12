@@ -271,11 +271,11 @@ func TestResolveUser_NoEmail_Returns401(t *testing.T) {
 
 // ── App-principal authorization (AUTH.md § App callers) ─────────────────────
 
-// TestRequireRole_AppPrincipal_DevMinRole_Allowed verifies the MVP policy: an
-// app-only caller (the provider set sets user_name="app:<appid>", user_id=0) passes
-// RequireRole(dev) without a users-table row. The allowlist gate happened in
-// the provider set; RequireRole grants dev-equivalent access.
-func TestRequireRole_AppPrincipal_DevMinRole_Allowed(t *testing.T) {
+// TestRequireRole_AppPrincipalWithoutRole_Forbidden pins that being an app
+// principal grants nothing: its role is the one its provider entry put on the
+// context, and with none it cannot write. RequireRole used to grant every app
+// principal dev, which let a client configured readonly POST /api/v1/restore.
+func TestRequireRole_AppPrincipalWithoutRole_Forbidden(t *testing.T) {
 	e := echo.New()
 	mw := handler.RequireRole(testDB, user.RoleDev)
 	called := false
@@ -291,21 +291,21 @@ func TestRequireRole_AppPrincipal_DevMinRole_Allowed(t *testing.T) {
 	auth.MarkAppPrincipal(c)
 	c.Set("user_name", auth.AppPrincipalPrefix+"5fc832f6-843e-4207-93dd-b3c3a77c06f2")
 
-	if err := h(c); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	err := h(c)
+	if err == nil {
+		t.Fatal("expected 403, got nil — the app-principal marker granted write access")
 	}
-	if !called {
-		t.Error("handler should have been called for app principal on dev route")
+	httpErr, ok := err.(*echo.HTTPError)
+	if !ok || httpErr.Code != http.StatusForbidden {
+		t.Errorf("expected 403 HTTPError, got: %v", err)
 	}
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rec.Code)
+	if called {
+		t.Error("handler must not be called for an app principal with no role")
 	}
 }
 
-// TestRequireRole_AppPrincipal_AdminMinRole_Forbidden verifies that the MVP
-// dev-equivalent policy denies app callers on admin-gated routes — the inverse
-// of the path above. When App Roles land (post-MVP), the `roles` claim will
-// gate this instead.
+// TestRequireRole_AppPrincipal_AdminMinRole_Forbidden verifies that an app
+// principal with no role on the context is refused on admin-gated routes too.
 func TestRequireRole_AppPrincipal_AdminMinRole_Forbidden(t *testing.T) {
 	e := echo.New()
 	mw := handler.RequireAdmin(testDB)

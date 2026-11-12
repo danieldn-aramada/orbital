@@ -112,6 +112,13 @@ client that requested the token, so under a chain of services it reflects the
 last one rather than the whole path, and `act` nests where `azp` does not. Worth
 replacing when token exchange lands, not worth waiting for.
 
+## `actor_issuer` — which issuer a service actor came from
+
+- **Set only when the actor is an app principal** (`app:…`). It's the token's `iss`, returned as `actorIssuer`. People don't get it: their identity lives in the users table.
+- **Why it exists:** a service name such as `system:serviceaccount:firmware:firmware-svc` is not unique across clusters. The issuer is what tells two of them apart. *(2026-11-11.)*
+- **Shape:** flat, like `acting_client`. Do NOT half-adopt CloudTrail's nested `userIdentity`.
+- Pinned by `TestAuditLog_NamesTheServiceAndItsIssuer`, which reads it back through `GET /api/v1/audit-log` and checks that person events don't carry it.
+
 ## Naming — `audit_events` (storage) / `audit-log` (API)
 
 **Settled 2026-08-26.** Both layers share the root noun `audit`:

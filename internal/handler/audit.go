@@ -19,6 +19,7 @@ import (
 	"github.com/armada/orbital/ent/auditeventresource"
 	"github.com/armada/orbital/ent/auditeventresourcetype"
 	"github.com/armada/orbital/ent/predicate"
+	"github.com/armada/orbital/internal/auth"
 	"github.com/armada/orbital/internal/metrics"
 	"github.com/armada/orbital/web"
 	"github.com/labstack/echo/v4"
@@ -68,6 +69,9 @@ type eventItem struct {
 	RequestID       string         `json:"requestId,omitempty"       example:"a1b2c3d4"`         // correlates events from one request
 	ActingClient    string         `json:"actingClient,omitempty" example:"aep-fleet-commander"` // service acting for the human in `actor`; absent when they are the same
 	Authorization   *authorization `json:"authorization,omitempty"`                              // what authorized this write; absent on a direct write
+	// Token issuer of the service named in `actor` (an `app:` actor), so the same
+	// name from two issuers stays distinguishable. Absent for a person.
+	ActorIssuer string `json:"actorIssuer,omitempty" example:"https://oidc.example.com/cluster-a"`
 	// Changes is the pre-computed field-level diff. **Present ONLY for a clean
 	// single-entity update** (omitted otherwise via omitempty) — so its presence
 	// is the client's signal that a field diff is available; no need to inspect
@@ -324,6 +328,7 @@ func (h *AuditHandler) List(c echo.Context) error {
 			SourceIPAddress: e.SourceIPAddress,
 			RequestID:       e.RequestID,
 			ActingClient:    e.ActingClient,
+			ActorIssuer:     e.ActorIssuer,
 			Authorization:   authorizationOf(e),
 		}
 		var d eventDetails
@@ -655,6 +660,8 @@ type auditOrigin struct {
 	// behalf. Empty when the caller IS the subject, so the field means something
 	// when present rather than being noise on every row.
 	ActingClient string
+	// ActorIssuer is the token issuer of an app actor; empty for people.
+	ActorIssuer string
 	// AuthorizationType / AuthorizationID name the ACT that authorized this write
 	// — a merged change request, an accepted divergence. Set only when one
 	// exists, so presence means "this write passed a control" and absence means
@@ -702,6 +709,9 @@ func originFromContext(c echo.Context, source string) auditOrigin {
 	if ac, _ := c.Get("acting_client").(string); ac != "" {
 		o.ActingClient = ac
 	}
+	if auth.IsAppPrincipal(c) {
+		o.ActorIssuer, _ = c.Get("auth_issuer").(string)
+	}
 	return o
 }
 
@@ -742,6 +752,9 @@ func writeAuditEvent(db *ent.Client, logger *slog.Logger, eventCategory, actor, 
 	}
 	if origin.ActingClient != "" {
 		ec = ec.SetActingClient(origin.ActingClient)
+	}
+	if origin.ActorIssuer != "" {
+		ec = ec.SetActorIssuer(origin.ActorIssuer)
 	}
 	// Columns, matching every other record-metadata fact on this table. Set only
 	// when an authority exists — absence is what distinguishes a direct write.

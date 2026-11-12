@@ -16,6 +16,7 @@ type importState struct {
 	availableVersion string // tag discovered by poller that is newer than currentVersion
 	lastImport       *orb.ImportRecord
 	lastError        string // last IMPORT error (setFailed)
+	failedTag        string // tag of the last failed import; the poller does not auto-retry it
 	lastChecked      time.Time
 	lastPollErr      string // last POLL error message (registry unreachable, etc.); separate from import errors
 }
@@ -63,13 +64,15 @@ func (s *importState) setDone(record orb.ImportRecord) {
 	s.availableVersion = ""
 	s.lastImport = &record
 	s.lastError = ""
+	s.failedTag = ""
 }
 
-func (s *importState) setFailed(errMsg string) {
+func (s *importState) setFailed(tag, errMsg string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.status = "failed"
 	s.lastError = errMsg
+	s.failedTag = tag
 }
 
 // setAvailable records a SUCCESSFUL poll result. Tag is the registry's highest
@@ -104,6 +107,7 @@ func (s *importState) snapshot() importSnapshot {
 		CurrentVersion:   s.currentVersion,
 		AvailableVersion: s.availableVersion,
 		LastError:        s.lastError,
+		FailedTag:        s.failedTag,
 		LastChecked:      s.lastChecked,
 		LastPollErr:      s.lastPollErr,
 	}
@@ -120,6 +124,7 @@ type importSnapshot struct {
 	AvailableVersion string            `json:"availableVersion,omitempty"`
 	LastImport       *orb.ImportRecord `json:"lastImport,omitempty"`
 	LastError        string            `json:"lastError,omitempty"`
+	FailedTag        string            `json:"-"`
 	LastChecked      time.Time         `json:"lastChecked,omitempty"`
 	LastPollErr      string            `json:"lastPollErr,omitempty"`
 }

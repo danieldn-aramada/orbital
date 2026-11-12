@@ -47,6 +47,12 @@ func (AuditEvent) Fields() []ent.Field {
 		// the actor and carries it in the `act` claim; until orbital consumes
 		// exchanged tokens this is inferred from the verified `azp`.
 		field.String("acting_client").Optional(),
+		// actor_issuer is the token issuer that vouched for an app principal in
+		// `actor`. A service has no users-table row to look its issuer up in, and
+		// a name like system:serviceaccount:<ns>:<sa> is the same string from
+		// every cluster — (actor, actor_issuer) is what identifies it, as (sub,
+		// iss) does in OIDC. Null for a person.
+		field.String("actor_issuer").Optional(),
 		field.String("source_ip_address").Optional(), // caller IP (c.RealIP()); empty for internal writers
 		field.String("request_id").Optional(),        // X-Request-Id: ties every event from one HTTP request together
 		// authorization_* name the act that authorized this write — a merged

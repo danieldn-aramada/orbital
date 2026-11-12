@@ -3149,6 +3149,11 @@
                     "type": "string",
                     "example": "asharma@armada.ai"
                 },
+                "actorIssuer": {
+                    "description": "Token issuer of the service named in `actor` (an `app:` actor), so the same\nname from two issuers stays distinguishable. Absent for a person.",
+                    "type": "string",
+                    "example": "https://oidc.example.com/cluster-a"
+                },
                 "authorization": {
                     "description": "what authorized this write; absent on a direct write",
                     "allOf": [

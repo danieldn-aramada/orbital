@@ -186,6 +186,7 @@ var (
 		{Name: "event_category", Type: field.TypeString, Default: "data"},
 		{Name: "event_source", Type: field.TypeString, Nullable: true},
 		{Name: "acting_client", Type: field.TypeString, Nullable: true},
+		{Name: "actor_issuer", Type: field.TypeString, Nullable: true},
 		{Name: "source_ip_address", Type: field.TypeString, Nullable: true},
 		{Name: "request_id", Type: field.TypeString, Nullable: true},
 		{Name: "authorization_type", Type: field.TypeString, Nullable: true},
@@ -205,12 +206,12 @@ var (
 			{
 				Name:    "auditevent_request_id",
 				Unique:  false,
-				Columns: []*schema.Column{AuditEventsColumns[9]},
+				Columns: []*schema.Column{AuditEventsColumns[10]},
 			},
 			{
 				Name:    "auditevent_source_ip_address",
 				Unique:  false,
-				Columns: []*schema.Column{AuditEventsColumns[8]},
+				Columns: []*schema.Column{AuditEventsColumns[9]},
 			},
 		},
 	}

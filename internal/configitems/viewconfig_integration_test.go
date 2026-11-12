@@ -228,3 +228,50 @@ func memberFields(v View) []string {
 	sort.Strings(out)
 	return out
 }
+
+// orbIds are immutable, so a field one is built from must be createOnly.
+func TestShippedViews_NoOrbIDSourceFieldIsEditable(t *testing.T) {
+	gql, admin := dgraphURLs()
+	types, iface, err := NewDGraphSchemaClient(gql, admin).Introspect(context.Background())
+	if err != nil {
+		t.Fatalf("introspect the deployed schema: %v", err)
+	}
+	cfg, _, _, err := LoadViewConfig(viewsConfigPath(t), "")
+	if err != nil {
+		t.Fatalf("load the shipped default: %v", err)
+	}
+	validated, _ := cfg.Validate(types, schemaVersionLabel(t))
+	views, err := ResolveViewsFromConfig(types, iface, validated, nil)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+
+	byType := map[string]View{}
+	for _, v := range views {
+		byType[v.Type] = v
+		editable := map[string]bool{}
+		for _, f := range v.Fields {
+			editable[f] = true
+		}
+		for _, p := range v.OrbIDPattern {
+			for _, path := range p.Paths() {
+				if path == "type" || strings.Contains(path, ".") {
+					continue
+				}
+				if editable[path] {
+					t.Errorf("%s.%s builds the orbId but the editor may change it — declare it `createOnly: true`", v.Type, path)
+				}
+			}
+		}
+	}
+
+	for _, typ := range []string{"Server", "NetworkDevice"} {
+		found := false
+		for _, f := range byType[typ].Fields {
+			found = found || f == "name"
+		}
+		if !found {
+			t.Errorf("%s.name is not part of its orbId, so the editor must allow it; editable fields: %v", typ, byType[typ].Fields)
+		}
+	}
+}

@@ -874,6 +874,12 @@ definitions:
       actor:
         example: asharma@armada.ai
         type: string
+      actorIssuer:
+        description: |-
+          Token issuer of the service named in `actor` (an `app:` actor), so the same
+          name from two issuers stays distinguishable. Absent for a person.
+        example: https://oidc.example.com/cluster-a
+        type: string
       authorization:
         allOf:
         - $ref: '#/definitions/handler.authorization'

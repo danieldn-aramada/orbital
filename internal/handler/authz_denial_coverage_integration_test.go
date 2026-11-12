@@ -16,7 +16,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// RequireRole has five ways to refuse, and until 2026-10-06 exactly one of them
+// RequireRole has four ways to refuse, and until 2026-10-06 exactly one of them
 // wrote an audit row. So "who was refused" depended on WHICH way they were
 // refused — a caller rejected for being unauthenticated, for being an app
 // principal, or for carrying a delegated role below the bar left no trace at
@@ -136,7 +136,7 @@ func TestAuthzDenial_AllowedRequestRecordsNoRefusal(t *testing.T) {
 
 // countDenials counts authorizationDenied events carrying a given reason.
 // Reads details rather than filtering in SQL: `reason` is the field that makes
-// the five branches distinguishable, and asserting on it is the point.
+// the four branches distinguishable, and asserting on it is the point.
 func countDenials(t *testing.T, reason string) int {
 	t.Helper()
 	evs := testDB.AuditEvent.Query().

@@ -47,8 +47,9 @@ type callerRole struct {
 
 // resolveCallerRole reads the caller's role. Three caller shapes, checked in
 // order:
-//   - Callers carrying a role on the context (a delegatedAuthorization provider) have a
-//     pre-mapped role in context and have NO users-table row, so there is no user_id to
+//   - Callers carrying a role on the context (a delegatedAuthorization provider
+//     or an app principal) have a pre-mapped role in context and have NO
+//     users-table row, so there is no user_id to
 //     look up — honor the context role directly. Mirrors the short-circuit in
 //     RequireRole; without it, AEP/Keycloak clients get 403 on every config
 //     mutation even though they map to admin.
@@ -155,24 +156,19 @@ func ReconcileAdminEmails(ctx context.Context, db *ent.Client, adminEmails map[s
 //
 // If the email has no matching user row, ResolveUser provisions a new one with
 // the role determined by adminEmails — mirroring the OIDC login provisioning path.
-// This ensures that service accounts and CI callers using bearer tokens are first-
-// class users in the local role table.
+// App principals and delegated callers are never provisioned.
 func ResolveUser(db *ent.Client, adminEmails map[string]struct{}) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			if id, _ := c.Get("user_id").(int); id != 0 {
 				return next(c) // session auth already resolved
 			}
-			// A caller whose role came from its provider (delegatedAuthorization) is
-			// intentionally NOT provisioned into the users table — its
-			// authorization happened upstream. Skip the lookup/provision so
-			// RequireRole's role short-circuit governs it.
+			// A caller with a provider-assigned role is never provisioned as a user.
 			if role, _ := c.Get("role").(string); role != "" {
 				return next(c)
 			}
-			// App-only (client credentials) tokens have no email and no users-table
-			// row, by design — the matching provider entry's clientID is the
-			// authz gate. Pass through without a DB lookup.
+			// App principals have no users-table row; with no role on the context,
+			// RequireRole refuses every write.
 			//
 			// Keyed on the marker the verifier set, NOT on the "app:" name
 			// prefix: user_name comes from the token's unvalidated `name` claim,
@@ -341,7 +337,7 @@ func BearerAuthFailureSink(db *ent.Client, logger *slog.Logger) func(echo.Contex
 // because "who was refused" must not depend on WHICH way they were refused —
 // until 2026-10-06 only the user-row branch wrote a row, so a caller refused for
 // being unauthenticated, for being an app principal, or for carrying a delegated
-// role left nothing behind. `reason` is what makes the five distinguishable once
+// role left nothing behind. `reason` is what makes the four distinguishable once
 // they all land in the same table.
 func auditAuthzDenied(db *ent.Client, c echo.Context, actor, reason string, minRole user.Role, userRole string) {
 	details := map[string]any{
@@ -372,9 +368,8 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 			if db == nil {
 				return next(c)
 			}
-			// A delegated-authorization caller carries a pre-mapped role from the
-			// middleware, since it is not provisioned into orbital's users
-			// table. Trust it directly and skip the DB lookup below.
+			// A provider-assigned role (delegated caller or app principal) is
+			// trusted directly; neither has a users-table row.
 			if roleStr, _ := c.Get("role").(string); roleStr != "" {
 				if RoleAtLeast(user.Role(roleStr), minRole) {
 					return next(c)
@@ -389,27 +384,6 @@ func RequireRole(db *ent.Client, minRole user.Role) echo.MiddlewareFunc {
 				)
 				auditAuthzDenied(db, c, actorFromContext(c), "context_role_below_required", minRole, roleStr)
 				return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("role %q is below required %q for this action", roleStr, minRole))
-			}
-			// App-only (client credentials) callers were authenticated by the
-			// provider entry whose clientID matched their azp. MVP policy: any
-			// such app caller is treated as `dev`-equivalent — sufficient for
-			// all mutating API routes today. Future best practice: check a
-			// roles claim against the required role, once the provider can
-			// allow defining them. See AUTH.md § App callers.
-			if auth.IsAppPrincipal(c) {
-				if RoleAtLeast(user.RoleDev, minRole) {
-					return next(c)
-				}
-				name, _ := c.Get("user_name").(string)
-				slog.Default().Warn("authorization denied",
-					"actor", name,
-					"method", c.Request().Method,
-					"uri", c.Request().URL.Path,
-					"required_role", string(minRole),
-					"reason", "app_caller_below_required_role",
-				)
-				auditAuthzDenied(db, c, actorFromContext(c), "app_caller_below_required_role", minRole, "")
-				return echo.ErrForbidden
 			}
 			userID, _ := c.Get("user_id").(int)
 			if userID == 0 {

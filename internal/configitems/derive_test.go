@@ -181,7 +181,7 @@ func TestResolver_SelfHealsWithoutRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("must self-heal once DGraph returns: %v", err)
 	}
-	eq(t, "Server after self-heal", got, []string{"hostname", "model"})
+	eq(t, "Server after self-heal", got, []string{"hostname", "model", "name"})
 }
 
 // The caching guarantee: repeated reads (every page load) do NO network work.
@@ -238,7 +238,7 @@ func TestResolver_ReDerivesWhenDeployedSchemaChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eq(t, "Server after schema change", got, []string{"hostname", "model", "serialNumber"})
+	eq(t, "Server after schema change", got, []string{"hostname", "model", "name", "serialNumber"})
 	if f.introCalls == introAfterFirst {
 		t.Error("a changed deployed schema must trigger re-introspection")
 	}

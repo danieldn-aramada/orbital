@@ -90,7 +90,7 @@ func (s *Server) poll(ctx context.Context) {
 	// manual button — cosign verify remains the trust boundary. Failure just
 	// logs; poller will not retry the same tag (chase-highest semantics: on
 	// next poll, if orbital publishes v(N+1), we jump to that instead).
-	if newer && s.cfg.AutoImportEnabled {
+	if newer && s.cfg.AutoImportEnabled && highest != snap.FailedTag {
 		if s.startImport(highest, orb.InitiatedByAuto) {
 			s.logger.Info("auto-import triggered", "tag", highest, "from", snap.CurrentVersion)
 		}

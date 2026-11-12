@@ -22,6 +22,44 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 ## [Unreleased]
 
+### Security
+
+- **A service configured read-only could write, including `POST /api/v1/restore`.**
+  Every client-credentials caller got dev access, whatever its provider entry
+  said. A service now gets exactly the role its entry assigns: the delegated
+  role, else the `roleMapping` match, else `defaultRole`, else 401. The bundler
+  now runs with its entry's `readonly`, which is all it needs. The audit refusal
+  reason `app_caller_below_required_role` is gone; those refusals now read
+  `context_role_below_required`.
+
+### Added
+
+- **Kubernetes services can call orbital with their own ServiceAccount token.**
+  A provider entry with `"principalType": "app"` makes every caller through it a
+  service: never a user, named `app:<username claim>`, with its role from the
+  entry. List a cluster's issuer this way, with `sub` as the username and groups
+  claim and a strict `roleMapping` per ServiceAccount.
+
+- **`actorIssuer` in `GET /api/v1/audit-log`:** the token issuer of a service
+  actor, so the same ServiceAccount name from two clusters stays
+  distinguishable. People's events don't carry it.
+
+- **Server and NetworkDevice names can be edited and set at create.** `name` is
+  now editable by default. It stays frozen after create on types whose orbId is
+  built from it (DataCenter, Rack, clusters, nodes, NICs, ports, storage).
+
+### Fixed
+
+- **Orb: a failed import is logged and counted, and isn't retried every poll.**
+  A pull, verify or import failure used to leave no log line and no metric, and
+  auto-import retried the same tag every 5 seconds forever. Each failure now
+  logs `import failed` with the tag, stage and error, and counts in
+  `orb_imports_total{status="failed"}`. The failed tag waits for a newer tag or
+  a manual import.
+
+- **`DiskPartition.number` could be edited**, although DiskPartition's orbId is
+  built from it.
+
 ### Added
 
 - **The Schema page draws the schema as a graph, and highlights the SDL.** Each
