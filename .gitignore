@@ -54,8 +54,13 @@ deploy/local/orbital.env
 # Orb local data
 orb-data/
 
-# Secrets — never commit filled-in secret manifests
+# Secrets — never commit filled-in secret manifests, or copies of them
 deploy/legacy/secrets.yaml
+*.bak
+
+# Environment overlays are local sandboxes, not product source — deploy/base/
+# is what ships. An overlay here will NOT be committed.
+deploy/overlays/*
 
 # Real edge site overlays are not product source — only the base and one
 # worked example ship. A new site overlay here will NOT be committed.

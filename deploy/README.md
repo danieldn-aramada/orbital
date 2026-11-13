@@ -25,7 +25,8 @@ docker run -p 8001:8001 \
 ## AKS Dev
 
 Canonical AKS deployment uses **kustomize overlays** in `deploy/overlays/`.
-Two overlays target different namespaces; both share `deploy/base/`.
+Overlays are **local and gitignored** — they carry environment values and sit
+next to `secrets.yaml`, so only `deploy/base/` is committed. The overlays in use:
 
 | Overlay | Namespace | PostgreSQL | Notes |
 |---|---|---|---|
