@@ -32,7 +32,7 @@ TEST_PKGS := $(shell go list ./... | grep -vE '(/ent$$|/ent/|/docs$$)')
 ACR          := armadaeksatest.azurecr.io
 IMAGE        := $(ACR)/orbital:$(SERVER_VERSION)
 
-.PHONY: help up down run-orbital run-orb seed fmt build test-unit test-integration test-e2e test-e2e-ui docs-screenshots release-check release-check-down edge-up edge-down docs build-css build-orbctl push seed-aks seed-aks-dgraph seed-aks-postgres smoke-aks dev-deps
+.PHONY: help up down run-orbital run-orb seed fmt build test-unit test-integration test-e2e test-e2e-ui docs-screenshots release-check release-check-down edge-up edge-down docs build-css vendor-graphiql build-orbctl push seed-aks seed-aks-dgraph seed-aks-postgres smoke-aks dev-deps
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -265,6 +265,8 @@ docs-site-publish: docs-site ## Publish the docs site to Azure Blob static websi
 build-css: ## Compile web/sass/main.scss → web/shared/static/css/main.css (requires: npm install)
 	npm run build-css
 
+vendor-graphiql: ## Rebuild the bundled GraphiQL in web/shared/static/graphiql-<version>/ from package-lock.json (requires: npm ci)
+	node scripts/vendor-graphiql.mjs
 
 build-orbctl: fmt ## Build the orbctl CLI → bin/orbctl
 	go build $(CLI_LDFLAGS) -o $(BIN_DIR)/orbctl ./cmd/orbctl

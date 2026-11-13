@@ -5,22 +5,15 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 ## Settled Decisions
 
 - **The address bar mirrors the whole OPEN TAB SET as repeated `?open=<orbId>`, so it moves only on
-  open and close — never on switching tabs.** *(2026-10-07.)* `syncOpenParams` in `shared.js` reads
-  the strip (`li.tab a[data-orb-id]`) and rewrites the param list; it is called from exactly two
-  places, the end of `loadGenericTab` and the close handler. **Do NOT mirror the ACTIVE tab instead**
-  — that was built first and rejected: the URL moved on every click, which in a server-rendered app
-  reads as a page load even though switching between already-open tabs issues no request. The active
-  tab is deliberately NOT in the URL for the same reason; a recipient lands on the last id in the
-  list. **Do NOT re-add the strip** that used to run after a deep link was honoured — it existed so a
-  reload could not resurrect a closed tab, and syncing both ways removes that need. **An inbound
-  `?open=` REPLACES this slug's saved tabs** (`clearGenericTabsForSlug`) rather than merging: merging
-  would force the pasted URL to be rewritten to the merged set on load, so a link would mutate in the
-  address bar as you watched it. `replaceState`, never `pushState` — Back stepping backwards through
-  opened tabs is a different feature. Pinned by the seven `?open=` tests in `e2e/generic-tabs.spec.ts`.
+  open and close — never on switching tabs.** *(2026-10-07.)* `syncOpenParams` in `shared.js` rewrites it
+  from the strip, called only at the end of `loadGenericTab` and from the close handler. **Do NOT mirror
+  the ACTIVE tab** — a URL that moves on every click reads as a page load; a recipient lands on the last id.
+  **An inbound `?open=` REPLACES this slug's saved tabs** (`clearGenericTabsForSlug`), never merges, or a
+  pasted link would rewrite itself on load. `replaceState`, never `pushState`. Pinned by the `?open=` tests
+  in `e2e/generic-tabs.spec.ts`.
   ⚠️ A test asserting a generic page's URL must allow a query (`/\/slug(\?|$)/`), not anchor on `$`.
   ⚠️ A deep link SELECTS a detail tab, so `#generic-table` is hidden on arrival — wait on
   `generic-fields`, not the table.
-
 
 - **A LIST member can be `editable: true`, and its rows are addressed by their own `orbId` — never by
   position.** *(2026-10-13.)* Single-hop only: a list below another hop is still refused at load, because
@@ -71,13 +64,13 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 - **Five tabs max, evict least-recently-USED, show a toast — never refuse.** *(2026-10-05.)* `MAX_GENERIC_TABS = 5` in `shared.js`, deliberately not configurable. Safe because a tab holds no unsaved state.
 - **The edit modal lives INSIDE `generic-detail-content`**, which is served both as a page and as the tab fragment. *(2026-10-05.)* ⚠️ Any swap must `genericEditors.delete(id)` first, or Edit drives an editor bound to a detached node. ⚠️ Post-save reload is tab-aware, like the Reload button.
 - **`displayTabContent` touches only panels that HAVE an id.** *(2026-10-05.)* `.tab-content` is also the layout wrapper; hiding an id-less one is permanent. ⚠️ Tests must assert the PANEL is visible, not just the strip.
-- **A ConfigItem is shown only as a tab. `/{slug}/{orbId}` is the tab's fetch URL and 404s for a human.** *(2026-10-05.)* Rows link via `/{slug}?open={orbId}`; nothing links to the detail path. Every `Detail` render is a fragment, error paths included. ⚠️ The "`?open=` is stripped once honoured, no copyable link" half of this was reversed 2026-10-07 — see the open-set rule above.
+- **A ConfigItem is shown only as a tab. `/{slug}/{orbId}` is the tab's fetch URL and 404s for a human.** *(2026-10-05.)* Rows link via `/{slug}?open={orbId}`; nothing links to the detail path. Every `Detail` render is a fragment, error paths included.
 - **Double-click opens a row; single click is DataTables row selection** (used by Copy/Excel/CSV export). *(2026-10-05.)* ⚠️ Before binding a gesture on a DataTable, check `select` — the conflict is silent.
 - **A list row's name is plain text; the row carries `data-orb-id`.** *(2026-10-05.)* Blue in a table means "you leave this page". Reference cells still link; references to pageless types are text.
 - **Detail action row sits at the top of the shared body; Edit is `is-rounded is-link`.** *(2026-10-05.)* Order: action row → pending-changes banner → Fields.
 - **One Reload button resolves page-vs-tab at click time** (inside a `.tab-content[id^="tab-content-generic-"]` ⇒ re-fetch that panel, else full reload). *(2026-10-05.)* Not a server-rendered flag. ⚠️ A full reload from inside a tab silently closes every other tab.
 - **Detail layout: Attributes left, Metadata right, then the Relationships tab strip, then the Audit Log section.** *(2026-10-03; audit split out 2026-10-30.)*
-- **The audit log is its own section, collapsed, loaded on first expand, open state remembered per browser.** *(2026-10-30, replaces "the last tab".)* It is the node's history — a peer of Attributes and Metadata, not a relationship — and once the strip was titled Relationships (2026-10-15) a tab in it was mislabelled. Collapsed so a page view costs no audit query; remembered (`audit-section-open` in localStorage) so after a Save it re-renders open and fresh. `initAuditSection` wires it; `data-orb-id` and `data-subgraph-orb-ids` live on the section, where the audit fetch and `subgraphOrbIds` read them. Pinned by `e2e/audit-section.spec.ts`.
+- **The audit log is its own section, collapsed, loaded on first expand, open state remembered per browser.** *(2026-10-30.)* It is the node's history — a peer of Attributes and Metadata, not a relationship. Collapsed so a page view costs no audit query; remembered (`audit-section-open` in localStorage) so after a Save it re-renders open and fresh. `initAuditSection` wires it; `data-orb-id` and `data-subgraph-orb-ids` live on the section, where the audit fetch and `subgraphOrbIds` read them. Pinned by `e2e/audit-section.spec.ts`.
 - **A tab whose panel holds a pending change shows a dot.** *(2026-10-03.)* `panelOrbIds` derives the set from the panel's `[data-field-orbid]` elements unless `data-panel-orbids` is given; no extra request.
 - **A tab panel is not a box** — the tabbed `article.box` around it already is. *(2026-10-03.)*
 - **The tab strip wraps when tabs do not fit; it never scrolls sideways.** *(2026-10-07.)* Bulma's nowrap+scroll clipped the last tab with no affordance. Wrapping breaks the `is-boxed` underline visually; an overflow affordance is the scalable fix.
@@ -93,12 +86,11 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 - **Delete is literal: the root plus its declared paths, never another page's.** Survivors' edges are cleared (from `@hasInverse`); a survivor left with a broken non-null edge is shown as **orphaned**, and the delete proceeds.
 - **A subgraph member must DEPEND on its parent: a non-null edge back, or an `orbIdPattern` built from that edge.** *(2026-11-08.)* Membership is delete scope, so declaring a peer deletes an independent entity — it happened with `Server.oobIP` (below) and with a switch taking its cabled server NICs and VC peers. A rule against peers, not a claim that `!` is ownership. Pinned by `TestEverySubgraphMember_DependsOnItsParent` (shipped file only; overlays are not checked).
 - **Delete lives on the page URL: `DELETE /{slug}/{orbId}`, preview at `.../delete-preview`.** UI-only, not `/api/v1`, not in swagger; API clients delete via `/graphql`. Auth is applied explicitly in `server.go` — the root group has none.
-- **VOCABULARY: a detail page has `Attributes`, `Metadata`, `Relationships`.** *(2026-10-15.)* This is **DGraph's own conceptual vocabulary**, not a UI invention — its overview states the model as "nodes and relationships", with "attributes that describe [a node's] properties", and uses "edge" nowhere. Its glossary defines an edge as the MENTAL PICTURE ("bubbles connected by lines") and a relationship as "a named, directed link relating one node to another" — the latter is what `Server.rack` is, so "relationship" is the more precise of DGraph's two terms, not merely the friendlier one. It is also the CMDB pair (orbital calls itself a CMDB) and CLAUDE.md's own wording. Not "Fields" — in GraphQL a relationship IS a field, so a box excluding them cannot be called Fields. Not "Connections" — already a tab label on NetworkDevice. The published view field is `relationships`; `data-testid="generic-fields"` stays, a test handle rather than copy.
-  ⚠️ An earlier draft of this entry claimed "edge" was DGraph's word and "relationship" the operator's. That is backwards and was corrected 2026-10-15 against `docs.dgraph.io` — the storage layer and the UI agree; neither is accommodating the other.
-- **A field label is the RAW field name unless `labels:` declares one.** *(2026-10-20, reverses the 2026-10-15 camelCase-splitting default.)* The UI's main readers are API developers; `firmwareRepository` is what they query by, and "Firmware Repository" is a translation they must undo. There is no fallback rule in code — `View.Labeller` returns the field untouched. `HumanTypeName` title-cases TYPE names for prose ("New Network Device") and is never a field-label fallback.
+- **VOCABULARY: a detail page has `Attributes`, `Metadata`, `Relationships`.** *(2026-10-15.)* DGraph's own terms — its docs describe "nodes and relationships" with "attributes", and a relationship as "a named, directed link relating one node to another", which is what `Server.rack` is. Not "Fields" (in GraphQL a relationship IS a field); not "Connections" (a NetworkDevice tab label). The published view field is `relationships`; `data-testid="generic-fields"` stays as a test handle.
+- **A field label is the RAW field name unless `labels:` declares one.** *(2026-10-20.)* The UI's main readers are API developers; `firmwareRepository` is what they query by, and "Firmware Repository" is a translation they must undo. There is no fallback rule in code — `View.Labeller` returns the field untouched. `HumanTypeName` title-cases TYPE names for prose ("New Network Device") and is never a field-label fallback.
   - **Declare a label only when it adds MEANING, never to fix capitalisation.** `labels:` shipped empty; the two declarations are `NetworkDevice.networkInterfaces: Ports` and `networkInterfaceConnectedNetworkDevice: Connections`. Do NOT re-add `SSH Enabled`/`Orb ID`-style entries — that is the old default creeping back one line at a time, and a page then mixes styles for no gain.
   - Keyed by FIELD NAME, not by type — `wwn` is on two types, and a per-type key meant two places to state one fact. `types.<T>.fields.<f>.label` overrides it where two types genuinely differ.
-  - **A value, not a rule.** No Go acronym table and no title-casing rule — both were tried and deleted: an adopter modelling PDUs or iLO cannot edit the binary.
+  - **A value, not a rule.** No acronym table and no title-casing rule: an adopter modelling PDUs or iLO cannot edit the binary.
   - An overlay's `labels:` **merges per field**, so relabelling one field does not drop the rest. Pinned by `TestLabeller_RawUnlessDeclared` and `TestMergeViewConfig_LabelsMergePerField`.
 - **No test asserts the CONTENTS of `config/views.yaml`.** *(2026-10-15.)* It is a tunable — relabelling a field, hiding a tab, reordering a subgraph are configuration changes, and a test naming what the file contains turns every such edit into a broken build. One did, briefly, and failed the moment the labels were edited. Tests seed their own `ViewConfig`. The single legitimate read of the shipped file is `schema_consistency_test.go`, which asserts INTEGRITY — every declared path names a field the schema actually has — a property any config must satisfy however it is tuned.
   ⚠️ **`ViewConfig.Validate` rebuilds the document field by field — a top-level key it does not name is DROPPED IN SILENCE.** `acronyms:` was, and every label reverted to title-casing while the config declared otherwise. Add new top-level keys there too; `TestValidate_CarriesTopLevelKeysThrough` guards the class.
@@ -134,7 +126,7 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 - **Computed columns are declared paths (`columns: [servers.count]`) on the type, and apply wherever it renders.** *(2026-10-02.)* `count` is fetched as `<field>Aggregate { count }`; an interface hop needs `... on ConfigItem`; the label comes from the type the leaf field belongs to.
   - **One key for both column shapes; `refColumns:` is retired.** *(2026-10-15.)* A bare SINGLE relationship in `columns:` (`rack`) is a column of links; a dotted path (`rack.uHeight`) is a value. They were two keys for one concept — a column a row of this type carries — and the detail page had already settled on "relationship" over "ref". Link columns still render before value columns: interleaving them would merge two render and query paths for no requested gain. A list, or a non-ConfigItem, named bare is dropped with a warning; `refColumns:` warns and is ignored. Pinned by `TestResolveViews_LinkColumnsAreListedNotDerived`, `TestValidateViews_LinkColumnDeclarationsAreChecked`, `TestResolveViews_LinkColumnsInheritAlongInterfaces`, `TestRetiredKeyWarnings_NamesTheReplacementForRefColumns`.
 - **Column/field order is a partial pin: `order: [a, b, c]`, rest alphabetical.** *(2026-09-26.)* Never a complete list — new fields would never appear. Interfaces' pins are inherited; list pages re-apply the pin after the interface union. A pinned field the type lacks is skipped.
-- **Labels resolve server-side onto `View.Labels`.** *(2026-09-29.)* One labeller for field rows, column headers and metadata, so they cannot disagree. (The title-casing default it described was replaced 2026-10-20 — see above.)
+- **Labels resolve server-side onto `View.Labels`.** *(2026-09-29.)* One labeller for field rows, column headers and metadata, so they cannot disagree.
 - **A view's label derives from its slug** (`slug: clusters` renames page and nav together). *(2026-09-26.)* Never hand-write a ConfigItem page into the menu.
 - **`filterBy:` is declared, one field per page, never inferred.** *(2026-09-29.)* Resolved server-side. A `filterBy:` naming a non-column is dropped and logged; "column" is `View.ColumnFields()`.
 - **Two layers, both files: shipped `config/views.yaml` + a PARTIAL overlay (`ORBITAL_VIEWS_OVERLAY_PATH`) replacing per view.** *(2026-10-04.)* A whole-file copy freezes that deployment. ⚠️ Mount the ConfigMap DIRECTORY, not a `subPath`, or changes are not picked up.
@@ -189,7 +181,6 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 - **Templates are parsed from `web.Dir()`, never `ParseFiles("web/…")`** — that breaks outside the repo root. *(2026-10-02.)*
 - **A page served by both apps lives in `shared/pages/` and gates auth on `.UI.ShowAuth`.** *(2026-09-23.)* Orb sets it false. Login notice: `shared/components/login-gate.gohtml`.
 - **Do NOT convert one page's graphdiff rendering from JS to Go templates in isolation.** Convert a whole surface or none.
-- **Go template `range` does not propagate assignments outward** — compute aggregates server-side.
 - **JS module cache-busting lives in `head.gohtml`'s import map; every cross-file import needs an entry.** `TestImportMapCoversAllModuleImports` enforces it.
 - **Vendor libraries live in named subdirectories of `web/shared/static/`**, browser files only.
 - **The schema graph: Cytoscape.js draws it, d3-hierarchy lays it out, highlight.js colours the SDL.** *(2026-11-08.)* Open-source licences only; dagre was removed (it orders a tree's siblings arbitrarily, with no way to fix it) and ELK deferred (EPL-2.0, 477 KB). Evidence: `.local/graph-viz-research/`.
@@ -254,116 +245,34 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
   Live keys besides the per-slug ones: `datacenterTabs`, `serverTabs`, `dcTabCurrent`, `srvTabCurrent` (orb), `crTabCurrent`.
 - **JavaScript is ES modules, no bundler**: `shared.js` (both apps), `orbital.js`, `orb.js`. Never inline `<script>` in templates.
 - **Cross-app navigation/reload handlers live in `shared.js`**; orbital-only edit handlers stay in `orbital.js`.
-- **DataTables AJAX reload must guard the error path:**
-  ```js
-  const onError = () => reloadButton.removeClass('is-loading')
-  dt.one('error.dt', onError)
-  dt.ajax.reload(() => { dt.off('error.dt', onError); reloadButton.removeClass('is-loading') })
-  ```
-- **Click handlers use event delegation on a `.js-*` class, not inline `onclick`:**
-  ```js
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.js-divergence-publish')
-    if (!btn) return
-    divergencePublishForDC(btn)
-  })
-  ```
-  Allowed exceptions: per-instance modal submit bindings inside an init function re-run on `afterSettle`; inline browser-API calls (`event.stopPropagation()`); tab-activation closures in `initDetailTabs`.
+- **A DataTables AJAX reload clears the button's `is-loading` on the error path too** (`dt.one('error.dt', …)`), or a failed reload spins forever.
+- **Click handlers use event delegation on a `.js-*` class, not inline `onclick`.** Exceptions: per-instance modal submit bindings inside an init function re-run on `afterSettle`; inline browser-API calls (`event.stopPropagation()`); tab-activation closures in `initDetailTabs`.
 - **Never add new `window.X` bridges.** Allowlist: the editor maps and `window.reloadClusterFragment`. A module that imports from `shared.js` imports; it does not bridge.
 - **Never call `getElementById` at module top level**; modules are deferred, use delegation.
 - **Go template + HTMX is the primary rendering pattern**; JS only for what templates can't do (polling, DataTables, JSON editors, tab lifecycle).
-- **All styles go in `web/sass/main.scss`** — never edit the generated `main.css`. `make build-css` / `make watch-css`.
-- `make run-orbital` uses version `v0.0.0-dev`.
+- **All styles go in `web/sass/main.scss`** — never edit the generated `main.css`. `make build-css`, or `npm run build-css-dev` to watch.
 
 ## HTMX patterns
 
-- **Never use `htmx.ajax()` for programmatic reloads** — use `fetch` with `HX-Request: true`:
-  ```js
-  fetch(url, { headers: { 'HX-Request': 'true' } })
-    .then(r => r.text())
-    .then(html => { el.innerHTML = html; htmx.process(el); initXxx(...) })
-  ```
+- **Never use `htmx.ajax()` for programmatic reloads** — `fetch` with `HX-Request: true`, swap the HTML, then `htmx.process(el)` and the section's init.
 - **HTMX does not re-execute `<script type="module">` in swapped content** — load the library once in `head.gohtml` and expose it on `window` (e.g. `window.JSONEditor`).
 - **Initialize JSONEditor lazily, in a visible container** (on first Edit click).
-- **HTMX declarative attributes (`hx-get`, `hx-post`) include `{{.BasePath}}`.**
 - **Two separate `afterSwap` listeners** — global init vs. the detail-page one.
 
 ## URL construction (BASE path)
 
-- `data-*` attributes hold the bare path (`data-url="/servers/{{.ID}}"`); JS prepends `BASE`.
-- **Never put `{{.BasePath}}` in `data-*`** — it double-prefixes on AKS.
-- Exception: HTMX declarative attributes include `{{.BasePath}}`.
-
-## GraphQL responses
-
-- **GraphQL returns 200 even for errors** — check `resp.ok`, then `result.errors`.
-
-## Recurring display patterns
-
-- **Digest display** — `digest.substring(0, 19) + '…'` with a copy button:
-  ```js
-  `<div style="display:flex;align-items:center;gap:0.25rem;">
-    <span class="is-family-monospace is-size-7">${digest.substring(0, 19)}…</span>
-    <button class="button is-small is-white tooltip" data-text="Copy digest"
-      data-copy-value="${digest}">
-      <span class="icon"><i class="fas fa-copy"></i></span>
-    </button>
-  </div>`
-  ```
+- `data-*` attributes hold the bare path (`data-url="/servers/{{.ID}}"`); JS prepends `BASE`. **Never put `{{.BasePath}}` in `data-*`** — it double-prefixes on AKS.
+- HTMX declarative attributes (`hx-get`, `hx-post`) are the exception: they include `{{.BasePath}}`.
 
 ## Canonical button patterns
 
 Match the pattern for the button's category; do not invent a new spinner or status mechanism.
 
-### Refresh / reload button (data appears in-place)
-
-- Reference: `loadArtifactsTable()`, `refreshDivergenceReports()` (orbital.js), `loadOrbTags()` (orb.js). Helper: `fetchWithMinDelay(url, minMs = 500)`.
-- Server branches on `HX-Request: true` and returns a fragment (`UI.renderFragment`).
-- Button id `btn-refresh-*`; Bulma `is-loading`; minimum 500ms. The swap must hang off the `Promise.all`, not the bare fetch:
-  ```js
-  // WRONG — skeleton flashes when fetch < 500ms because the swap fires inside the bare-fetch .then
-  fetch(url).then(r => r.text()).then(html => { container.innerHTML = html })  // fires at t=fetch
-    .finally(() => minDelay.then(() => btn.classList.remove('is-loading')))    // fires at t=max(fetch,500)
-  ```
-- Show skeleton rows immediately, with a `colgroup` mirroring the real table (`divergenceSkeletonHTML()`).
-- `htmx.process(container)` after every swap. No `window.location.reload()`.
-
-### Test connection / probe button (single status indicator)
-
-- Declarative HTMX, no JS:
-  ```html
-  <button hx-post="{{.BasePath}}/api/v1/backup/test-connection"
-          hx-target="#backup-connection-result"
-          hx-swap="innerHTML"
-          class="button is-light is-small">
-    <span class="icon"><i class="fa-solid fa-plug"></i></span>
-    <span>Test Connection</span>
-  </button>
-  <span id="backup-connection-result" class="is-size-7"></span>
-  ```
-- Server returns an HTML-escaped success/error span (`renderTestConnectionFragment`). Spinner via `.button.htmx-request`. Do NOT add `hx-disabled-elt`.
-
-### Inline status — not toast
-
-Action results show in an existing `*-status` slot that stays until the next action (`showPublishStatus()` in `orb.js`). No toasts.
-
-### Inside an action row, a notice is TEXT — not a `.notification` panel
-
-Colour in an action row belongs to the actions. A notice there is `is-size-7` text with an `icon-text` glyph (`has-text-warning` + `fa-triangle-exclamation`, or `has-text-info` + `fa-circle-info`). A `.notification` is fine where it owns its space. Reference: `applyGateState` in `configitem-editor.js`.
-
-## Iterating on CSS / templates
-
-- **Hard-refresh first** when a change doesn't appear — `?v=` only busts on real deploys.
-- **Templates hot-reload; Go handlers need a restart.**
-
-## Horizontal scroll inside flex/grid layouts
-
-When a scroll container clips instead of scrolling, every flex/grid ancestor must be allowed to shrink:
-
-- **Flex item** (Bulma `.column`) → `min-width: 0`.
-- **Grid track** → `minmax(0, 1fr)`, not `1fr`. `min-width: 0` on the item does not override the track.
-
-Check the whole ancestor chain at once.
+- **Refresh / reload (data appears in place):** the server branches on `HX-Request: true` and returns a fragment. The `btn-refresh-*` button shows `is-loading` for at least 500ms (`fetchWithMinDelay`), and the swap hangs off that `Promise.all`, never the bare fetch, or the skeleton flashes. Skeleton rows show immediately (`divergenceSkeletonHTML()`); `htmx.process` after every swap; never `window.location.reload()`. Reference: `loadArtifactsTable()`, `refreshDivergenceReports()`, `loadOrbTags()`.
+- **Test connection / probe:** declarative `hx-post` into a result `<span>`, no JS. The server returns an HTML-escaped fragment (`renderTestConnectionFragment`); the spinner is `.button.htmx-request`. Do NOT add `hx-disabled-elt`.
+- **Action results show inline, not as toasts** — in an existing `*-status` slot that stays until the next action (`showPublishStatus()` in `orb.js`).
+- **Inside an action row, a notice is TEXT, not a `.notification` panel** — `is-size-7` with an `icon-text` glyph; colour in an action row belongs to the actions. A `.notification` is fine where it owns its space. Reference: `applyGateState` in `configitem-editor.js`.
+- **A digest shows its first 19 characters and `…`, with a copy button.**
 
 ## DataTables + Bulma
 
@@ -389,35 +298,20 @@ Driven by `prefers-color-scheme` through Bulma's `--bulma-*` variables; no toggl
 
 - **Detail-tab active panel persists under `tab-active:{tabContainer.id}`**, wired by `initDetailTabs`; never written by hand.
 
-## Detail tabs and audit section — canonical pattern
+## Detail tabs and audit section
 
 Reference template `shared/pages/generic-detail.gohtml`; both functions in `shared.js`.
 
-- **Tabs — `initDetailTabs(tabContainer, options?)`.** Container `<div class="tabs is-boxed" id="{prefix}-detail-tabs-{{.DomID}}">` (the id is the storage namespace). Each tab `<li data-panel="…">`; the first carries `is-active`; panels are siblings, non-default ones start `display:none`. Options: `scoped` (default `true` — keep it), `storage` (`'local'` default, or `'session'`). A saved tab that no longer exists is ignored.
-- **Audit — `initAuditSection(section)`.** `<article data-audit-section data-orb-id data-subgraph-orb-ids>` holding a `[data-audit-toggle]` (with `aria-controls` naming the panel) and the panel, which starts hidden and empty. Row cap `AUDIT_PANEL_LIMIT`, from `layout.AuditPanelDefaultLimit`.
+- **Tabs — `initDetailTabs(tabContainer, options?)`.** The container id (`{prefix}-detail-tabs-{{.DomID}}`) is the storage namespace; each tab is `<li data-panel="…">`, the first `is-active`, non-default panels start hidden. Keep `scoped: true`. A saved tab that no longer exists is ignored.
+- **Audit — `initAuditSection(section)`** on `<article data-audit-section data-orb-id data-subgraph-orb-ids>`; its panel starts hidden and empty and loads on first expand. Row cap `AUDIT_PANEL_LIMIT`, from `layout.AuditPanelDefaultLimit`.
 - Both set `data-wired="true"` once their handlers are attached; automation waits on it, not on visibility.
-
-```js
-const tabs = root.querySelector('[id^="newprefix-detail-tabs-"]')
-if (tabs) initDetailTabs(tabs)
-initAuditSection(root.querySelector('[data-audit-section]'))
-```
 
 ## Template conventions
 
 - **Page titles**: `{{.PageTitle}} | Orbital`; every handler sets `PageTitle`.
-- **Never redeclare fields of embedded types** (`layout.Base`) — the outer field shadows it.
 - **Single-tab pages** use a heading, not `<nav class="tabs is-boxed">`; keep the `.tab-content` wrapper if they contain boxes.
 - **`updatedBy`/`updatedAt` are hidden from audit variable display** (`skipVars`); they stay in the database.
 - **REST-triggered audit events have no child row.**
-- **Startup logging uses slog**, set first in `cmd/orbital/main.go`.
 - **Standalone pages still include `head.gohtml`** for cache-busting.
 - **Full-document templates live in `pages/`, fragments in `partials/`.**
-
-## Timestamp rendering
-
-- **`data-timestamp` uses RFC3339**; the visible fallback is short:
-  ```gohtml
-  <span data-timestamp="{{.SomeTime.Format "2006-01-02T15:04:05Z07:00"}}">{{.SomeTime.Format "2006-01-02 15:04"}}</span>
-  ```
-- **`renderTimestamps(document)` runs at DOMContentLoaded**; swapped content calls `renderTimestamps(panel)`.
+- **Timestamps render client-side:** `data-timestamp` holds RFC3339 with a short visible fallback (`2006-01-02 15:04`); `renderTimestamps(document)` runs at DOMContentLoaded, and swapped content calls `renderTimestamps(panel)`.
