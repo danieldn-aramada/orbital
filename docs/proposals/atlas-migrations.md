@@ -1,6 +1,6 @@
-# Spike 27 — Adopt Atlas for Postgres schema migration
+# Adopt Atlas for Postgres schema migration
 
-**Status:** Design proposal — open for review. No code written.
+**Status:** Proposed — design complete, open for review. No code written.
 **Date:** 2026-08-26
 **Scope:** orbital's PostgreSQL schema evolution (`ent/migrate`, `cmd/orbital/main.go`), the deploy path, and CI. Orb's SQLite is a secondary target (§8).
 **Question:** How does orbital evolve its Postgres schema against long-lived data — adding constraints to populated tables — without crashlooping deploys?
@@ -253,7 +253,7 @@ With Pro out, the defence is three layers, none of them paid:
 2. **Does `make test-integration` migrate via Atlas or keep `Schema.Create`?** Tests start empty, so auto-migration is correct and faster there — but then tests never exercise the path production uses. Leaning: tests apply real migrations, making drift impossible by construction. Affects `export_integration_test.go:59` and `ingester_integration_test.go:49`.
 3. **Where does the redacted AKS snapshot live, who refreshes it, and what is redacted?** The audit table holds actor emails and full mutation payloads. This has a privacy dimension and needs an owner, not just a pipeline.
 4. **Is the Atlas CLI a hard developer prerequisite, or generation-only?** Contributors who never touch `ent/` should not need it. Leaning: generation-only, documented in `CONTRIBUTING.md`, with CI enforcing that generated migrations were committed.
-5. **Init container vs Helm pre-upgrade hook Job.** §4.2 recommends `--migrate` from an init container; a Helm hook is the more conventional K8s answer and interacts differently with rollbacks. Check against the chart work in `armada-orbital`.
+5. **Init container vs Helm pre-upgrade hook Job.** §4.2 recommends `--migrate` from an init container; a Helm hook is the more conventional K8s answer and interacts differently with rollbacks. Check against the deployment's Helm chart.
 6. **Rollback policy.** Atlas supports down-migrations but they are not universally safe (a dropped column's data is gone). Decide whether the policy is roll-forward-only — most teams land there — and write it down.
 7. **Does orb follow?** See §8.
 

@@ -8,7 +8,7 @@ Orbital — the source of truth for edge, air-gapped modular data centers.
 |---|---|
 | Full spike + pre-GA backlog | [`docs/planning/backlog.md`](docs/planning/backlog.md) |
 | Known technical debt | [`docs/planning/debt.md`](docs/planning/debt.md) |
-| Designs under investigation | [`docs/spikes/`](docs/spikes/) |
+| Designs under investigation | [`docs/proposals/`](docs/proposals/) |
 | Settled architecture per domain | [`docs/reference/`](docs/reference/) |
 | Release notes | [`CHANGELOG.md`](CHANGELOG.md) — source of truth; GitHub Release bodies are generated from it |
 
@@ -75,8 +75,8 @@ selection, and the architecture design that became the SDD.*
 
 | | |
 |---|---|
-| **Apply the DGraph schema on deploy** | Rollouts don't apply `schema.graphql` or its migrations. Make the deploy do it (Helm hook + kustomize Job). → [`debt.md`](docs/planning/debt.md) |
-| **Spike 27 — Atlas Postgres migrations** | Versioned migrations; ends the crashloop-on-deploy class. → [`spike-27-atlas-migrations.md`](docs/spikes/spike-27-atlas-migrations.md) |
+| **Apply the DGraph schema on deploy** | Rollouts don't apply `schema.graphql` or its migrations. Make the deploy do it (Helm hook + kustomize Job). → [`dgraph-schema-migrations.md`](docs/proposals/dgraph-schema-migrations.md) |
+| **Spike 27 — Atlas Postgres migrations** | Versioned migrations; ends the crashloop-on-deploy class. → [`atlas-migrations.md`](docs/proposals/atlas-migrations.md) |
 | **Spike 23 — Audit existing tests** | Which tests guard real regressions vs which are theatre. |
 | **CLI authentication, redesigned** | `orbctl` login is Entra-locked and unused; decide between a public IdP client, orbital issuing its own credential, or personal access tokens. |
 

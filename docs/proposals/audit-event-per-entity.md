@@ -1,6 +1,6 @@
-# Spike: one audit event per entity, correlated by request id
+# One audit event per entity, correlated by request id
 
-**Status:** Partially shipped. **§4 (write-path pre-flight) is DONE — implemented 2026-09-03**, and its decisions now live in `docs/reference/AUDIT.md`; the section is kept below only for the deliberation, and can go when the rest of this spike closes. §§1–3 (one audit event per entity) are still design-only: target shape decided (option B below), phasing and two open questions remain.
+**Status:** Accepted — partially implemented. **§4 (write-path pre-flight) is DONE — implemented 2026-09-03**, and its decisions now live in `docs/reference/AUDIT.md`; the section is kept below only for the deliberation, and can go when the rest of this spike closes. §§1–3 (one audit event per entity) are still design-only: target shape decided (option B below), phasing and two open questions remain.
 **Date:** 2026-09-01.
 **Folds into:** `docs/reference/AUDIT.md` on close; this doc is then deleted.
 

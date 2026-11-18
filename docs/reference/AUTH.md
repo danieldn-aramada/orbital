@@ -400,7 +400,7 @@ can predict what their next login does. **If that UI distinction is ever removed
 delete the column and follow Grafana** — the silent revert those products are
 criticised for is what an invisible version of this would be.
 
-Survey and reasoning: [`spike-26-auth-providers.md`](../spikes/spike-26-auth-providers.md)
+Survey and reasoning: [`auth-providers.md`](../proposals/auth-providers.md)
 § Role ownership when an IdP and a local table disagree — point-in-time evidence,
 not normative.
 

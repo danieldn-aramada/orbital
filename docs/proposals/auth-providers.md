@@ -1,4 +1,6 @@
-# Spike 26 — upstream survey and deliberation behind multi-provider auth
+# Multi-provider auth — upstream survey and deliberation
+
+**Status:** Implemented (shipped 2026-09-22). Kept as the evidence companion that `AUTH.md` links.
 
 > **Evidence companion to [`AUTH.md`](../reference/AUTH.md) § Multiple identity
 > providers — start there for what orbital actually does.** Everything settled
@@ -156,7 +158,7 @@ for scripted testing, and ROPC is discouraged by OAuth 2.1 anyway.
 
 **Green synthetic tests missed three real defects.** Live testing against the dev
 realm caught two: a service-account token provisioning
-`service-account-armada-orbital` as a readonly user, and provider ownership being
+`service-account-<client-id>` as a readonly user, and provider ownership being
 inferred from `usernamePrefix`. The third — the forgeable `app:` prefix above —
 survived until someone asked what the constant was *for*, because every test that
 touched it constructed the verifier's output by hand and so could only confirm

@@ -1,6 +1,6 @@
 # Advisory enforcement for approval policies
 
-**Status:** Not started — open question under investigation. **The "verdict: yes" was
+**Status:** Proposed — not started; open question under investigation. **The "verdict: yes" was
 withdrawn 2026-09-17**: its two stated premises were tested against the code and both
 failed. The question is still open, but as ergonomics, not as a safety gap.
 

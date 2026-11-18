@@ -1,6 +1,6 @@
-# Spike 37 — Parse GraphQL with a real AST
+# Parse GraphQL with a real AST
 
-**Status:** Not started — open question under investigation.
+**Status:** Proposed — not started; open question under investigation.
 
 *Moved out of `docs/planning/backlog.md` 2026-09-15: the entry had grown past what a
 tracker line can carry. The backlog keeps the question; this doc keeps the reasoning.
