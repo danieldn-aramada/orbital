@@ -273,6 +273,130 @@ The detail page's audit section query (`GET /api/v1/audit-log?orbId=...`) filter
 - Does **not** stop a superuser (`session_replication_role = replica`) or filesystem access. Pinned by
   `TestAuditGuard_*`.
 
+## Tamper evidence — hash chain + digests in WORM storage 📋
+
+**Designed, not built.** What it would and would not prove, for an auditor: `docs/audit-model.md` §5.
+This section is the evidence the design rests on. Quotes were checked against the live pages on 2026-11-19.
+
+**The design.** Each audit row stores the SHA-256 hash of its predecessor. Every hour orbital
+publishes the chain head as a **digest**: a small object in Azure Blob Storage under a **locked
+time-based retention policy** (WORM). Each digest carries the hash of the previous one, and an hour
+with no events still gets a digest. Verification recomputes the chain from PostgreSQL and compares
+it against the stored digests.
+
+- **The digest store is the control, not the chain.** An unkeyed hash chain is a pure function of
+  the rows, so whoever can rewrite rows can recompute it. The protection comes from publishing the
+  head somewhere the database's own administrators cannot change it. Microsoft spells out this
+  attack against its own product (below).
+- **Why the name "digest"?** Both of the closest precedents use it: CloudTrail's "digest file" and
+  Azure SQL ledger's "database digest". `audit-model.md` calls the same object an *anchor*,
+  meaning its role: it anchors the chain outside the database.
+
+### Prior art — the same pattern, shipped
+
+| Product | Publishes | Where | Signed |
+|---|---|---|---|
+| [AWS CloudTrail log file integrity validation](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-validation-intro.html) | Hourly **digest file**: a hash of each log file, plus a reference to the previous digest | The trail's S3 bucket | Yes: "SHA-256 for hashing and SHA-256 with RSA for digital signing" |
+| [Azure SQL ledger](https://learn.microsoft.com/en-us/sql/relational-databases/security/ledger/ledger-overview) | **Database digests**: the root hash of the latest block | Azure Blob with immutability policies, Azure Confidential Ledger, or on-premises WORM | The [digest JSON](https://learn.microsoft.com/en-us/sql/relational-databases/security/ledger/ledger-digest-management) has no signature field. Trust comes from the store |
+| Certificate Transparency, [RFC 6962](https://www.rfc-editor.org/rfc/rfc6962) (obsoleted by [RFC 9162](https://www.rfc-editor.org/rfc/rfc9162)) | Signed Merkle tree heads | Compared by independent auditors | Yes |
+
+- **CloudTrail.**
+  - "Every hour, CloudTrail also creates and delivers a file that references the log files for the
+    last hour and contains a hash of each. This file is called a digest file."
+  - Each digest references its predecessor. That chaining lets the AWS CLI "detect if a digest file
+    has been deleted" ([digest file structure](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-validation-digest-file-structure.html)).
+  - Quiet hours are published on purpose: "CloudTrail will deliver a digest file even when there has
+    been no API activity in your account during the one hour period that the digest file represents."
+  - Orbital copies all three: hourly, chained, and published when nothing happened. A quiet hour then
+    cannot be mistaken for someone suppressing digests.
+- **Azure SQL ledger.**
+  - "When a block is formed, its associated database digest is published and stored outside the
+    database in tamper-proof storage."
+  - Microsoft names the attack the store exists to stop: "An attacker who has access to modify the
+    digests would be able to: Tamper with the data in the database. Generate the hashes that represent
+    the database with those changes. Modify the digests to represent the updated hash…"
+  - It promises detection, not prevention: "Ledger can't prevent such attacks but guarantees that any
+    tampering will be detected when the ledger data is verified."
+  - The [verification guide](https://learn.microsoft.com/en-us/sql/relational-databases/security/ledger/ledger-database-verification)
+    warns against digests kept in Azure Storage "without a configured and locked immutability policy".
+- **Azure Monitor**, Microsoft's advice for its own log platform: "If you need a fully tamper-proof
+  solution, we recommend you export your data to an immutable storage solution"
+  ([data security](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/data-security)).
+- **Certificate Transparency** states the limit of any log that reports on itself: "it is necessary
+  to treat each log as a trusted third party" (RFC 9162 §1). Detection depends on someone else keeping
+  earlier heads: "Violation of the append-only property is detected by global gossiping" (RFC 6962).
+  Orbital's locked WORM store plays the auditors' role: a copy of earlier heads that orbital's
+  operators cannot rewrite.
+
+**Literature.**
+- Schneier & Kelsey, [*Secure Audit Logs to Support Computer Forensics*](https://www.schneier.com/academic/archives/1999/05/secure_audit_logs_to.html)
+  (ACM TISSEC, 1999), the origin of hash-chained audit logs.
+  - Its guarantee covers "all log entries generated prior to the logging machine's compromise".
+  - That is why the newest, not-yet-published records are the exposure window in `audit-model.md` §5.
+- Crosby & Wallach, [*Efficient Data Structures for Tamper-Evident Logging*](https://www.usenix.org/legacy/event/sec09/tech/full_papers/crosby.pdf)
+  (USENIX Security 2009): the standard treatment of an untrusted logger kept honest by auditors.
+- NIST [SP 800-92](https://csrc.nist.gov/pubs/sp/800/92/final) §3.2 applies the same primitive to log
+  archives: "Log file integrity checking involves calculating a message digest for each file and
+  storing the message digest securely to ensure that changes to archived logs are detected."
+
+### WORM — why a *locked* time-based retention policy
+
+**This is WORM enforced by a storage policy, not the hardware write-once media of AU-9(1).** In NIST SP 800-53,
+"WORM" appears only in AU-9(1), "Write audit trails to hardware-enforced, write-once media". Its
+examples are CD-R, BD-R and DVD-R, and it calls switchable write protection "write-protected but not
+write-once media". AU-9(1) is in no baseline, and orbital makes no claim against it. Say "immutable
+(WORM) storage under a locked time-based retention policy": WORM is the term people recognise, and
+the locked policy is what the claim rests on.
+
+| Azure immutability policy | Can be removed | Fit for digests |
+|---|---|---|
+| **Time-based retention, locked** | By no one: "You can't delete a locked time-based retention policy. You can extend the retention period, but you can't decrease it." | ✅ |
+| Time-based retention, unlocked | Can be shortened or deleted. Microsoft says to lock "typically less than 24 hours" after creating it, and to use unlocked only for short-term testing | ❌ |
+| Legal hold | Holds data "until the legal hold is explicitly cleared", by whoever holds that permission | ❌ |
+
+Sources: [time-based retention](https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-time-based-retention-policy-overview),
+[immutable storage overview](https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-storage-overview).
+
+- **Microsoft's claim.** Data "can't be modified or deleted by any user, not even by users with
+  account administrative privileges". Once locked, the policy is "fully compliant with SEC 17a-4(f)".
+- **No escape by deleting the container.** "Storage account deletion fails if there is at least one
+  container with a locked time-based retention policy." On unlocked policies, the same page says:
+  "Unlocked policies don't provide delete protection."
+  ([container-level WORM](https://learn.microsoft.com/en-us/azure/storage/blobs/immutable-container-level-worm-policies))
+- **AWS equivalent: [S3 Object Lock](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html)
+  compliance mode.** "a protected object version can't be overwritten or deleted by any user,
+  including the root user".
+  - Its one documented escape is the one Azure blocks: "The only way to delete an object under the
+    compliance mode before its retention date expires is to delete the associated AWS account."
+  - Governance mode is S3's bypassable counterpart.
+
+### FedRAMP and NIST
+
+- **Azure Blob Storage is in Azure's FedRAMP High scope.** It is listed as "Storage: Blobs"
+  ([Azure services by FedRAMP audit scope](https://learn.microsoft.com/en-us/azure/azure-government/compliance/azure-services-in-fedramp-auditscope);
+  Azure holds a "FedRAMP High P-ATO", per [Azure FedRAMP offering](https://learn.microsoft.com/en-us/azure/compliance/offerings/offering-fedramp)).
+  Immutable storage is a feature of that service and is not listed separately, so cite the service,
+  not the feature.
+- **Controls** ([NIST SP 800-53 Rev. 5](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-53r5.pdf)):
+  - **AU-9(a):** "Protect audit information and audit logging tools from unauthorized access,
+    modification, and deletion".
+  - **AU-9(b):** alert "upon detection of unauthorized access, modification, or deletion of audit
+    information". The chain is what provides that detection.
+  - **AU-9(3)**, High only: "Implement cryptographic mechanisms to protect the integrity of audit
+    information and audit tools."
+  - Baseline membership and orbital's status per control: `audit-model.md` §7.
+
+### What the evidence does not settle
+
+1. **How an assessor scores it.** No public source shows a 3PAO assessing an unkeyed hash chain with
+   WORM digests against AU-9(3) for a cloud service offering, because authorized SSPs are not public.
+   Ask the assessor.
+2. **Signing.** Orbital's digests are unsigned, like Azure SQL ledger's. CloudTrail signs its digests.
+   AU-9(3)'s discussion lists "signed hash functions using asymmetric cryptography" as an example
+   ("include"), not a requirement. Whether an assessor expects signing at High is part of item 1.
+3. **AU-9(2) is a different control.** Digests are not audit records, so keeping them in Blob does not
+   meet AU-9(2), which asks for the records themselves to be stored on a separate physical system.
+
 ## ent conventions for events
 
 - **Do not use `Immutable()` on ent schema fields** — immutability enforced at app layer (never call `.Update()` on event records). `Immutable()` causes migration pain: changing a field requires drop/recreate rather than ALTER.

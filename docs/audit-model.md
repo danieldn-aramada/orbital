@@ -262,8 +262,9 @@ internally as a side effect of mutations; callers only ever read them. Neither w
 ### Designed, not built 📋
 
 A tamper-evidence design exists: each audit row carries the hash of its predecessor, forming a chain
-that breaks detectably if any row is altered or removed, with the chain head published periodically
-to immutable external storage.
+that breaks detectably if any row is altered or removed, with the chain head published hourly as a
+**digest** to immutable (WORM) external storage — the pattern AWS CloudTrail and Azure SQL ledger
+ship. The upstream evidence for the approach, with sources: `docs/reference/AUDIT.md` § Tamper evidence.
 
 **What that would and would not prove**, stated plainly because the distinction is the whole point:
 
@@ -322,7 +323,7 @@ published segments rather than arbitrary rows.
 
 **AU-9(3) is a High-baseline enhancement.** It is not in the Low or Moderate baselines. An adopter
 targeting Moderate should read §5 as a hardening measure rather than a requirement — though AU-9(b)
-asks for tamper *detection* at every baseline, and orbital has none today.
+asks for tamper *detection* at every baseline, and orbital's detects only removal of the guard (§8).
 
 ---
 
@@ -330,16 +331,12 @@ asks for tamper *detection* at every baseline, and orbital has none today.
 
 Named rather than omitted. Each is tracked work.
 
-1. **Audit-logging failures are silent.** A failed audit write produces a single application-log
-   warning, no metric and no alert. AU-5(a) asks for an alert at every baseline. *(Highest-value gap
-   here.)*
-2. **No tamper detection.** AU-9(b) asks for an alert on detection of unauthorized modification; there
-   is nothing to detect with. The §5 design addresses this.
-3. **No file export.** §4.
-4. **No capacity signal.** Retention is unbounded by default with no growth metric — AU-4.
-9. **No detection of a superuser bypass.** The append-only guard is enforced and monitored (§5), but a
-   superuser can disable triggers for their session, and nothing would see it. That gap is what the
-   hash chain and external anchor exist to close.
+1. **Tamper detection covers the guard, not the data.** AU-9(b) asks for an alert on detection of
+   unauthorized modification. Startup verification alerts if the append-only trigger is removed or
+   disabled (§5), but a superuser can bypass triggers for their session and edit rows, and nothing
+   would see it. That gap is what the hash chain and external anchor exist to close.
+2. **No file export.** §4.
+3. **No capacity signal.** Retention is unbounded by default with no growth metric — AU-4.
 
 ---
 
