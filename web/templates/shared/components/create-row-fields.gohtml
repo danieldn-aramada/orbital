@@ -1,0 +1,49 @@
+{{/*
+create-row-fields.gohtml — the inputs of one list row being created: its fields
+and the existing nodes it points at. Shared by the create form's repeating rows
+and a parent page's Add form, so both build a row the same way.
+Render context: page.CreateUnitRepeating.
+*/}}
+{{define "create-row-fields.gohtml"}}
+  {{range .Fields}}
+  <div class="field">
+    {{/* Same weight as the root form's labels. A repeating row is a
+         node being created, not an annotation on one — greying it
+         reads as secondary, and the reader types into it just as
+         much. */}}
+    <label class="label is-size-7">
+      {{.Label}}{{if .Identity}} <span class="has-text-danger">*</span>{{end}}
+    </label>
+    {{if eq .Type "Boolean"}}
+    <div class="select is-small is-fullwidth">
+      <select data-create-row-field="{{.Field}}" data-create-type="Boolean">
+        <option value=""{{if eq .Default ""}} selected{{end}}>—</option>
+        <option value="true"{{if eq .Default "true"}} selected{{end}}>true</option>
+        <option value="false"{{if eq .Default "false"}} selected{{end}}>false</option>
+      </select>
+    </div>
+    {{else}}
+    <input class="input is-small"
+           type="{{if or (eq .Type "Int") (eq .Type "Int64") (eq .Type "Float")}}number{{else}}text{{end}}"
+           data-create-row-field="{{.Field}}" data-create-type="{{.Type}}"
+           value="{{.Default}}" placeholder="{{.Hint}}"
+           {{if .Identity}}data-create-identity="1" required{{end}}>
+    {{end}}
+  </div>
+  {{end}}
+  {{range .Relations}}
+  <div class="field">
+    <label class="label is-size-7">
+      {{.Label}}{{if .Required}} <span class="has-text-danger">*</span>{{end}}
+    </label>
+    <div class="select is-small is-fullwidth">
+      <select data-create-row-rel="{{.Field}}" {{if .Required}}required{{end}}
+              data-create-scoped="true" disabled
+              data-testid="create-row-rel-{{.Field}}">
+        <option value="">— choose a {{.Label}} —</option>
+        {{range .Options}}<option value="{{.OrbID}}" data-namespace="{{.Namespace}}">{{.Name}}</option>{{end}}
+      </select>
+    </div>
+  </div>
+  {{end}}
+{{end}}

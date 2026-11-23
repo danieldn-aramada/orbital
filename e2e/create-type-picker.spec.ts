@@ -33,10 +33,12 @@ test('an interface page states which type it creates, pre-selected', async ({ pa
 
   const picker = modal.getByTestId('create-type');
   await expect(picker, 'an interface page must say which type it creates').toBeVisible();
-  await expect(picker, 'with one implementation it is answered already — no extra click')
-    .toHaveValue('EksaKubernetesCluster');
+  const preselected = await picker.inputValue();
+  expect(preselected, 'it is answered already — no extra click').not.toBe('');
+  await expect(modal).toHaveAttribute('data-kind', preselected);
 
   // Acceptance 4: the mutation follows the SELECTION, not the page.
+  await picker.selectOption('EksaKubernetesCluster');
   await expect(modal).toHaveAttribute('data-kind', 'EksaKubernetesCluster');
 });
 
@@ -47,6 +49,8 @@ test('shared fields render once; the implementation\'s own are per-type', async 
   await page.goto('/clusters');
   await page.getByTestId('create-open').click();
   const modal = page.locator('.modal.is-active');
+
+  await modal.getByTestId('create-type').selectOption('EksaKubernetesCluster');
 
   // `clusterType` is EKS-A's own; `cni` comes from the interface.
   const shared = modal.locator('[data-create-field="cni"]:not([data-create-child])');
@@ -72,13 +76,11 @@ test('a value typed into a hidden type block is never sent', async ({ page, requ
   // declare, and DGraph refuses the whole mutation — so the create fails with a
   // schema error naming a field the reader cannot see.
   //
-  // With one implementation nothing is hidden, so this asserts the mechanism
-  // rather than the symptom: hiding the block must remove its fields from the
-  // collected set.
   await page.goto('/clusters');
   await page.getByTestId('create-open').click();
   const modal = page.locator('.modal.is-active');
 
+  await modal.getByTestId('create-type').selectOption('EksaKubernetesCluster');
   await modal.locator('[data-create-field="clusterType"]').fill('workload');
   const visible = await page.evaluate(() => {
     const m = document.querySelector('.modal.is-active')!;
@@ -91,11 +93,8 @@ test('a value typed into a hidden type block is never sent', async ({ page, requ
   });
   expect(visible, 'the selected type\'s field is collected').toContain('clusterType');
 
-  // Hide it the way a type change would, and it must drop out.
-  await page.evaluate(() => {
-    const b = document.querySelector('.modal.is-active [data-create-type-fields]') as HTMLElement;
-    b.style.display = 'none';
-  });
+  // Switch to a type without it, and it must drop out.
+  await modal.getByTestId('create-type').selectOption('AzureLocalKubernetesCluster');
   const afterHide = await page.evaluate(() => {
     const m = document.querySelector('.modal.is-active')!;
     const hidden = (el: Element) => {

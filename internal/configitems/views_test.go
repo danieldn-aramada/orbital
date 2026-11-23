@@ -74,3 +74,35 @@ func viewFor(t *testing.T, views []View, typeName string) View {
 	t.Fatalf("no view for %s", typeName)
 	return View{}
 }
+
+// A value column may cross a list; a count may not reach past one, because the
+// response would hold one aggregate per element and the cell would show their
+// list instead of a total.
+func TestResolveColumnPaths_ListHops(t *testing.T) {
+	types := map[string]TypeInfo{
+		"Server": {Fields: []DerivedField{
+			{Name: "kubernetesNodes", Kind: "OBJECT", TypeName: "KubernetesNode", IsList: true},
+		}},
+		"KubernetesNode": {Fields: []DerivedField{
+			{Name: "role", Kind: "SCALAR"},
+			{Name: "taints", Kind: "OBJECT", TypeName: "Taint", IsList: true},
+		}},
+		"Taint": {Fields: []DerivedField{{Name: "key", Kind: "SCALAR"}}},
+	}
+	for _, tc := range []struct {
+		path     string
+		resolves bool
+	}{
+		{"kubernetesNodes.role", true},
+		{"kubernetesNodes.count", true},
+		{"kubernetesNodes.taints.key", true},
+		{"kubernetesNodes.taints.count", false},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			cols, warn := resolveColumnPaths(types, types["Server"], "Server", nil, []string{tc.path})
+			if got := len(cols) == 1; got != tc.resolves {
+				t.Fatalf("resolves = %v, want %v (warnings: %v)", got, tc.resolves, warn)
+			}
+		})
+	}
+}

@@ -87,6 +87,7 @@ test('a network device form offers rack and virtual chassis, optional and scoped
 
 test('a cluster form creates its control-plane IP, links a shared tinkerbell IP, and links its management cluster', async ({ page, request }) => {
   const modal = await openForm(page, 'clusters');
+  await modal.getByTestId('create-type').selectOption('EksaKubernetesCluster');
   await expect(modal.getByTestId('create-rel-managementCluster')).toBeDisabled();
   await modal.locator('[data-create-rel="dataCenter"]').selectOption({ value: DC });
   expect(new Set(await visibleNamespaces(modal, 'managementCluster'))).toEqual(new Set(['colo']));

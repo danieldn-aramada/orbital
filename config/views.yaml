@@ -62,6 +62,7 @@
 # COLUMNS  (types.<T>.columns — extra table columns wherever T is a row)
 #   rack            a bare SINGLE relationship: a column of links
 #   rack.uHeight    a path ending in a value; `<list>.count` counts
+#   kubernetesNodes.role   a path through a list: each distinct value, comma-joined
 #   Link columns render before value columns. `refColumns:` is retired.
 #
 # DERIVED, never declared here
@@ -73,7 +74,7 @@
 # declaring only the pages or types it changes. Copying this whole file into an
 # overlay freezes that deployment at today's shape, forever.
 
-schemaVersion: v20
+schemaVersion: v21
 
 # FIELD LABELS — the stored field name on the left, the text the UI shows on
 # the right. A field NOT listed shows its RAW name (`firmwareRepository`): the
@@ -102,7 +103,7 @@ pages:
     subgraph:
       - { path: idracSettings, editable: true }
       - { path: serverMaintenance, editable: true }
-      - kubernetesNode
+      - kubernetesNodes
       - storageControllers
       - networkAdapters
       - networkInterfaces
@@ -118,7 +119,7 @@ pages:
       - { path: backup.etcd, editable: true }
       - { path: backup.velero, editable: true }
       - { path: backup.s3Sync, editable: true }
-      - nodes
+      - { path: nodes, editable: true }
 
   NetworkDevice:
     menuWeight: 40
@@ -185,6 +186,10 @@ types:
     fields:
       number: { createOnly: true }
 
+  AzureLocalKubernetesCluster:
+    fields:
+      name: { createOnly: true }
+
   EksaKubernetesCluster:
     fields:
       name: { createOnly: true }
@@ -193,13 +198,14 @@ types:
 
   KubernetesNode:
     columns:
+      - cluster
       - server
     fields:
       name: { createOnly: true }
-      gpu: { editable: false, tableHidden: true }
-      notes: { editable: false, tableHidden: true }
-      owner: { editable: false, tableHidden: true }
-      role: { editable: false }
+      server: { editable: true }
+      gpu: { tableHidden: true }
+      notes: { tableHidden: true }
+      owner: { tableHidden: true }
 
   NetworkAdapter:
     fields:
@@ -230,9 +236,9 @@ types:
       - server
       - networkAdapter
       - connectedNetworkDevice
-      - server.kubernetesNode.cluster.name
-      - server.kubernetesNode.role
-      - server.kubernetesNode.gpu
+      - server.kubernetesNodes.cluster.name
+      - server.kubernetesNodes.role
+      - server.kubernetesNodes.gpu
     fields:
       name: { createOnly: true }
       connectedNetworkDevicePort: { editable: false }
@@ -254,9 +260,9 @@ types:
       - oobIP
       - rack
       - rack.uHeight
-      - kubernetesNode.cluster.name
-      - kubernetesNode.role
-      - kubernetesNode.gpu
+      - kubernetesNodes.cluster.name
+      - kubernetesNodes.role
+      - kubernetesNodes.gpu
     fields:
       serviceTag: { createOnly: true }
       rack: { editable: true }

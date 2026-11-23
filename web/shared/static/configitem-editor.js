@@ -165,6 +165,191 @@ function relationEdits(modal) {
   return { set, remove }
 }
 
+// rowRelationEdits returns each list row's changed reference selects, keyed by
+// the row's orbId, as the set/remove of that row's own update.
+function rowRelationEdits(modal) {
+  const out = {}
+  if (!modal) return out
+  for (const el of modal.querySelectorAll('[data-edit-row-rel]')) {
+    const field = el.dataset.editRowRel
+    const current = el.dataset.editRelCurrent || ''
+    const chosen = el.value || ''
+    if (chosen === current) continue
+    const e = out[el.dataset.rowOrbId] || (out[el.dataset.rowOrbId] = { set: {}, remove: {} })
+    if (chosen === '') e.remove[field] = { orbId: current }
+    else e.set[field] = { orbId: chosen }
+  }
+  return out
+}
+
+// createInputValue reads a create-form input as the GraphQL type it declares.
+// undefined for an empty input, which the caller leaves out of the mutation.
+export function createInputValue(el) {
+  const raw = (el.value || '').trim()
+  if (raw === '') return undefined
+  switch (el.dataset.createType) {
+    case 'Boolean': return raw === 'true'
+    case 'Int': case 'Int64': return parseInt(raw, 10)
+    case 'Float': return parseFloat(raw)
+    case 'DateTime': {
+      // DGraph wants RFC3339. Accept whatever Date can parse and normalise
+      // it; hand back the raw text when it cannot, so the server reports a
+      // bad value rather than this silently inventing one.
+      const d = new Date(raw)
+      return isNaN(d.getTime()) ? raw : d.toISOString()
+    }
+    default: return raw
+  }
+}
+
+// scopeSelectTo limits a select of existing nodes to one namespace, disabled
+// until there is one. A choice made for another namespace is cleared.
+export function scopeSelectTo(sel, ns) {
+  sel.value = ''
+  sel.disabled = !ns
+  for (const opt of sel.options) {
+    if (!opt.value) continue
+    const other = opt.dataset.namespace !== ns
+    opt.hidden = other
+    opt.disabled = other
+  }
+}
+
+// orbIdsInUse returns which of the given orbIds already exist.
+export async function orbIdsInUse(ids) {
+  const wanted = ids.filter(Boolean)
+  if (!wanted.length) return []
+  const r = await fetch(BASE + '/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: 'query InUse($ids: [String!]) { queryConfigItem(filter: { orbId: { in: $ids } }) { orbId } }',
+      variables: { ids: wanted },
+    }),
+  })
+  const body = await r.json()
+  return ((body.data && body.data.queryConfigItem) || []).map(n => n.orbId)
+}
+
+// newRowOrbId fills a new row's orbId template from the row's own inputs, or
+// '' while one it needs is empty. The parent's placeholders arrive filled.
+function newRowOrbId(row, ns) {
+  let out = row.dataset.rowOrbidTemplate || ''
+  let blank = false
+  for (const el of row.querySelectorAll('[data-create-row-field]')) {
+    const token = `{${el.dataset.createRowField}}`
+    if (!out.includes(token)) continue
+    const v = (el.value || '').trim()
+    if (v === '') blank = true
+    out = out.replaceAll(token, v)
+  }
+  return (blank || out === '' || out.includes('{')) ? '' : `${ns}:${out}`
+}
+
+// wireMemberLists connects the modal's row controls: Add clones the page's row
+// template, and ticking Delete loads the same preview the page's Delete shows.
+function wireMemberLists(modal, ns) {
+  if (!modal || !modal.querySelector('[data-edit-member-list]')) return
+  const refreshIds = () => {
+    for (const row of modal.querySelectorAll('[data-edit-new-row]')) {
+      const out = row.querySelector('[data-edit-new-row-orbid]')
+      if (out) out.textContent = newRowOrbId(row, ns) || '—'
+    }
+  }
+  modal.addEventListener('click', (e) => {
+    const add = e.target.closest('[data-edit-add-row]')
+    if (add) {
+      e.preventDefault()
+      const field = add.dataset.editAddRow
+      const tpl = [...document.querySelectorAll('template[data-edit-add-row-template]')]
+        .find(t => t.dataset.editAddRowTemplate === field && t.dataset.editFor === modal.dataset.orbId)
+      const host = modal.querySelector(`[data-edit-new-rows="${field}"]`)
+      if (!tpl || !host) return
+      host.appendChild(tpl.content.cloneNode(true))
+      for (const sel of host.lastElementChild.querySelectorAll('[data-create-scoped]')) scopeSelectTo(sel, ns)
+      refreshIds()
+      return
+    }
+    const drop = e.target.closest('[data-edit-drop-new-row]')
+    if (drop) {
+      e.preventDefault()
+      drop.closest('[data-edit-new-row]').remove()
+    }
+  })
+  modal.addEventListener('input', (e) => {
+    if (e.target.closest('[data-edit-new-row]')) refreshIds()
+  })
+  modal.addEventListener('change', async (e) => {
+    const box = e.target.closest('[data-edit-delete-row]')
+    if (!box) return
+    const row = box.closest('[data-edit-member-row]')
+    const slot = row.querySelector('[data-edit-delete-preview]')
+    const seq = String(Number(row.dataset.previewSeq || 0) + 1)
+    row.dataset.previewSeq = seq
+    delete row.dataset.previewLoaded
+    for (const sel of row.querySelectorAll('[data-edit-row-rel]')) sel.disabled = box.checked
+    if (!box.checked) {
+      slot.innerHTML = ''
+      slot.style.display = 'none'
+      return
+    }
+    slot.textContent = 'Loading what this deletes…'
+    slot.style.display = ''
+    const list = row.closest('[data-edit-member-list]')
+    let text
+    try {
+      const r = await fetch(BASE + list.dataset.previewUrl + '?member=' + encodeURIComponent(row.dataset.rowOrbId))
+      text = r.ok ? await r.text() : null
+      if (row.dataset.previewSeq !== seq) return // re-toggled while loading
+      if (text === null) {
+        slot.textContent = await apiErrorText(r, 'Could not load what this deletes')
+        return
+      }
+    } catch (_) {
+      if (row.dataset.previewSeq === seq) slot.textContent = 'Could not load what this deletes.'
+      return
+    }
+    slot.innerHTML = text
+    // The page's own Delete looks its version up by this id.
+    slot.querySelector('#cfg-delete-version')?.remove()
+    row.dataset.previewLoaded = 'true'
+  })
+}
+
+// memberEdits reads the rows added and the rows ticked for delete. A delete is
+// only sent once its preview has been shown.
+function memberEdits(modal, ns) {
+  const adds = {}
+  const addIds = []
+  const deletes = []
+  if (!modal) return { adds, addIds, deletes }
+  for (const row of modal.querySelectorAll('[data-edit-new-row]')) {
+    const field = row.dataset.editNewRow
+    const orbId = newRowOrbId(row, ns)
+    if (!orbId) return { error: `Fill the fields each new ${field} row needs — its Orb ID is built from them.` }
+    if (addIds.includes(orbId)) return { error: `Two new ${field} rows would get the same Orb ID (${orbId}). Give them different values.` }
+    addIds.push(orbId)
+    const entry = { orbId, namespace: ns }
+    for (const el of row.querySelectorAll('[data-create-row-field]')) {
+      const v = createInputValue(el)
+      if (v !== undefined) entry[el.dataset.createRowField] = v
+    }
+    for (const sel of row.querySelectorAll('[data-create-row-rel]')) {
+      if (sel.value) entry[sel.dataset.createRowRel] = { orbId: sel.value }
+      else if (sel.required) return { error: `Each new ${field} row needs a ${sel.dataset.createRowRel}.` }
+    }
+    ;(adds[field] || (adds[field] = [])).push(entry)
+  }
+  for (const box of modal.querySelectorAll('[data-edit-delete-row]:checked')) {
+    const row = box.closest('[data-edit-member-row]')
+    if (row.dataset.previewLoaded !== 'true') {
+      return { error: `Nothing was saved: what deleting ${row.dataset.rowOrbId} removes has not been shown. Untick Delete and tick it again.` }
+    }
+    deletes.push({ orbId: row.dataset.rowOrbId, kind: row.dataset.rowKind, version: parseInt(row.dataset.rowVersion, 10) })
+  }
+  return { adds, addIds, deletes }
+}
+
 // valueForMutation stringifies fields declared String in the schema whose VALUE
 // is JSON (DataCenter.assetDataV2). Sending them as structure is rejected —
 // "cannot use as String" from DGraph on the mutation path, and by the changeset
@@ -323,9 +508,9 @@ function guardVersion(target) {
 // Creates are skipped: there is no prior version to be stale against. Targets
 // carrying no version are skipped too — they are unguarded by construction, and
 // silently inventing a check for them here would be worse than the honest gap.
-async function staleTargets(changes, rootChange, rootTarget, rootOrbId) {
+async function staleTargets(changes, rootWrites, rootTarget, rootOrbId, extra = []) {
   const want = []
-  if (rootChange && rootTarget && Number.isInteger(rootTarget.version) && rootTarget.version > 0) {
+  if (rootWrites && rootTarget && Number.isInteger(rootTarget.version) && rootTarget.version > 0) {
     want.push({ orbId: rootOrbId, kind: rootTarget.kind, version: rootTarget.version })
   }
   for (const ch of changes) {
@@ -333,6 +518,9 @@ async function staleTargets(changes, rootChange, rootTarget, rootOrbId) {
     if (t.path.length === 0 || !ch.existed) continue
     if (!Number.isInteger(t.version) || t.version <= 0) continue
     want.push({ orbId: t.orbId, kind: t.kind, version: t.version })
+  }
+  for (const e of extra) {
+    if (Number.isInteger(e.version) && e.version > 0) want.push(e)
   }
   if (want.length === 0) return []
 
@@ -886,6 +1074,7 @@ export function initConfigItemEditor({
     : { 'Content-Type': 'application/json' }
   const namespaceOf = (orbId) => String(orbId || '').split(':')[0]
   const rootKind = (targets.find(t => t.path.length === 0) || {}).kind
+  wireMemberLists(modal, namespaceOf(reloadOrbId))
 
   // Forward reference. applyGateState resolves the policy asynchronously and may
   // add a Propose button that submits the very handler defined below it. The
@@ -926,9 +1115,19 @@ export function initConfigItemEditor({
     const currentUser = modal.dataset.currentUser || ''
     const now = new Date().toISOString()
 
+    // Rows added and deleted through the modal's controls, never the JSON array.
+    const members = memberEdits(modal, namespaceOf(reloadOrbId))
+    if (members.error) {
+      showError(members.error)
+      return false
+    }
+    const deleting = new Set(members.deletes.map(d => d.orbId))
+    const memberChanged = members.addIds.length > 0 || deleting.size > 0
+
     // For each target, determine: did this entity change? did it previously exist?
     const changes = []
     for (const t of targets) {
+      if (deleting.has(t.orbId)) continue // its edits go with it
       const currentSub = t.path.length === 0
         ? rootWithoutSubtrees(current, targets)
         : subtreeFor(current, t)
@@ -961,8 +1160,12 @@ export function initConfigItemEditor({
     // reporting success without writing.
     const relEdits = relationEdits(modal)
     const relChanged = Object.keys(relEdits.set).length > 0 || Object.keys(relEdits.remove).length > 0
+    // A row's re-pointed edge rides on that row's own update, sharing its version guard.
+    const rowRelEdits = rowRelationEdits(modal)
+    for (const id of deleting) delete rowRelEdits[id]
+    const rowRelChanged = Object.keys(rowRelEdits).length > 0
 
-    if (changes.length === 0 && !relChanged) {
+    if (changes.length === 0 && !relChanged && !rowRelChanged && !memberChanged) {
       // Save closes silently: there is nothing to persist, and reporting that
       // as a problem would be noise.
       //
@@ -1035,6 +1238,13 @@ export function initConfigItemEditor({
     }
     if (relChanged && rootSet === null) rootSet = {}
     if (relChanged) Object.assign(rootSet, relEdits.set)
+    // New rows are nested in the root update, under its version guard.
+    if (members.addIds.length > 0) {
+      if (rootSet === null) rootSet = {}
+      for (const [field, entries] of Object.entries(members.adds)) {
+        rootSet[field] = entries.map(e => ({ ...configItemDefaults(), ...e }))
+      }
+    }
     // Children folded into rootSet — tracked so the per-target loop skips
     // them (otherwise we'd double-emit them as separate add mutations).
     const foldedOrbIds = new Set()
@@ -1089,7 +1299,8 @@ export function initConfigItemEditor({
           ...relEdits.remove,
         },
         version: rootTarget.version,
-      }), shortLabel({ kind: rootTarget.kind, orbId: reloadOrbId }), false)
+      }), shortLabel({ kind: rootTarget.kind, orbId: reloadOrbId }) +
+        (members.addIds.length ? ' with new ' + members.addIds.map(id => shortLabel({ orbId: id })).join(', ') : ''), false)
     }
     for (const ch of changes) {
       const t = ch.target
@@ -1098,10 +1309,12 @@ export function initConfigItemEditor({
       const sub = ch.currentSub || {}
       if (ch.existed) {
         // EDIT — canonical update{Kind} triggers the diff renderer.
+        const rel = rowRelEdits[t.orbId] || { set: {}, remove: {} }
+        delete rowRelEdits[t.orbId]
         push(buildUpdateCall({
           kind: t.kind, orbId: t.orbId, payloadField: t.payloadField,
-          set: { ...scalarPayload(t, sub) },
-          remove: removePayload(t, ch.before, sub),
+          set: { ...scalarPayload(t, sub), ...rel.set },
+          remove: { ...removePayload(t, ch.before, sub), ...rel.remove },
           version: t.version,
         }), shortLabel(t), false)
       } else {
@@ -1119,6 +1332,16 @@ export function initConfigItemEditor({
       }
     }
 
+    // Rows whose only change is a re-pointed edge.
+    for (const [orbId, rel] of Object.entries(rowRelEdits)) {
+      const t = targets.find(x => x.orbId === orbId)
+      if (!t) continue
+      push(buildUpdateCall({
+        kind: t.kind, orbId, payloadField: t.payloadField,
+        set: rel.set, remove: rel.remove, version: t.version,
+      }), shortLabel(t), false)
+    }
+
     // Order: root first — it may CREATE the wrappers the calls below reference
     // by orbId, so it cannot move. Then creates, then updates: a create is the
     // likelier failure (required fields, validation), and with sequential
@@ -1129,11 +1352,24 @@ export function initConfigItemEditor({
       rest.sort((a, b) => Number(!a.k) - Number(!b.k)) // creates (true) first; stable otherwise
       rest.forEach((e, i) => { calls[head + i] = e.c; labels[head + i] = e.l; isCreate[head + i] = e.k })
     }
+    // Deletes go last: if anything before them fails, none is sent.
+    for (const d of members.deletes) {
+      const filter = { orbId: { eq: d.orbId } }
+      if (Number.isInteger(d.version) && d.version > 0) filter.version = { eq: d.version }
+      push({
+        query: `mutation Delete${d.kind}($filter: ${d.kind}Filter!) { delete${d.kind}(filter: $filter) { numUids } }`,
+        variables: { filter },
+      }, shortLabel(d) + ' (delete)', false)
+    }
 
     // The proposal path. Same computed edit, different destination: a change
     // request rather than the graph. Nothing is written here — that is the
     // point of the gate.
     if (mode === 'propose' || (opts && opts.forcePropose)) {
+      if (rowRelChanged || memberChanged) {
+        showError('Adding or deleting a row, or changing a row\'s reference, cannot be proposed yet. Save it directly, or propose the other changes without it.')
+        return false
+      }
       return await proposeChange({
         namespace: namespaceOf(reloadOrbId),
         rootTarget, rootOrbId: reloadOrbId,
@@ -1158,7 +1394,23 @@ export function initConfigItemEditor({
     //
     // It is NOT the guarantee. The server's per-mutation `version` check is,
     // and it still runs. This only stops us from writing half a tree.
-    const stale = await staleTargets(changes, rootChange, rootTarget, reloadOrbId)
+    if (members.addIds.length > 0) {
+      let taken
+      try {
+        taken = await orbIdsInUse(members.addIds)
+      } catch (_) {
+        showError('Could not check the new rows\' Orb IDs — nothing was saved. Try again.')
+        return false
+      }
+      // An existing id would be LINKED and moved off its own parent.
+      if (taken.length) {
+        showError('Nothing was saved: ' + taken[0] + ' already exists, and a new row with that Orb ID would re-parent it.')
+        return false
+      }
+    }
+    const refOnly = Object.keys(rowRelEdits).map(id => targets.find(t => t.orbId === id)).filter(Boolean)
+      .map(t => ({ orbId: t.orbId, kind: t.kind, version: t.version }))
+    const stale = await staleTargets(changes, rootSet !== null, rootTarget, reloadOrbId, [...members.deletes, ...refOnly])
     if (stale === null) {
       showError('Could not check for concurrent edits — nothing was saved. Try again.')
       return false
@@ -1199,13 +1451,12 @@ export function initConfigItemEditor({
       if (peek && gqlErrorMessage(peek)) break
       // A mutation that MATCHED NOTHING is a 200 with no errors array — "not an
       // error" is a documented DGraph property (docs/reference/DGRAPH.md), and
-      // orbital only converts it to a 409 when the write was version-guarded.
-      // An unguarded update that matched nothing would otherwise be counted as
-      // saved, so the report would name an entity that was never written.
-      // Every reachable edit target carries a version today, so this is belt
-      // and braces — but it is exactly the case that goes live the moment a
-      // target without one becomes editable.
-      if (matchedNothing(peek)) break
+      // orbital only converts it to a 409 when `variables.version` guards it.
+      // A delete is guarded by its filter instead, so a stale one lands here.
+      if (matchedNothing(peek)) {
+        showError(partialMsg(applied, `${labels[i] || 'An entity'} was not written: it changed or was deleted since this dialog opened`))
+        return false
+      }
       applied.push(labels[i] || 'an entity')
     }
 
@@ -1226,6 +1477,11 @@ export function initConfigItemEditor({
             // refusal tells the caller to open a change request, and this
             // prompt is that change request one click away. Rendering both
             // would state the remedy twice.
+            if (rowRelChanged || memberChanged) {
+              showError(partialMsg(applied, apiErrorFromBody(body, 'This change needs approval')) +
+                ' Adding or deleting a row, or changing a row\'s reference, cannot be proposed yet.')
+              return false
+            }
             if (confirm((body.error || 'This change needs approval.') + '\n\nOpen a change request with this edit?')) {
               return await proposeChange({
                 namespace: namespaceOf(reloadOrbId),

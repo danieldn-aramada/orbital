@@ -120,7 +120,7 @@ type View struct {
 	JSONString []string `json:"jsonString,omitempty"`
 
 	// Columns are extra columns whose value lives at the end of a PATH —
-	// `servers.count`, `kubernetesNode.cluster.name`. Resolved and validated
+	// `servers.count`, `kubernetesNodes.cluster.name`. Resolved and validated
 	// against the schema here, so a client rendering its own table gets the
 	// same columns without re-walking the graph.
 	Columns []ViewColumn `json:"columns,omitempty"`
@@ -219,7 +219,7 @@ type ViewRefColumn struct {
 
 // ViewColumn is one computed column: a path from the row's type to a value.
 type ViewColumn struct {
-	// Path is the declared dotted path, e.g. "kubernetesNode.cluster.name".
+	// Path is the declared dotted path, e.g. "kubernetesNodes.cluster.name".
 	Path string `json:"path"`
 	// Field is the leaf — the label is derived from it, so a column reads
 	// "Cluster" rather than "Kubernetes Node Cluster Name".
@@ -336,8 +336,8 @@ func resolveColumnPaths(types map[string]TypeInfo, info TypeInfo, typeName strin
 				break
 			}
 			isLast := i == len(hops)-1
-			if f.IsList && !(isLast && leaf == "count") {
-				warn = append(warn, typeName+": column "+path+" — "+seg+" is a list, and only a `count` leaf may follow one")
+			if f.IsList && leaf == "count" && !isLast {
+				warn = append(warn, typeName+": column "+path+" — "+seg+" is a list, so a `count` cannot reach past it")
 				ok = false
 				break
 			}

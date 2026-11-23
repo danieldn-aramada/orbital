@@ -81,6 +81,10 @@ type EditModal struct {
 	// editor. Deliberately not in EditDataJSON — that tree holds scalars.
 	Relations []EditRelation
 
+	// MemberLists are the editable lists whose rows have edges to choose, or
+	// that are added to and deleted from here.
+	MemberLists []EditMemberList
+
 	EditDataJSON    template.JS
 	EditTargetsJSON template.JS
 }
@@ -92,6 +96,35 @@ type EditRelation struct {
 	Type    string
 	Current string
 	Options []EditRelationOption
+}
+
+// EditMemberList is one editable list in the modal. Rows of a type with no page
+// of its own are also added (CanAdd) and deleted (CanRemove) here.
+type EditMemberList struct {
+	Field     string
+	Label     string
+	RowKind   string
+	CanAdd    bool
+	CanRemove bool
+	// PreviewURL is the parent page's delete preview, which takes ?member= to
+	// name what deleting one row removes.
+	PreviewURL string
+	Rows       []EditMemberRow
+}
+
+// EditMemberRow is one stored row and its re-pointable edges.
+type EditMemberRow struct {
+	OrbID     string
+	Name      string
+	Version   int
+	Relations []EditRowRelation
+}
+
+// EditRowRelation is a row's re-pointable edge, saved on that row's own
+// update. Required edges offer no "none".
+type EditRowRelation struct {
+	Required bool
+	EditRelation
 }
 
 // EditRelationOption duplicates page.CreateOption because page imports

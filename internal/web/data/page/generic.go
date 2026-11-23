@@ -85,6 +85,10 @@ type FilterBy struct {
 type GenericDetail struct {
 	layout.Base
 	PageTitle string
+	// MemberAddForms are the new-row inputs the edit modal clones, one per
+	// editable list whose type has no page of its own.
+	MemberAddForms []AddMemberForm
+
 	CanMutate bool
 
 	// HasEditable is whether the editor has ANYTHING to write — the type's own
@@ -360,6 +364,12 @@ type CreateForm struct {
 	Repeating []CreateUnitRepeating
 }
 
+// AddMemberForm is one list's new-row inputs for the edit modal, which saves
+// them in the parent's own update.
+type AddMemberForm struct {
+	Row CreateUnitRepeating
+}
+
 // CreateField is one editable scalar on the form.
 type CreateField struct {
 	Field string
@@ -464,6 +474,10 @@ type CreateUnitRepeating struct {
 	OrbIDTemplate string
 
 	Fields []CreateField
+
+	// Relations are the row's references chosen from existing nodes, e.g. the
+	// server a Kubernetes node runs on.
+	Relations []CreateRelation
 }
 
 // EditorOmission says how many members of one editable list the editor left
@@ -491,4 +505,6 @@ type CreateType struct {
 	// interface does not declare. Shared fields stay on CreateForm.Fields and
 	// are rendered once, so switching type keeps whatever was typed into them.
 	Fields []CreateField
+	// Relations are this implementation's OWN relationships, split the same way.
+	Relations []CreateRelation
 }

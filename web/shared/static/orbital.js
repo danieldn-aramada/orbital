@@ -32,7 +32,7 @@
 // configitem-editor.js: generic edit-modal submit handler. Also imported for
 // module so any page's modal shim
 // can call it without re-importing.
-import { activeChangeRequestsFor, initConfigItemEditor } from './configitem-editor.js'
+import { activeChangeRequestsFor, initConfigItemEditor, createInputValue, scopeSelectTo, orbIdsInUse } from './configitem-editor.js'
 
 import {
   BASE,
@@ -3641,7 +3641,7 @@ function initCreateForms() {
     const submitBtn = document.getElementById('create-submit-' + domId)
     if (!submitBtn) return
 
-    const rels = () => [...modal.querySelectorAll('[data-create-rel]')]
+    const rels = () => [...modal.querySelectorAll('[data-create-rel]')].filter(el => !inHiddenTypeBlock(el))
 
     // Repeating rows: a LIST member created alongside its parent.
     //
@@ -3690,7 +3690,11 @@ function initCreateForms() {
         const field = add.dataset.createAddRow
         const tpl = modal.querySelector(`[data-create-row-template="${field}"]`)
         const host = modal.querySelector(`[data-create-rows="${field}"]`)
-        if (tpl && host) host.appendChild(tpl.content.cloneNode(true))
+        if (tpl && host) {
+          host.appendChild(tpl.content.cloneNode(true))
+          // A new row's selects are scoped now; scopeRefs only reacts to a namespace change.
+          for (const sel of host.lastElementChild.querySelectorAll('[data-create-scoped]')) scopeSelect(sel, namespace())
+        }
         refreshRowIds()
         return
       }
@@ -3701,7 +3705,7 @@ function initCreateForms() {
         refreshRowIds()
       }
     })
-    // Only the SELECTED implementation's fields count. Every type's block is in
+    // Only the SELECTED implementation's fields and relationships count. Every type's block is in
     // the DOM so switching does not re-fetch, and the hidden ones must not be
     // collected — a value left in a hidden block would be sent as a field the
     // chosen type does not have, and DGraph refuses the whole mutation.
@@ -3716,23 +3720,7 @@ function initCreateForms() {
     // The mutation is JSON, so a value has to arrive as the type the schema
     // declares: "false" (a string) into a Boolean field is refused by DGraph,
     // and "2" into an Int sorts and compares as text.
-    const typed = (el) => {
-      const raw = (el.value || '').trim()
-      if (raw === '') return undefined
-      switch (el.dataset.createType) {
-        case 'Boolean': return raw === 'true'
-        case 'Int': case 'Int64': return parseInt(raw, 10)
-        case 'Float': return parseFloat(raw)
-        case 'DateTime': {
-          // DGraph wants RFC3339. Accept whatever Date can parse and normalise
-          // it; hand back the raw text when it cannot, so the server reports a
-          // bad value rather than this silently inventing one.
-          const d = new Date(raw)
-          return isNaN(d.getTime()) ? raw : d.toISOString()
-        }
-        default: return raw
-      }
-    }
+    const typed = createInputValue
 
     const showError = (msg) => { errorEl.textContent = msg; errorEl.style.display = '' }
     const clearError = () => { errorEl.textContent = ''; errorEl.style.display = 'none' }
@@ -3802,20 +3790,12 @@ function initCreateForms() {
     // stays disabled until that namespace is known. Changing the namespace
     // clears it: a choice made for one data centre is wrong for another.
     let scopedNs = null
+    const scopeSelect = scopeSelectTo
     const scopeRefs = () => {
       const ns = namespace()
       if (ns === scopedNs) return
       scopedNs = ns
-      for (const sel of modal.querySelectorAll('[data-create-scoped]')) {
-        sel.value = ''
-        sel.disabled = !ns
-        for (const opt of sel.options) {
-          if (!opt.value) continue
-          const other = opt.dataset.namespace !== ns
-          opt.hidden = other
-          opt.disabled = other
-        }
-      }
+      for (const sel of modal.querySelectorAll('[data-create-scoped]')) scopeSelect(sel, ns)
     }
     scopeRefs()
 
@@ -3867,7 +3847,7 @@ function initCreateForms() {
       // so it is created when absent and LINKED when present — DGraph links a
       // nested object whose orbId exists. Linking one whose single back-edge is
       // already set would MOVE it off its current owner, so that is refused.
-      for (const el of modal.querySelectorAll('[data-create-ref-key]')) {
+      for (const el of [...modal.querySelectorAll('[data-create-ref-key]')].filter(el => !inHiddenTypeBlock(el))) {
         const field = el.dataset.createRefKey
         const value = (el.value || '').trim()
         if (!value) {
@@ -3962,6 +3942,14 @@ function initCreateForms() {
           for (const el of row.querySelectorAll('[data-create-row-field]')) {
             const v = typed(el)
             if (v !== undefined) entry[el.dataset.createRowField] = v
+          }
+          for (const sel of row.querySelectorAll('[data-create-row-rel]')) {
+            if (sel.value) {
+              entry[sel.dataset.createRowRel] = { orbId: sel.value }
+            } else if (sel.required) {
+              showError('Each ' + field + ' row needs a ' + sel.dataset.createRowRel + '.')
+              return
+            }
           }
           entries.push(entry)
         }
@@ -4058,7 +4046,6 @@ async function namespaceOccupiedBy(kind, ns) {
   }
 }
 
-// orbIdsInUse returns which of the given orbIds already exist.
 // refNode reads one node by orbId, with its back-edge when one is named, or
 // null when it does not exist.
 async function refNode(type, orbId, inverse) {
@@ -4076,21 +4063,6 @@ async function refNode(type, orbId, inverse) {
   })
   const body = await r.json()
   return (body.data && body.data.n) || null
-}
-
-async function orbIdsInUse(ids) {
-  const wanted = ids.filter(Boolean)
-  if (!wanted.length) return []
-  const r = await fetch(BASE + '/graphql', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: 'query InUse($ids: [String!]) { queryConfigItem(filter: { orbId: { in: $ids } }) { orbId } }',
-      variables: { ids: wanted },
-    }),
-  })
-  const body = await r.json()
-  return ((body.data && body.data.queryConfigItem) || []).map(n => n.orbId)
 }
 
 document.addEventListener('DOMContentLoaded', initCreateForms)

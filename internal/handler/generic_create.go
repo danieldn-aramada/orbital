@@ -146,33 +146,28 @@ func buildCreateForm(
 		form.Fields = append(form.Fields, createField(info, v, f, labeller, identity[f]))
 	}
 
-	// Required relationships: the same non-null analysis that derives
-	// ownership. A non-null edge on the type being created is a thing the
-	// create MUST supply, because the node cannot exist without it.
-	for _, f := range info.Fields {
-		if f.Kind == "SCALAR" || f.Kind == "ENUM" || f.IsList || !f.NonNull {
-			continue
+	// On an interface page the relationships split the same way: the
+	// interface's own once here, each implementation's in its type block.
+	ifaceField := map[string]bool{}
+	if pageView.IsInterface {
+		for _, f := range meta(pageView.Type).Fields {
+			ifaceField[f.Name] = true
 		}
-		// A view exists for every ConfigItem type, so this is the test for
-		// "points at something orbital models" without a second lookup table.
-		if _, isConfigItem := byType[f.TypeName]; !isConfigItem {
-			continue
-		}
-		opts, err := createOptions(ctx, dgraphURL, f.TypeName, "")
-		if err != nil {
-			form.Unavailable = "Orbital could not load the " + labeller(f.Name) +
-				" options, so it cannot offer a create form: " + err.Error()
-			return form
-		}
-		form.Relations = append(form.Relations, page.CreateRelation{
-			Field: f.Name, Label: labeller(f.Name), Type: f.TypeName,
-			Required: true, Options: opts,
-		})
-		// Namespace comes from the FIRST required relationship that has one.
-		// Never typed: it is the prefix of the parent's orbId, and a second
-		// input for the same value is a second chance to disagree with it.
-		if form.NamespaceFrom == "" {
-			form.NamespaceFrom = f.Name
+	}
+	rels, err := createRelations(ctx, dgraphURL, info, v, byType, labeller,
+		func(f string) bool { return !pageView.IsInterface || ifaceField[f] })
+	if err != nil {
+		form.Unavailable = err.Error()
+		return form
+	}
+	form.Relations = rels
+	// Namespace comes from the FIRST required relationship. Never typed: it is
+	// the prefix of the parent's orbId, and a second input for the same value is
+	// a second chance to disagree with it.
+	for _, r := range rels {
+		if r.Required && r.KeyField == "" && !r.Scoped {
+			form.NamespaceFrom = r.Field
+			break
 		}
 	}
 	if form.NamespaceFrom == "" {
@@ -183,34 +178,6 @@ func buildCreateForm(
 		// root type gets this with no code change, and that is the whole reason
 		// it is not a `v.Type == "DataCenter"` branch.
 		form.NamespaceInput = true
-	}
-
-	// References declared `editable: true`: optional unless `createRequired`.
-	// One whose node is identified by a single field of its own (an IPAddress by
-	// its address) is a text input that creates or links; any other is a select
-	// of existing nodes in the namespace being created into.
-	for _, r := range v.CreateRefs {
-		rel := page.CreateRelation{
-			Field: r.Field, Label: labeller(r.Field), Type: r.Type, Required: r.Required,
-			KeyField: r.KeyField, Pattern: r.Pattern,
-			Inverse: r.Inverse, InverseIsList: r.InverseIsList,
-		}
-		if r.KeyField != "" {
-			if len(r.Set) > 0 {
-				b, _ := json.Marshal(r.Set)
-				rel.SetJSON = string(b)
-			}
-		} else {
-			opts, err := createOptions(ctx, dgraphURL, r.Type, "")
-			if err != nil {
-				form.Unavailable = "Orbital could not load the " + labeller(r.Field) +
-					" options, so it cannot offer a create form: " + err.Error()
-				return form
-			}
-			rel.Options = opts
-			rel.Scoped = true
-		}
-		form.Relations = append(form.Relations, rel)
 	}
 
 	// The TYPE picker. Rendered for an interface page ALWAYS, pre-selected when
@@ -252,6 +219,13 @@ func buildCreateForm(
 				}
 				ct.Fields = append(ct.Fields, createField(ivInfo, iv, f, ivLabel, identity[f]))
 			}
+			own, err := createRelations(ctx, dgraphURL, ivInfo, iv, byType, ivLabel,
+				func(f string) bool { return !ifaceField[f] })
+			if err != nil {
+				form.Unavailable = err.Error()
+				return form
+			}
+			ct.Relations = own
 			form.Types = append(form.Types, ct)
 		}
 		if len(form.Types) == 0 {
@@ -267,43 +241,13 @@ func buildCreateForm(
 		if strings.Contains(m.Field, ".") {
 			continue // a list below another hop: the form holds no row to hang it on
 		}
-		cv, ok := byType[m.Type]
-		if !ok || len(cv.CreateFields) == 0 {
-			continue
+		rep, err := repeatingRowForm(ctx, dgraphURL, m, labeller, byType, labelFor, meta)
+		if err != nil {
+			form.Unavailable = err.Error()
+			return form
 		}
-		tmpl := repeatingChildOrbIDTemplate(cv, m.ParentEdge)
-		if tmpl == "" {
-			continue // identity not derivable from this form; see the single-child rule
-		}
-		rep := page.CreateUnitRepeating{
-			Field: m.Field, Label: labeller(m.Field), Kind: m.Type, OrbIDTemplate: tmpl,
-		}
-		// Which of the row's fields BUILD its identity, so the form can star
-		// them and refuse an empty one — the same treatment the root's `name`
-		// gets, and for the same reason: without it the row has no orbId and
-		// the whole nested mutation fails.
-		//
-		// Read off the row's own template, where a bare `{x}` is the row's
-		// field and `{parent.x}` is the parent's. The parent's are already
-		// required on the root form; starring them again inside every row
-		// would ask for the same value twice.
-		rowIdentity := map[string]bool{}
-		for _, seg := range strings.Split(tmpl, "{")[1:] {
-			if body, _, ok := strings.Cut(seg, "}"); ok && !strings.HasPrefix(body, "parent.") {
-				rowIdentity[body] = true
-			}
-		}
-
-		childLabel := labelFor(m.Type)
-		childInfo := meta(m.Type)
-		for _, f := range cv.CreateFields {
-			if cv.NoCreate[f] {
-				continue
-			}
-			rep.Fields = append(rep.Fields, createField(childInfo, cv, f, childLabel, rowIdentity[f]))
-		}
-		if len(rep.Fields) > 0 {
-			form.Repeating = append(form.Repeating, rep)
+		if rep != nil {
+			form.Repeating = append(form.Repeating, *rep)
 		}
 	}
 
@@ -348,6 +292,143 @@ func buildCreateForm(
 		form.Unit = append(form.Unit, child)
 	}
 	return form
+}
+
+// createRelations are the relationships a create of v supplies, for the fields
+// keep admits: every non-null edge to a ConfigItem (required), then the
+// references declared `editable: true` (optional unless `createRequired`).
+func createRelations(
+	ctx context.Context,
+	dgraphURL string,
+	info configitems.TypeInfo,
+	v configitems.View,
+	byType map[string]configitems.View,
+	labeller func(string) string,
+	keep func(field string) bool,
+) ([]page.CreateRelation, error) {
+	var out []page.CreateRelation
+	for _, f := range info.Fields {
+		if f.Kind == "SCALAR" || f.Kind == "ENUM" || f.IsList || !f.NonNull || !keep(f.Name) {
+			continue
+		}
+		// A view exists for every ConfigItem type, so this is the test for
+		// "points at something orbital models" without a second lookup table.
+		if _, isConfigItem := byType[f.TypeName]; !isConfigItem {
+			continue
+		}
+		opts, err := createOptions(ctx, dgraphURL, f.TypeName, "")
+		if err != nil {
+			return nil, fmt.Errorf("Orbital could not load the %s options, so it cannot offer a create form: %w", labeller(f.Name), err)
+		}
+		out = append(out, page.CreateRelation{
+			Field: f.Name, Label: labeller(f.Name), Type: f.TypeName,
+			Required: true, Options: opts,
+		})
+	}
+	// One whose node is identified by a single field of its own (an IPAddress by
+	// its address) is a text input that creates or links; any other is a select
+	// of existing nodes in the namespace being created into.
+	for _, r := range v.CreateRefs {
+		if !keep(r.Field) {
+			continue
+		}
+		rel := page.CreateRelation{
+			Field: r.Field, Label: labeller(r.Field), Type: r.Type, Required: r.Required,
+			KeyField: r.KeyField, Pattern: r.Pattern,
+			Inverse: r.Inverse, InverseIsList: r.InverseIsList,
+		}
+		if r.KeyField != "" {
+			if len(r.Set) > 0 {
+				b, _ := json.Marshal(r.Set)
+				rel.SetJSON = string(b)
+			}
+		} else {
+			opts, err := createOptions(ctx, dgraphURL, r.Type, "")
+			if err != nil {
+				return nil, fmt.Errorf("Orbital could not load the %s options, so it cannot offer a create form: %w", labeller(r.Field), err)
+			}
+			rel.Options = opts
+			rel.Scoped = true
+		}
+		out = append(out, rel)
+	}
+	return out, nil
+}
+
+// repeatingRowForm builds the form for one row of list member m: its fields,
+// its reference selects and the template its orbId is built from. Nil when the
+// row cannot be created from a form — no create fields, or an identity the form
+// cannot derive.
+func repeatingRowForm(
+	ctx context.Context,
+	dgraphURL string,
+	m configitems.ViewTab,
+	labeller func(string) string,
+	byType map[string]configitems.View,
+	labelFor func(typeName string) func(string) string,
+	meta func(typeName string) configitems.TypeInfo,
+) (*page.CreateUnitRepeating, error) {
+	cv, ok := byType[m.Type]
+	if !ok || len(cv.CreateFields) == 0 {
+		return nil, nil
+	}
+	tmpl := repeatingChildOrbIDTemplate(cv, m.ParentEdge)
+	if tmpl == "" {
+		return nil, nil // identity not derivable from this form; see the single-child rule
+	}
+	rep := page.CreateUnitRepeating{
+		Field: m.Field, Label: labeller(m.Field), Kind: m.Type, OrbIDTemplate: tmpl,
+	}
+	// Which of the row's fields BUILD its identity, so the form can star
+	// them and refuse an empty one — the same treatment the root's `name`
+	// gets, and for the same reason: without it the row has no orbId and
+	// the whole nested mutation fails.
+	//
+	// Read off the row's own template, where a bare `{x}` is the row's
+	// field and `{parent.x}` is the parent's. The parent's are already
+	// required on the root form; starring them again inside every row
+	// would ask for the same value twice.
+	rowIdentity := map[string]bool{}
+	for _, seg := range strings.Split(tmpl, "{")[1:] {
+		if body, _, ok := strings.Cut(seg, "}"); ok && !strings.HasPrefix(body, "parent.") {
+			rowIdentity[body] = true
+		}
+	}
+
+	childLabel := labelFor(m.Type)
+	childInfo := meta(m.Type)
+	for _, f := range cv.CreateFields {
+		if cv.NoCreate[f] {
+			continue
+		}
+		rep.Fields = append(rep.Fields, createField(childInfo, cv, f, childLabel, rowIdentity[f]))
+	}
+	// The row's references, as selects of existing nodes in the namespace.
+	// The edge back to the parent is set by nesting, so it is never asked.
+	// A typed create-or-link reference (KeyField) is offered on the root form only.
+	for _, r := range cv.CreateRefs {
+		if r.Field == m.ParentEdge || r.KeyField != "" {
+			continue
+		}
+		opts, err := createOptions(ctx, dgraphURL, r.Type, "")
+		if err != nil {
+			return nil, fmt.Errorf("Orbital could not load the %s options, so it cannot offer a create form: %w", childLabel(r.Field), err)
+		}
+		required := r.Required
+		for _, f := range childInfo.Fields {
+			if f.Name == r.Field && f.NonNull {
+				required = true
+			}
+		}
+		rep.Relations = append(rep.Relations, page.CreateRelation{
+			Field: r.Field, Label: childLabel(r.Field), Type: r.Type,
+			Required: required, Options: opts, Scoped: true,
+		})
+	}
+	if len(rep.Fields) == 0 {
+		return nil, nil
+	}
+	return &rep, nil
 }
 
 // createOptions fetches the existing nodes a required relationship may point at.

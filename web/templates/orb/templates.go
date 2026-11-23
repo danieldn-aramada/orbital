@@ -73,7 +73,8 @@ func Map(fsys fs.FS) map[string]*template.Template {
 		// references it and an unparsed {{template}} is an execute-time error.
 		"generic-list": parsePage(fsys, "generic-list", append(
 			page("templates/shared/pages/generic-list.gohtml"),
-			"templates/shared/components/create-modal.gohtml")),
+			"templates/shared/components/create-modal.gohtml",
+			"templates/shared/components/create-row-fields.gohtml")),
 		// edit-modal is parsed even though orb NEVER renders it — orb sets no
 		// can_mutate, so that branch cannot be taken.
 		//
@@ -88,7 +89,8 @@ func Map(fsys fs.FS) map[string]*template.Template {
 		// that duplication is what this renderer exists to remove.
 		"generic-detail": parsePage(fsys, "generic-detail", append(
 			page("templates/shared/pages/generic-detail.gohtml"),
-			"templates/shared/components/edit-modal.gohtml")),
+			"templates/shared/components/edit-modal.gohtml",
+			"templates/shared/components/create-row-fields.gohtml")),
 		"divergence":      parsePage(fsys, "divergence", page("templates/orb/pages/divergence.gohtml")),
 		"import-history":  parsePage(fsys, "import-history", page("templates/orb/pages/import-history.gohtml")),
 		"publish-history": parsePage(fsys, "publish-history", page("templates/orb/pages/publish-history.gohtml")),

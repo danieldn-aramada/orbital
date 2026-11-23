@@ -44,11 +44,29 @@ what changed. GitHub Release bodies are generated from this file, never the othe
   actor, so the same ServiceAccount name from two clusters stays
   distinguishable. People's events don't carry it.
 
+- **Azure Local clusters (schema v21).** New `AzureLocalKubernetesCluster` type;
+  `clusterId` and `platformId` on every cluster; `Server.kubernetesNodes` lists
+  every node a server runs (`kubernetesNode` is deprecated). Run the link copy
+  in `docs/reference/DGRAPH.md` after applying v21.
+
+- **Add and delete a cluster's nodes, or a data center's racks, from its edit
+  form**, with each node's server chosen from a list. A delete shows what it
+  removes before Save and never deletes the server.
+
+- **Table columns can read through a list**: the server list and a network
+  device's Connections tab show each node's cluster, role and gpu again.
+
 - **Server and NetworkDevice names can be edited and set at create.** `name` is
   now editable by default. It stays frozen after create on types whose orbId is
   built from it (DataCenter, Rack, clusters, nodes, NICs, ports, storage).
 
 ### Fixed
+
+- **Creating an EKS-A cluster offered no `managementCluster` or
+  `tinkerbellIP`** once a second cluster type existed. Each type's own
+  relationships now show in its own section of the form.
+
+- **The config editor reported success when a write matched nothing.**
 
 - **Orb: a failed import is logged and counted, and isn't retried every poll.**
   A pull, verify or import failure used to leave no log line and no metric, and
@@ -244,9 +262,9 @@ what changed. GitHub Release bodies are generated from this file, never the othe
 
 - **Schema v20 renames two fields — breaking.** `NetworkDevice.serial` is now
   `serialNumber`, matching every other type, and `IPAddress.kubernetesNodeIpv4`
-  is now `kubernetesNodeIPv4`. After applying v20, run
-  `scripts/migrate-schema-v20.sh --dgraph <url>` to carry existing values
-  across; until then both read as null. Clients querying `serial` must switch.
+  is now `kubernetesNodeIPv4`. After applying v20, copy existing values across
+  on each DGraph (see `docs/reference/DGRAPH.md`); until then both read as
+  null. Clients querying `serial` must switch.
 - **Every type and field in the schema has a description,** shown in GraphiQL
   and returned by introspection.
 - **An unknown log level or log format now stops startup** instead of quietly

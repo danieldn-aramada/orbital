@@ -85,6 +85,7 @@ test('an interface page creates a CONCRETE implementation, never the interface',
   await page.goto('/clusters');
   await page.getByTestId('create-open').click();
   const modal = page.locator('.modal.is-active');
+  await modal.getByTestId('create-type').selectOption('EksaKubernetesCluster');
 
   await expect(modal, 'the modal must name the IMPLEMENTATION; the interface has no add mutation')
     .toHaveAttribute('data-kind', 'EksaKubernetesCluster');

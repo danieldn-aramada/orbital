@@ -86,12 +86,19 @@ func parseDeletePreviewTmpl() *template.Template {
 }
 
 // Preview returns an HTML fragment describing the impact of the delete without
-// modifying anything. Served at GET /{slug}/{orbId}/delete-preview.
+// modifying anything. Served at GET /{slug}/{orbId}/delete-preview; with
+// ?member=<orbId> it previews deleting one row the page's editor deletes.
 func (h *DeleteHandler) Preview(c echo.Context) error {
 	ctx := c.Request().Context()
 	typeName, id, err := h.target(c)
 	if err != nil {
 		return err
+	}
+	if member := c.QueryParam("member"); member != "" {
+		if typeName, err = h.memberType(c, member); err != nil {
+			return err
+		}
+		id = member
 	}
 	plan, err := h.planFor(ctx, typeName, id)
 	if err != nil {
@@ -127,6 +134,29 @@ func (h *DeleteHandler) target(c echo.Context) (typeName, orbID string, err erro
 	return v.Type, orbID, nil
 }
 
+// memberType is the type of a row the page's editor deletes: a member of one of
+// its editable lists whose type has no page of its own. Anything else is refused.
+func (h *DeleteHandler) memberType(c echo.Context, member string) (string, error) {
+	ctx := c.Request().Context()
+	views, err := h.views(ctx)
+	if err != nil {
+		return "", echo.NewHTTPError(http.StatusServiceUnavailable,
+			"orbital cannot read the schema right now, so it does not know what a delete would remove")
+	}
+	vs := configitems.ViewSet(views)
+	page, _ := vs.BySlug(c.Param("slug"))
+	concrete, err := h.concreteTypeOf(ctx, member)
+	if err != nil {
+		return "", err
+	}
+	for _, m := range page.EditorListMembers() {
+		if m.Type == concrete && !strings.Contains(m.Field, ".") && vs.Of(concrete).Slug == "" {
+			return concrete, nil
+		}
+	}
+	return "", echo.NewHTTPError(http.StatusBadRequest, member+" is not a row this page deletes")
+}
+
 // Execute performs the cascade delete: the root plus its page's declared
 // subgraph, in one version-guarded transaction, with one audit event.
 //
@@ -139,6 +169,9 @@ func (h *DeleteHandler) Execute(c echo.Context) error {
 	typeName, id, err := h.target(c)
 	if err != nil {
 		return err
+	}
+	if c.QueryParam("member") != "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "a row is deleted through /graphql; ?member= only previews it")
 	}
 	actor := actorFromContext(c)
 	caller := resolveCallerRole(c, h.db)

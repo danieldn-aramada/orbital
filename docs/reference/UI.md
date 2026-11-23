@@ -24,9 +24,10 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
   ⚠️ `snapshotKey` includes the orbId — without it every target of one list collides on a single slot and
   all but one row diffs against the wrong snapshot. ⚠️ `orbId` is in the editor tree on purpose (it is how
   a save matches an entry to its target) and must stay out of `set`.
-- **Membership is NOT editable from the parent.** *(2026-10-13.)* Dropping a row from the array reads as
-  "no change", never as a delete — removing a config item from a form row would route around the delete
-  preview that names what it would orphan. Adding is the create form.
+- **Membership changes from the parent only through the edit form's Add and Delete controls, never the JSON
+  array.** *(2026-10-13; amended 2026-11-23.)* A dropped array row still means no change. Ticking Delete shows
+  the page delete's preview (`…/delete-preview?member=<orbId>`) before Save; deletes go last, version-guarded.
+  Add uses the create form's row fields. Only for members whose type has no page of its own.
 - **`ORBITAL_EDITOR_MAX_MEMBERS` caps how many members of one list are EDITABLE, and the cap is stated.**
   *(2026-10-13, default 20.)* The notice names the setting, because a reader who finds their member missing
   needs to know which knob returns it. Capping the editor never hides data — the read-only tab still shows
@@ -55,6 +56,8 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
   ⚠️ Do NOT derive settable-ness from "is it optional" — `views.yaml`'s own rule is that scalars are
   subtractive and **relationships are declared**, and deriving it would have put a 304-option `IPAddress`
   picker on the server form.
+- **On an interface page, each implementation's own fields AND relationships live in its type block.**
+  *(2026-11-23.)* Hidden blocks are not sent. The picker lists implementations A–Z.
 
 ### Detail tabs (list pages)
 
@@ -124,6 +127,7 @@ Read this before: Go template changes, HTMX interactions, JavaScript, CSS/SCSS, 
 - **Field editability is one key, `fields.<name>.editable`, in both directions.** *(2026-10-04.)* Default: the type's own scalars plus ConfigItem's `name`, minus ConfigItem's other fields. Editor-scoped, not API-scoped. A key naming a missing field is inert.
   - **`name` is editable unless the orbId is built from it.** *(2026-11-12.)* A field an orbId is built from must be `createOnly`: settable at create, frozen after. Renaming a DataCenter would publish to a different OCI repository than the one its edge polls. Pinned by `TestShippedViews_NoOrbIDSourceFieldIsEditable`.
 - **Computed columns are declared paths (`columns: [servers.count]`) on the type, and apply wherever it renders.** *(2026-10-02.)* `count` is fetched as `<field>Aggregate { count }`; an interface hop needs `... on ConfigItem`; the label comes from the type the leaf field belongs to.
+  - **A path through a list (`kubernetesNodes.role`) shows each distinct value, comma-joined.** *(2026-11-23.)* A `count` cannot reach past a list.
   - **One key for both column shapes; `refColumns:` is retired.** *(2026-10-15.)* A bare SINGLE relationship in `columns:` (`rack`) is a column of links; a dotted path (`rack.uHeight`) is a value. They were two keys for one concept — a column a row of this type carries — and the detail page had already settled on "relationship" over "ref". Link columns still render before value columns: interleaving them would merge two render and query paths for no requested gain. A list, or a non-ConfigItem, named bare is dropped with a warning; `refColumns:` warns and is ignored. Pinned by `TestResolveViews_LinkColumnsAreListedNotDerived`, `TestValidateViews_LinkColumnDeclarationsAreChecked`, `TestResolveViews_LinkColumnsInheritAlongInterfaces`, `TestRetiredKeyWarnings_NamesTheReplacementForRefColumns`.
 - **Column/field order is a partial pin: `order: [a, b, c]`, rest alphabetical.** *(2026-09-26.)* Never a complete list — new fields would never appear. Interfaces' pins are inherited; list pages re-apply the pin after the interface union. A pinned field the type lacks is skipped.
 - **Labels resolve server-side onto `View.Labels`.** *(2026-09-29.)* One labeller for field rows, column headers and metadata, so they cannot disagree.

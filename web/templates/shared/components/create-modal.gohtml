@@ -73,35 +73,7 @@ memory. Infrahub generates its create form from the schema for the same reason.
       </div>
       {{end}}
 
-      {{range .Relations}}
-      <div class="field">
-        <label class="label is-size-7">
-          {{.Label}}{{if .Required}} <span class="has-text-danger">*</span>{{end}}
-        </label>
-        {{if .KeyField}}
-        {{/* Create-or-link: the referenced node is identified by this one
-             value, so it is typed, not chosen from nodes that may not exist. */}}
-        <input class="input is-small" type="text" data-create-ref-key="{{.Field}}"
-               data-ref-type="{{.Type}}" data-key-field="{{.KeyField}}"
-               {{with .SetJSON}}data-ref-set="{{.}}"{{end}}
-               {{with .Inverse}}data-ref-inverse="{{.}}"{{end}}
-               {{if .InverseIsList}}data-ref-inverse-list="true"{{end}}
-               {{with .Pattern}}pattern="{{.}}"{{end}}
-               {{if .Required}}required{{end}}
-               data-testid="create-ref-{{.Field}}" placeholder="{{.KeyField}}">
-        <p class="help is-size-7">Links the existing {{.Type}} with this {{.KeyField}}, or creates it.</p>
-        {{else}}
-        <div class="select is-small is-fullwidth">
-          <select data-create-rel="{{.Field}}" {{if .Required}}required{{end}}
-                  {{if .Scoped}}data-create-scoped="true" disabled{{end}}
-                  data-testid="create-rel-{{.Field}}">
-            <option value="">— choose a {{.Label}} —</option>
-            {{range .Options}}<option value="{{.OrbID}}" data-namespace="{{.Namespace}}">{{.Name}}</option>{{end}}
-          </select>
-        </div>
-        {{end}}
-      </div>
-      {{end}}
+      {{range .Relations}}{{template "create-relation" .}}{{end}}
 
       {{range .Fields}}
       <div class="field">
@@ -164,6 +136,7 @@ memory. Infrahub generates its create form from the schema for the same reason.
            fields above keep whatever was typed into them. */}}
       {{range .Types}}
       <div data-create-type-fields="{{.Kind}}" style="display:none">
+        {{range .Relations}}{{template "create-relation" .}}{{end}}
         {{range .Fields}}
         <div class="field">
           <label class="label is-size-7">
@@ -221,33 +194,7 @@ memory. Infrahub generates its create form from the schema for the same reason.
             </div>
             <button class="delete is-small" data-create-remove-row aria-label="remove"></button>
           </div>
-          {{$rowField := .Field}}
-          {{range .Fields}}
-          <div class="field">
-            {{/* Same weight as the root form's labels. A repeating row is a
-                 node being created, not an annotation on one — greying it
-                 reads as secondary, and the reader types into it just as
-                 much. */}}
-            <label class="label is-size-7">
-              {{.Label}}{{if .Identity}} <span class="has-text-danger">*</span>{{end}}
-            </label>
-            {{if eq .Type "Boolean"}}
-            <div class="select is-small is-fullwidth">
-              <select data-create-row-field="{{.Field}}" data-create-type="Boolean">
-                <option value=""{{if eq .Default ""}} selected{{end}}>—</option>
-                <option value="true"{{if eq .Default "true"}} selected{{end}}>true</option>
-                <option value="false"{{if eq .Default "false"}} selected{{end}}>false</option>
-              </select>
-            </div>
-            {{else}}
-            <input class="input is-small"
-                   type="{{if or (eq .Type "Int") (eq .Type "Int64") (eq .Type "Float")}}number{{else}}text{{end}}"
-                   data-create-row-field="{{.Field}}" data-create-type="{{.Type}}"
-                   value="{{.Default}}" placeholder="{{.Hint}}"
-                   {{if .Identity}}data-create-identity="1" required{{end}}>
-            {{end}}
-          </div>
-          {{end}}
+          {{template "create-row-fields.gohtml" .}}
         </div>
       </template>
       {{end}}
@@ -267,4 +214,35 @@ memory. Infrahub generates its create form from the schema for the same reason.
     </footer>
   </div>
 </div>
+{{end}}
+
+{{/* One relationship input. Render context: page.CreateRelation. */}}
+{{define "create-relation"}}
+      <div class="field">
+        <label class="label is-size-7">
+          {{.Label}}{{if .Required}} <span class="has-text-danger">*</span>{{end}}
+        </label>
+        {{if .KeyField}}
+        {{/* Create-or-link: the referenced node is identified by this one
+             value, so it is typed, not chosen from nodes that may not exist. */}}
+        <input class="input is-small" type="text" data-create-ref-key="{{.Field}}"
+               data-ref-type="{{.Type}}" data-key-field="{{.KeyField}}"
+               {{with .SetJSON}}data-ref-set="{{.}}"{{end}}
+               {{with .Inverse}}data-ref-inverse="{{.}}"{{end}}
+               {{if .InverseIsList}}data-ref-inverse-list="true"{{end}}
+               {{with .Pattern}}pattern="{{.}}"{{end}}
+               {{if .Required}}required{{end}}
+               data-testid="create-ref-{{.Field}}" placeholder="{{.KeyField}}">
+        <p class="help is-size-7">Links the existing {{.Type}} with this {{.KeyField}}, or creates it.</p>
+        {{else}}
+        <div class="select is-small is-fullwidth">
+          <select data-create-rel="{{.Field}}" {{if .Required}}required{{end}}
+                  {{if .Scoped}}data-create-scoped="true" disabled{{end}}
+                  data-testid="create-rel-{{.Field}}">
+            <option value="">— choose a {{.Label}} —</option>
+            {{range .Options}}<option value="{{.OrbID}}" data-namespace="{{.Namespace}}">{{.Name}}</option>{{end}}
+          </select>
+        </div>
+        {{end}}
+      </div>
 {{end}}

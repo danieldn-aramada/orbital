@@ -160,7 +160,7 @@ test('a relationship table shows the child type\'s computed columns', async ({ p
 //
 // The bespoke page emitted one row per SERVER. The generic page emits one row
 // per NetworkInterface, with the server as a link — so the declaration lives on
-// NetworkInterface and reaches through `server.kubernetesNode.…`, which is why
+// NetworkInterface and reaches through `server.kubernetesNodes.…`, which is why
 // the path limit had to be four segments rather than the three I first set.
 //
 // Asserted on the NETWORK DEVICE page specifically. The earlier version of this

@@ -459,6 +459,13 @@ func TestColumnValue(t *testing.T) {
 			"cluster": map[string]any{"name": "colo-prod"},
 		},
 		"serversAggregate": map[string]any{"count": float64(22)},
+		"kubernetesNodes": []any{
+			map[string]any{"role": "control_plane", "gpu": false, "cluster": map[string]any{"name": "al1"}},
+			map[string]any{"role": "worker", "gpu": true, "cluster": map[string]any{"name": "al1"}},
+			map[string]any{"role": "worker", "gpu": false, "cluster": map[string]any{"name": "al1"}},
+			map[string]any{"cluster": map[string]any{"name": "al1"}},
+		},
+		"racks": []any{},
 	}
 	for _, tc := range []struct {
 		name string
@@ -473,6 +480,12 @@ func TestColumnValue(t *testing.T) {
 		{"missing hop", configitems.ViewColumn{Path: "nothing.here"}, nil},
 		{"missing leaf", configitems.ViewColumn{Path: "kubernetesNode.nosuch"}, nil},
 		{"hop is not an object", configitems.ViewColumn{Path: "orbId.deeper"}, nil},
+		// Through a list: each distinct value once, in order, and an element
+		// missing the field adds nothing.
+		{"through a list, distinct", configitems.ViewColumn{Path: "kubernetesNodes.cluster.name"}, "al1"},
+		{"through a list, several", configitems.ViewColumn{Path: "kubernetesNodes.role"}, "control_plane, worker"},
+		{"through a list, boolean", configitems.ViewColumn{Path: "kubernetesNodes.gpu"}, "false, true"},
+		{"through an empty list", configitems.ViewColumn{Path: "racks.name"}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := columnValue(row, tc.col); got != tc.want {

@@ -266,9 +266,14 @@ type Server implements ConfigItem {
   networkInterfaces: [NetworkInterface] @hasInverse(field: server)
 
   """
-  The Kubernetes node running on the server.
+  Deprecated: use `kubernetesNodes`. Not updated since schema v21.
   """
-  kubernetesNode: KubernetesNode @hasInverse(field: server)
+  kubernetesNode: KubernetesNode
+
+  """
+  The Kubernetes nodes running on the server.
+  """
+  kubernetesNodes: [KubernetesNode] @hasInverse(field: server)
 
   """
   The IP address of the server's management controller.
@@ -784,9 +789,19 @@ interface KubernetesCluster {
   description: String
 
   """
-  How the cluster is provisioned. One of `eksa`, `maas` or `metal3`.
+  How the cluster is provisioned. One of `eksa`, `maas`, `metal3` or `aks`.
   """
   provider: String @search(by: [term, hash])
+
+  """
+  The cluster's fleet-wide ID, e.g. a UUID. Not its `orbId`.
+  """
+  clusterId: String @search(by: [hash])
+
+  """
+  The ID of the platform the cluster belongs to. Several clusters can share one.
+  """
+  platformId: String @search(by: [hash])
 
   """
   The data center the cluster runs in.
@@ -832,7 +847,15 @@ type EksaKubernetesCluster implements KubernetesCluster & ConfigItem {
 }
 
 """
-A Kubernetes node: a server's membership in a cluster.
+A Kubernetes cluster on Azure Local, provisioned by AKS. Its nodes are VMs.
+
+orbIdPattern: {type}-{name}
+"""
+type AzureLocalKubernetesCluster implements KubernetesCluster & ConfigItem
+
+"""
+A Kubernetes node. Its `server` is the machine it runs on: itself on bare metal,
+the host for a VM.
 
 orbIdPattern: {name}
 """

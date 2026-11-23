@@ -59,6 +59,56 @@ Prefix. See docs/playbooks/add-configitem.md.
         </div>
       </div>
       {{- end}}
+      {{- range $ml := .MemberLists}}
+      {{/* Rows are added and deleted here only through these controls, never by
+           editing the JSON array; a delete is previewed before Save. New-row
+           inputs are cloned from the page's <template>, which needs page data. */}}
+      <div class="mb-4" data-edit-member-list="{{$ml.Field}}" data-preview-url="{{$ml.PreviewURL}}"
+           data-testid="edit-member-list-{{$ml.Field}}">
+        <div class="is-flex is-align-items-center mb-2" style="gap:0.75rem">
+          <p class="is-size-7 has-text-weight-semibold">{{$ml.Label}}</p>
+          {{- if $ml.CanAdd}}
+          <button class="button is-small is-rounded is-link is-outlined"
+                  data-edit-add-row="{{$ml.Field}}" data-testid="edit-add-row">
+            <span class="icon"><i class="fa-solid fa-plus"></i></span>
+            <span>Add</span>
+          </button>
+          {{- end}}
+        </div>
+        {{- range $row := $ml.Rows}}
+        <div class="box p-3 mb-2" data-edit-member-row data-row-orb-id="{{$row.OrbID}}"
+             data-row-kind="{{$ml.RowKind}}" data-row-version="{{$row.Version}}">
+          <div class="is-flex is-justify-content-space-between is-align-items-center">
+            <p class="is-size-7 has-text-weight-semibold">{{with $row.Name}}{{.}}{{else}}{{$row.OrbID}}{{end}}</p>
+            {{- if $ml.CanRemove}}
+            <label class="checkbox is-size-7 has-text-danger">
+              <input type="checkbox" data-edit-delete-row data-testid="edit-delete-row"> Delete
+            </label>
+            {{- end}}
+          </div>
+          {{- range $rr := $row.Relations}}
+          <div class="field mt-2">
+            <label class="label is-size-7">{{$rr.Label}}</label>
+            <div class="select is-small is-fullwidth">
+              <select data-edit-row-rel="{{$rr.Field}}" data-row-orb-id="{{$row.OrbID}}"
+                      data-edit-rel-current="{{$rr.Current}}"
+                      data-testid="edit-row-rel-{{$rr.Field}}">
+                {{- if not $rr.Required}}
+                <option value="">— none —</option>
+                {{- end}}
+                {{- range $rr.Options}}
+                <option value="{{.OrbID}}" {{if eq .OrbID $rr.Current}}selected{{end}}>{{.Name}}</option>
+                {{- end}}
+              </select>
+            </div>
+          </div>
+          {{- end}}
+          <div class="mt-2 is-size-7" data-edit-delete-preview data-testid="edit-delete-preview" style="display:none"></div>
+        </div>
+        {{- end}}
+        <div data-edit-new-rows="{{$ml.Field}}"></div>
+      </div>
+      {{- end}}
       <div id="{{.Prefix}}-json-editor-{{.DomID}}" style="min-height:200px"></div>
       {{- end}}
     </section>

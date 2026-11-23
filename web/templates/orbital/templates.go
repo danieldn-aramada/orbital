@@ -61,12 +61,16 @@ func Map(fsys fs.FS) map[string]*template.Template {
 			// The New-node form. Rendered with the page rather than fetched on
 			// click: the skeleton is server-derived, and a second round trip
 			// would buy nothing.
-			"templates/shared/components/create-modal.gohtml")...)),
+			"templates/shared/components/create-modal.gohtml",
+			"templates/shared/components/create-row-fields.gohtml")...)),
 		"generic-detail": template.Must(template.ParseFS(fsys, page(
 			"templates/shared/pages/generic-detail.gohtml",
 			// The SAME edit modal the bespoke pages parse — one template, not a
 			// generic copy of one.
-			"templates/shared/components/edit-modal.gohtml")...)),
+			"templates/shared/components/edit-modal.gohtml",
+			// A list whose type has no page adds its rows here, with the
+			// create form's row inputs.
+			"templates/shared/components/create-row-fields.gohtml")...)),
 		"restore": template.Must(template.ParseFS(fsys, page("templates/orbital/pages/restore.gohtml")...)),
 		"users":   template.Must(template.ParseFS(fsys, page("templates/orbital/pages/users.gohtml")...)),
 

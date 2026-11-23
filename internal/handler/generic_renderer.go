@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -250,6 +251,9 @@ func (g *GenericRenderer) List(c echo.Context) error {
 // wants the one value at the end. A missing hop is a legitimate answer, not an
 // error: a server with no Kubernetes node has no cluster, and the cell renders
 // an em dash like any other absent value.
+//
+// A path through a list (`kubernetesNodes.role`) yields each distinct value
+// once, in the order found, joined with ", ".
 func columnValue(row map[string]any, c configitems.ViewColumn) any {
 	segs := strings.Split(c.Path, ".")
 	if c.IsCount {
@@ -261,18 +265,46 @@ func columnValue(row map[string]any, c configitems.ViewColumn) any {
 	// An inline fragment does not nest in the RESPONSE — `... on ConfigItem
 	// { name }` returns `name` at the same level — so the declared path walks
 	// the result directly.
-	var cur any = row
-	for _, seg := range segs {
-		m, ok := cur.(map[string]any)
-		if !ok {
-			return nil
-		}
-		cur = m[seg]
-		if cur == nil {
-			return nil
+	vals := pathValues(row, segs)
+	switch len(vals) {
+	case 0:
+		return nil
+	case 1:
+		return vals[0]
+	}
+	seen := map[string]bool{}
+	parts := make([]string, 0, len(vals))
+	for _, v := range vals {
+		s := fmt.Sprint(stringify(v))
+		if !seen[s] {
+			seen[s] = true
+			parts = append(parts, s)
 		}
 	}
-	return cur
+	return strings.Join(parts, ", ")
+}
+
+// pathValues walks segs from cur, fanning out over every element of a list
+// met along the way. A list AT the end is the value itself.
+func pathValues(cur any, segs []string) []any {
+	if cur == nil {
+		return nil
+	}
+	if len(segs) == 0 {
+		return []any{cur}
+	}
+	if list, ok := cur.([]any); ok {
+		var out []any
+		for _, e := range list {
+			out = append(out, pathValues(e, segs)...)
+		}
+		return out
+	}
+	m, ok := cur.(map[string]any)
+	if !ok {
+		return nil
+	}
+	return pathValues(m[segs[0]], segs[1:])
 }
 
 // columnHeadersFor labels the computed columns by their LEAF field, so a path
@@ -837,7 +869,9 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 		})
 	}
 
-	data.HasEditable = len(editData) > 0 || len(relations) > 0
+	memberLists := g.memberLists(c, vs, v, byType, entity, orbID, data)
+
+	data.HasEditable = len(editData) > 0 || len(relations) > 0 || len(memberLists) > 0
 	if !data.HasEditable {
 		return
 	}
@@ -886,9 +920,128 @@ func (g *GenericRenderer) attachGenericEditor(c echo.Context, data *page.Generic
 		Typename:          v.Type,
 		ViewsHash:         g.fields.ViewsHash(),
 		Relations:         relations,
+		MemberLists:       memberLists,
 		EditDataJSON:      template.JS(editJSON),
 		EditTargetsJSON:   template.JS(targetsJSON),
 	}
+}
+
+// memberLists are the editable lists the modal shows row by row: their rows'
+// re-pointable edges, and for a type with no page of its own, adding and
+// deleting rows. A list with neither is left to the JSON editor alone.
+func (g *GenericRenderer) memberLists(c echo.Context, vs configitems.ViewSet, v configitems.View, byType map[string]configitems.View, entity map[string]any, orbID string, data *page.GenericDetail) []component.EditMemberList {
+	var out []component.EditMemberList
+	ns := namespaceOf(orbID)
+	for _, m := range v.EditorListMembers() {
+		if strings.Contains(m.Field, ".") {
+			continue
+		}
+		mv, known := byType[m.Type]
+		if !known {
+			continue
+		}
+		owned := mv.Slug == "" && !mv.IsInterface
+		ml := component.EditMemberList{
+			Field: m.Field, Label: g.fieldLabeller(vs, v.Type)(m.Field), RowKind: m.Type,
+			CanRemove:  owned,
+			PreviewURL: "/" + data.ListSlug + "/" + url.PathEscape(orbID) + "/delete-preview",
+		}
+		if owned {
+			row, err := repeatingRowForm(c.Request().Context(), g.dgraphURL, m, g.fieldLabeller(vs, v.Type), byType,
+				func(t string) func(string) string { return g.fieldLabeller(vs, t) }, g.fields.Meta)
+			if err != nil {
+				g.logger.Warn("generic editor: no add rows for list member", "type", v.Type, "field", m.Field, "err", err)
+			} else if row != nil && fillParentPlaceholders(row, entity) {
+				ml.CanAdd = true
+				data.MemberAddForms = append(data.MemberAddForms, page.AddMemberForm{Row: *row})
+			}
+		}
+
+		rels := g.rowRelationChoices(c, vs, m, mv, ns)
+		rows, _ := entity[m.Field].([]any)
+		cap := g.editorMaxMembers
+		if cap <= 0 {
+			cap = DefaultEditorMaxMembers
+		}
+		if len(rows) > cap {
+			rows = rows[:cap]
+		}
+		for _, r := range rows {
+			raw, _ := r.(map[string]any)
+			rowID, _ := raw["orbId"].(string)
+			if rowID == "" {
+				continue
+			}
+			row := component.EditMemberRow{OrbID: rowID}
+			row.Name, _ = raw["name"].(string)
+			if vv, ok := raw["version"].(float64); ok {
+				row.Version = int(vv)
+			}
+			for _, rel := range rels {
+				cur := ""
+				if ref, ok := raw[rel.Field].(map[string]any); ok {
+					cur, _ = ref["orbId"].(string)
+				}
+				rel.Current = cur
+				row.Relations = append(row.Relations, rel)
+			}
+			ml.Rows = append(ml.Rows, row)
+		}
+		if ml.CanAdd || ml.CanRemove || len(rels) > 0 {
+			out = append(out, ml)
+		}
+	}
+	return out
+}
+
+// rowRelationChoices are list member m's editable single references, with the
+// existing nodes in ns to choose from. The edge back to the parent is identity,
+// never offered. A load failure drops that reference, never the editor.
+func (g *GenericRenderer) rowRelationChoices(c echo.Context, vs configitems.ViewSet, m configitems.ViewTab, mv configitems.View, ns string) []component.EditRowRelation {
+	var out []component.EditRowRelation
+	info := g.fields.Meta(m.Type)
+	for _, f := range mv.EditableRefs {
+		refType := mv.Relations[f]
+		if refType == "" || f == m.ParentEdge {
+			continue
+		}
+		opts, err := createOptions(c.Request().Context(), g.dgraphURL, refType, ns)
+		if err != nil {
+			g.logger.Warn("generic editor: load row relation options", "type", m.Type, "field", f, "err", err)
+			continue
+		}
+		eopts := make([]component.EditRelationOption, 0, len(opts))
+		for _, o := range opts {
+			eopts = append(eopts, component.EditRelationOption{OrbID: o.OrbID, Name: o.Name})
+		}
+		required := false
+		for _, fi := range info.Fields {
+			if fi.Name == f && fi.NonNull {
+				required = true
+			}
+		}
+		out = append(out, component.EditRowRelation{
+			Required: required,
+			EditRelation: component.EditRelation{
+				Field: f, Label: g.fieldLabeller(vs, m.Type)(f), Type: refType, Options: eopts,
+			},
+		})
+	}
+	return out
+}
+
+// fillParentPlaceholders writes the existing parent's values into a row's
+// orbId template. False when the parent lacks one, leaving no derivable identity.
+func fillParentPlaceholders(row *page.CreateUnitRepeating, entity map[string]any) bool {
+	for _, seg := range strings.Split(row.OrbIDTemplate, "{parent.")[1:] {
+		f, _, _ := strings.Cut(seg, "}")
+		val, _ := stringify(entity[f]).(string)
+		if val == "" {
+			return false
+		}
+		row.OrbIDTemplate = strings.ReplaceAll(row.OrbIDTemplate, "{parent."+f+"}", val)
+	}
+	return true
 }
 
 // stampFetchedVersions applies the OCC version of every entity the detail query

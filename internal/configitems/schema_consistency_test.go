@@ -145,7 +145,9 @@ func parseSchemaTypes(src string) (map[string]map[string]bool, map[string]bool) 
 	fieldTargets = map[string]string{}
 	schemaImplements = map[string][]string{}
 	nonNullFields = map[string]bool{}
-	blockRe := regexp.MustCompile(`^(?:type|interface)\s+(\w+)([^{]*)\{`)
+	// The body is optional: DGraph rejects an empty `{}`, so a type with no
+	// fields of its own (AzureLocalKubernetesCluster) is declared without one.
+	blockRe := regexp.MustCompile(`^(?:type|interface)\s+(\w+)([^{]*?)\s*(\{)?\s*$`)
 	fieldRe := regexp.MustCompile(`^\s+(\w+)\s*:\s*(\[?)(\w+)\]?(!?)`)
 
 	cur := ""
@@ -160,6 +162,9 @@ func parseSchemaTypes(src string) (map[string]map[string]bool, map[string]bool) 
 				if w != "implements" {
 					schemaImplements[cur] = append(schemaImplements[cur], w)
 				}
+			}
+			if m[3] == "" {
+				cur = "" // no body, so no fields follow
 			}
 			continue
 		}

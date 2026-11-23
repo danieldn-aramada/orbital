@@ -10,7 +10,7 @@
 ## 1. The problem
 
 - **Nothing applies the schema on deploy.** Orbital applies it only on `make seed`, restore, export to scratch and orb import, never at startup or rollout (`DGRAPH.md`). An image ahead of its DGraph queries fields that do not exist, and pages render empty or error. It has happened twice: v0.0.25 (a new cluster field) and v0.0.63, the first v20 image.
-- **Renames need a data copy, run by hand.** A rename is a new DQL predicate, so v20 needed `scripts/migrate-schema-v20.sh` on every DGraph; until then the renamed fields read `null`. The old predicates were never dropped.
+- **Renames need a data copy, run by hand.** A rename is a new DQL predicate, so v20 needed a hand-run copy script on every DGraph; until then the renamed fields read `null`. The old predicates were never dropped.
 - **Two apply paths read different files.** Restore applies the schema baked into the running image; `make seed-aks-dgraph` applies the one in the local checkout.
 - **Drift is detected, not fixed.** The boot log and the `/schema` page report it (`internal/dgraphschema/drift.go`); someone still has to act.
 
@@ -28,7 +28,7 @@
 - One step per `schema/VERSION` (`v20`, `v21`, …). A step applies that version's schema and, if needed, runs a data migration written in Go.
 - Every step is idempotent: a rerun is a no-op, and a run that failed part-way resumes.
 - The schema a step applies is the file shipped in the image, which removes the two-file problem.
-- `scripts/migrate-schema-v20.sh` becomes step `v20`.
+- v20's copy becomes step `v20`.
 
 ### 2.3 The record of applied steps lives in DGraph
 

@@ -180,7 +180,8 @@ type TypeDecl struct {
 
 	// Columns are extra table columns, two shapes in one list:
 	//
-	//   - a dotted PATH ending in a value (`rack.uHeight`, `servers.count`)
+	//   - a dotted PATH ending in a value (`rack.uHeight`, `servers.count`); one
+	//     through a list (`kubernetesNodes.role`) shows each distinct value
 	//   - a bare SINGLE RELATIONSHIP (`rack`) — a column of links to the node on
 	//     the other end. `Data Center`, `Rack`, `OOB IP` on a server.
 	//

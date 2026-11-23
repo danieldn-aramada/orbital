@@ -375,6 +375,23 @@ where the tab's own label is the heading and the strip is the way back.
              is correct — its Edit button is unreachable too. */}}
         {{if and .CanMutate .HasEditable}}
         {{template "edit-modal.gohtml" .EditModal}}
+        {{/* The edit modal's new rows, built like the create form's. */}}
+        {{range .MemberAddForms}}
+        <template data-edit-add-row-template="{{.Row.Field}}" data-edit-for="{{$.EditModal.OrbID}}">
+          <div class="box p-3 mb-2" data-edit-new-row="{{.Row.Field}}"
+               data-row-orbid-template="{{.Row.OrbIDTemplate}}">
+            <div class="is-flex is-justify-content-space-between is-align-items-start mb-2">
+              <div class="field mb-0">
+                <label class="label is-size-7 mb-1">orbId</label>
+                <p class="is-size-7 has-text-grey" data-edit-new-row-orbid
+                   data-testid="edit-new-row-orbid">—</p>
+              </div>
+              <button class="delete is-small" data-edit-drop-new-row aria-label="remove"></button>
+            </div>
+            {{template "create-row-fields.gohtml" .Row}}
+          </div>
+        </template>
+        {{end}}
         {{end}}
 
         {{end}}
